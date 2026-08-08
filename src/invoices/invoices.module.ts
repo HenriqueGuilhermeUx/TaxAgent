@@ -8,6 +8,7 @@ import { NfseNationalProvider } from '../providers/nfse-national/nfse-national.p
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineService } from '../tax-engine/tax-engine.service';
 import { TenancyModule } from '../tenancy/tenancy.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
 import { XmlEngineModule } from '../xml-engine/xml-engine.module';
 import { InvoiceWorkerService } from './invoice-worker.service';
 import { InvoicesController } from './invoices.controller';
@@ -15,17 +16,8 @@ import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
 @Module({
-  imports: [JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, XmlEngineModule],
+  imports: [JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, XmlEngineModule, WebhooksModule],
   controllers: [InvoicesController],
-  providers: [
-    InvoicesService,
-    InvoicesRepository,
-    InvoiceWorkerService,
-    FiscalRouterService,
-    FiscalLedgerService,
-    TaxEngineService,
-    NfseNationalClient,
-    NfseNationalProvider,
-  ],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, FiscalRouterService, FiscalLedgerService, TaxEngineService, NfseNationalClient, NfseNationalProvider],
 })
 export class InvoicesModule {}

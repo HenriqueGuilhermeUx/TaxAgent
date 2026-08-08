@@ -1,15 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import * as forge from 'node-forge';
 import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
-
-interface Envelope {
-  alg: 'aes-256-gcm';
-  iv: string;
-  tag: string;
-  ciphertext: string;
-}
+import { EncryptedEnvelope, EnvelopeCryptoService } from '../security/envelope-crypto.service';
 
 export interface CertificateMaterial {
   pfx: Buffer;
@@ -19,14 +13,17 @@ export interface CertificateMaterial {
 
 @Injectable()
 export class CertificateVaultService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService, private readonly crypto: EnvelopeCryptoService) {}
 
   async store(companyId: string, pfxBase64: string, password: string) {
+    const company = await this.db.query('SELECT id FROM companies WHERE id=$1', [companyId]);
+    if (!company.rowCount) throw new NotFoundException('Company not found');
+
     const pfx = Buffer.from(pfxBase64, 'base64');
     if (pfx.length < 64) throw new BadRequestException('Invalid or empty PKCS#12 payload');
-
     const metadata = this.inspectPkcs12(pfx, password);
     const id = createId('cert');
+
     await this.db.withTransaction(async (client) => {
       await client.query("UPDATE certificates SET status='revoked' WHERE company_id=$1 AND status='active'", [companyId]);
       await client.query(
@@ -37,8 +34,8 @@ export class CertificateVaultService {
         [
           id,
           companyId,
-          JSON.stringify(this.encrypt(pfx)),
-          JSON.stringify(this.encrypt(Buffer.from(password, 'utf8'))),
+          JSON.stringify(this.crypto.seal(pfx)),
+          JSON.stringify(this.crypto.sealText(password)),
           metadata.fingerprint,
           metadata.serialNumber,
           metadata.subject,
@@ -48,7 +45,6 @@ export class CertificateVaultService {
         ],
       );
     });
-
     return { id, company_id: companyId, status: 'active', ...metadata };
   }
 
@@ -63,8 +59,8 @@ export class CertificateVaultService {
 
   async getActiveMaterial(companyId: string): Promise<CertificateMaterial> {
     const { rows } = await this.db.query<{
-      encrypted_pfx: Envelope;
-      encrypted_password: Envelope;
+      encrypted_pfx: EncryptedEnvelope;
+      encrypted_password: EncryptedEnvelope;
       certificate_fingerprint: string;
       valid_to: Date | null;
     }>(
@@ -74,34 +70,11 @@ export class CertificateVaultService {
     const record = rows[0];
     if (!record) throw new NotFoundException('Active certificate not found for company');
     if (record.valid_to && record.valid_to.getTime() <= Date.now()) throw new BadRequestException('Active certificate is expired');
-
     return {
-      pfx: this.decrypt(record.encrypted_pfx),
-      password: this.decrypt(record.encrypted_password).toString('utf8'),
+      pfx: this.crypto.open(record.encrypted_pfx),
+      password: this.crypto.openText(record.encrypted_password),
       fingerprint: record.certificate_fingerprint,
     };
-  }
-
-  private key(): Buffer {
-    const encoded = process.env.TAXAGENT_MASTER_KEY_B64;
-    if (!encoded) throw new Error('TAXAGENT_MASTER_KEY_B64 is required for certificate operations');
-    const key = Buffer.from(encoded, 'base64');
-    if (key.length !== 32) throw new Error('TAXAGENT_MASTER_KEY_B64 must decode to exactly 32 bytes');
-    return key;
-  }
-
-  private encrypt(value: Buffer): Envelope {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    const ciphertext = Buffer.concat([cipher.update(value), cipher.final()]);
-    return { alg: 'aes-256-gcm', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), ciphertext: ciphertext.toString('base64') };
-  }
-
-  private decrypt(envelope: Envelope): Buffer {
-    if (envelope.alg !== 'aes-256-gcm') throw new Error('Unsupported certificate envelope algorithm');
-    const decipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(envelope.iv, 'base64'));
-    decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
-    return Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'base64')), decipher.final()]);
   }
 
   private inspectPkcs12(pfx: Buffer, password: string) {

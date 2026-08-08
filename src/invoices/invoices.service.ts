@@ -4,6 +4,7 @@ import { IssueResult } from '../fiscal-core/fiscal.types';
 import { JobsService } from '../jobs/jobs.service';
 import { FiscalLedgerService } from '../ledger/fiscal-ledger.service';
 import { TaxEngineService } from '../tax-engine/tax-engine.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoicesRepository } from './invoices.repository';
 
@@ -15,6 +16,7 @@ export class InvoicesService {
     private readonly taxEngine: TaxEngineService,
     private readonly ledger: FiscalLedgerService,
     private readonly jobs: JobsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   async create(dto: CreateInvoiceDto, idempotencyKey?: string) {
@@ -22,7 +24,6 @@ export class InvoicesService {
       const existing = await this.repository.findByIdempotency(dto.company_id, idempotencyKey);
       if (existing) return this.toAccepted(existing);
     }
-
     const input = this.taxEngine.validate({
       companyId: dto.company_id,
       environment: dto.environment,
@@ -35,7 +36,6 @@ export class InvoicesService {
         taxClassification: dto.service.tax_classification,
       },
     });
-
     const invoice = await this.repository.create(input, idempotencyKey);
     await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.created', payload: { environment: input.environment } });
     await this.jobs.enqueue('issue_invoice', { invoiceId: invoice.id });
@@ -54,7 +54,6 @@ export class InvoicesService {
     if (!invoice || invoice.status === 'authorized' || invoice.status === 'cancelled') return;
     await this.repository.markProcessing(id);
     await this.ledger.append({ invoiceId: id, type: 'invoice.processing', payload: { attempt: attemptNumber } });
-
     let attemptId: string | undefined;
     try {
       const provider = await this.router.resolve({
@@ -66,7 +65,9 @@ export class InvoicesService {
       const result = await provider.issue(invoice.canonical_input);
       await this.repository.finishAttempt(attemptId, result.status, result);
       await this.repository.saveResult(id, result);
-      await this.ledger.append({ invoiceId: id, type: result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected', payload: result });
+      const eventType = result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected';
+      await this.ledger.append({ invoiceId: id, type: eventType, payload: result });
+      await this.webhooks.emit(invoice.company_id, eventType, { invoice_id: id, result });
     } catch (error) {
       const result: IssueResult = {
         status: 'rejected',
@@ -76,6 +77,7 @@ export class InvoicesService {
       if (attemptId) await this.repository.finishAttempt(attemptId, 'error', result, result.rejection?.code, result.rejection?.message);
       await this.repository.saveResult(id, result);
       await this.ledger.append({ invoiceId: id, type: 'invoice.error', payload: result });
+      await this.webhooks.emit(invoice.company_id, 'invoice.error', { invoice_id: id, result });
       throw error;
     }
   }
