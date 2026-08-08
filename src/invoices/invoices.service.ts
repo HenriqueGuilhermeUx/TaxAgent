@@ -19,58 +19,17 @@ export class InvoicesService {
     if (idempotencyKey) { const existing = await this.repository.findByIdempotency(dto.company_id, idempotencyKey); if (existing) return this.toAccepted(existing); }
     await this.tenancy.getCompany(dto.company_id);
     const input = this.taxEngine.validate({ companyId: dto.company_id, environment: dto.environment, customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code }, service: { description: dto.service.description, amount: dto.service.amount, nationalServiceCode: dto.service.national_service_code, operationIndicator: dto.service.operation_indicator, taxClassification: dto.service.tax_classification } });
-    const invoice = await this.repository.create(input, idempotencyKey);
-    await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.created', payload: { environment: input.environment } });
-    await this.jobs.enqueue('issue_invoice', { invoiceId: invoice.id });
-    await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.queued' });
-    return this.toAccepted(invoice);
+    const invoice = await this.repository.create(input, idempotencyKey); await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.created', payload: { environment: input.environment } }); await this.jobs.enqueue('issue_invoice', { invoiceId: invoice.id }); await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.queued' }); return this.toAccepted(invoice);
   }
   async findOneForCompany(id: string, companyId?: string) { const invoice = await this.repository.findById(id); if (!invoice) throw new NotFoundException('Invoice not found'); if (companyId && invoice.company_id !== companyId) throw new ForbiddenException('Invoice belongs to another company'); return { ...invoice, ledger: await this.ledger.findByInvoice(id) }; }
-  async requestCancellation(id: string, companyId: string | undefined, dto: CancelInvoiceDto) {
-    const invoice = await this.repository.findById(id);
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    if (companyId && invoice.company_id !== companyId) throw new ForbiddenException('Invoice belongs to another company');
-    if (invoice.status !== 'authorized' || !invoice.access_key) throw new BadRequestException('Only an authorized invoice with access key can be cancelled');
-    await this.repository.markCancelling(id);
-    await this.jobs.enqueue('cancel_invoice', { invoiceId: id, reasonCode: dto.reason_code, reason: dto.reason });
-    await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_requested', payload: { reason_code: dto.reason_code, reason: dto.reason } });
-    return { id, status: 'cancelling' };
-  }
+  async requestCancellation(id: string, companyId: string | undefined, dto: CancelInvoiceDto) { const invoice = await this.repository.findById(id); if (!invoice) throw new NotFoundException('Invoice not found'); if (companyId && invoice.company_id !== companyId) throw new ForbiddenException('Invoice belongs to another company'); if (invoice.status !== 'authorized' || !invoice.access_key) throw new BadRequestException('Only an authorized invoice with access key can be cancelled'); await this.repository.markCancelling(id); await this.jobs.enqueue('cancel_invoice', { invoiceId: id, reasonCode: dto.reason_code, reason: dto.reason }); await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_requested', payload: { reason_code: dto.reason_code, reason: dto.reason } }); return { id, status: 'cancelling' }; }
   async process(id: string, attemptNumber: number): Promise<void> {
     const invoice = await this.repository.findById(id); if (!invoice || invoice.status === 'authorized' || invoice.status === 'cancelled') return;
-    const company = await this.tenancy.getCompany(invoice.company_id) as { city_code: string };
-    await this.repository.markProcessing(id); await this.ledger.append({ invoiceId: id, type: 'invoice.processing', payload: { attempt: attemptNumber } });
-    let attemptId: string | undefined;
-    try {
-      const provider = await this.router.resolve({ companyId: invoice.company_id, environment: invoice.environment, issuerCityCode: company.city_code, serviceLocationCityCode: invoice.canonical_input.customer.cityCode });
-      attemptId = await this.repository.createAttempt(id, provider.name, attemptNumber, invoice.canonical_input);
-      const result = await provider.issue(invoice.canonical_input, { invoiceId: id });
-      await this.repository.finishAttempt(attemptId, result.status, result); await this.repository.saveResult(id, result);
-      const eventType = result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected'; await this.ledger.append({ invoiceId: id, type: eventType, payload: result }); await this.webhooks.emit(invoice.company_id, eventType, { invoice_id: id, result });
-    } catch (error) { await this.handleIssueFailure(invoice.id, invoice.company_id, attemptId, attemptNumber, error); }
+    const company = await this.tenancy.getCompany(invoice.company_id) as { city_code: string }; await this.repository.markProcessing(id); await this.ledger.append({ invoiceId: id, type: 'invoice.processing', payload: { attempt: attemptNumber } }); let attemptId: string | undefined;
+    try { const provider = await this.router.resolve({ companyId: invoice.company_id, environment: invoice.environment, issuerCityCode: company.city_code, serviceLocationCityCode: invoice.canonical_input.customer.cityCode }); attemptId = await this.repository.createAttempt(id, provider.name, attemptNumber, invoice.canonical_input); const result = await provider.issue(invoice.canonical_input, { invoiceId: id }); await this.repository.finishAttempt(attemptId, result.status, result); await this.repository.saveResult(id, result); const eventType = result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected'; await this.ledger.append({ invoiceId: id, type: eventType, payload: result }); if (result.status === 'authorized' && (process.env.TAXAGENT_NFSE_MODE ?? 'mock') !== 'mock') await this.jobs.enqueue('generate_danfse', { invoiceId: id }); await this.webhooks.emit(invoice.company_id, eventType, { invoice_id: id, result }); }
+    catch (error) { await this.handleIssueFailure(invoice.id, invoice.company_id, attemptId, attemptNumber, error); }
   }
-  async processCancellation(id: string, reasonCode: string, reason: string, attemptNumber: number): Promise<void> {
-    const invoice = await this.repository.findById(id); if (!invoice || !invoice.access_key || invoice.status === 'cancelled') return;
-    const company = await this.tenancy.getCompany(invoice.company_id) as { city_code: string };
-    try {
-      const provider = await this.router.resolve({ companyId: invoice.company_id, environment: invoice.environment, issuerCityCode: company.city_code, serviceLocationCityCode: invoice.canonical_input.customer.cityCode });
-      const result = await provider.cancel({ companyId: invoice.company_id, environment: invoice.environment, accessKey: invoice.access_key, reasonCode, reason }, { invoiceId: id });
-      await this.repository.createFiscalEvent(id, provider.name, 'cancellation', result.providerReference, result);
-      if (result.status === 'registered') {
-        await this.repository.markCancelled(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancelled', payload: result }); await this.webhooks.emit(invoice.company_id, 'invoice.cancelled', { invoice_id: id, result }); return;
-      }
-      await this.repository.restoreAuthorized(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_rejected', payload: result }); await this.webhooks.emit(invoice.company_id, 'invoice.cancellation_rejected', { invoice_id: id, result });
-    } catch (error) {
-      const normalized = normalizeEngineError(error); const exhausted = attemptNumber >= MAX_ATTEMPTS;
-      if (normalized.retryable && !exhausted) { await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code } }); throw error; }
-      await this.repository.restoreAuthorized(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_failed', payload: { code: normalized.code, message: normalized.message } }); await this.webhooks.emit(invoice.company_id, 'invoice.cancellation_failed', { invoice_id: id, error: normalized });
-    }
-  }
-  private async handleIssueFailure(id: string, companyId: string, attemptId: string | undefined, attemptNumber: number, error: unknown) {
-    const normalized = normalizeEngineError(error); if (attemptId) await this.repository.finishAttempt(attemptId, 'error', normalized, normalized.code, normalized.message); const exhausted = attemptNumber >= MAX_ATTEMPTS;
-    if (normalized.retryable && !exhausted) { await this.repository.markRetrying(id); await this.ledger.append({ invoiceId: id, type: 'invoice.retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message } }); throw error; }
-    const result: IssueResult = { status: 'rejected', provider: 'taxagent', rejection: { code: exhausted && normalized.retryable ? 'TA_RETRIES_EXHAUSTED' : normalized.code, message: normalized.message, retryable: false, category: exhausted ? 'retry-exhausted' : 'engine' } };
-    await this.repository.saveResult(id, result); await this.ledger.append({ invoiceId: id, type: 'invoice.rejected', payload: result }); await this.webhooks.emit(companyId, 'invoice.rejected', { invoice_id: id, result });
-  }
+  async processCancellation(id: string, reasonCode: string, reason: string, attemptNumber: number): Promise<void> { const invoice = await this.repository.findById(id); if (!invoice || !invoice.access_key || invoice.status === 'cancelled') return; const company = await this.tenancy.getCompany(invoice.company_id) as { city_code: string }; try { const provider = await this.router.resolve({ companyId: invoice.company_id, environment: invoice.environment, issuerCityCode: company.city_code, serviceLocationCityCode: invoice.canonical_input.customer.cityCode }); const result = await provider.cancel({ companyId: invoice.company_id, environment: invoice.environment, accessKey: invoice.access_key, reasonCode, reason }, { invoiceId: id }); await this.repository.createFiscalEvent(id, provider.name, 'cancellation', result.providerReference, result); if (result.status === 'registered') { await this.repository.markCancelled(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancelled', payload: result }); await this.webhooks.emit(invoice.company_id, 'invoice.cancelled', { invoice_id: id, result }); return; } await this.repository.restoreAuthorized(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_rejected', payload: result }); await this.webhooks.emit(invoice.company_id, 'invoice.cancellation_rejected', { invoice_id: id, result }); } catch (error) { const normalized = normalizeEngineError(error); const exhausted = attemptNumber >= MAX_ATTEMPTS; if (normalized.retryable && !exhausted) { await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code } }); throw error; } await this.repository.restoreAuthorized(id); await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_failed', payload: { code: normalized.code, message: normalized.message } }); await this.webhooks.emit(invoice.company_id, 'invoice.cancellation_failed', { invoice_id: id, error: normalized }); } }
+  private async handleIssueFailure(id: string, companyId: string, attemptId: string | undefined, attemptNumber: number, error: unknown) { const normalized = normalizeEngineError(error); if (attemptId) await this.repository.finishAttempt(attemptId, 'error', normalized, normalized.code, normalized.message); const exhausted = attemptNumber >= MAX_ATTEMPTS; if (normalized.retryable && !exhausted) { await this.repository.markRetrying(id); await this.ledger.append({ invoiceId: id, type: 'invoice.retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message } }); throw error; } const result: IssueResult = { status: 'rejected', provider: 'taxagent', rejection: { code: exhausted && normalized.retryable ? 'TA_RETRIES_EXHAUSTED' : normalized.code, message: normalized.message, retryable: false, category: exhausted ? 'retry-exhausted' : 'engine' } }; await this.repository.saveResult(id, result); await this.ledger.append({ invoiceId: id, type: 'invoice.rejected', payload: result }); await this.webhooks.emit(companyId, 'invoice.rejected', { invoice_id: id, result }); }
   private toAccepted(invoice: { id: string; status: string; environment: string }) { return { id: invoice.id, status: invoice.status, environment: invoice.environment }; }
 }
