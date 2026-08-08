@@ -6,6 +6,10 @@ export interface CanonicalService {
   description: string;
   amount: number;
   nationalServiceCode?: string;
+  serviceLocationCityCode?: string;
+  issTaxation?: '1' | '2' | '3' | '4';
+  issWithholding?: '1' | '2' | '3';
+  issRate?: number;
   operationIndicator?: string;
   taxSituation?: string;
   taxClassification?: string;

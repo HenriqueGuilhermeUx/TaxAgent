@@ -24,12 +24,13 @@ export class NfseNationalProvider implements FiscalProvider {
     const mode = process.env.TAXAGENT_NFSE_MODE ?? 'mock';
     if (mode === 'mock') return { status: 'authorized', provider: this.name, accessKey: `MOCK-${randomUUID().replaceAll('-', '').toUpperCase()}`, providerReference: `dps_mock_${Date.now()}`, raw: { mode, schema: this.schemas.active(input.environment).id, amount: input.service.amount } };
     this.assertLive();
-    if (!input.service.nationalServiceCode) throw new FiscalEngineError('TA_NATIONAL_SERVICE_CODE_REQUIRED', 'Live NFS-e transmission requires cTribNac/national_service_code', false);
-    const rtcRequiredSince = Date.parse('2026-08-03T00:00:00-03:00');
-    if (Date.now() >= rtcRequiredSince && (!input.service.operationIndicator || !input.service.taxSituation || !input.service.taxClassification)) {
-      throw new FiscalEngineError('TA_RTC_FIELDS_REQUIRED', 'Live NFS-e transmission requires cIndOp, CST and cClassTrib under the active IBS/CBS rules. Resolve the tax decision before issuance.', false);
-    }
     const company = await this.tenancy.getCompany(input.companyId) as FiscalCompany;
+    if (String(company.tax_regime ?? '').toLowerCase() !== 'regular') throw new FiscalEngineError('TA_TAX_REGIME_NOT_LIVE_SUPPORTED', 'TaxAgent live NFS-e builder currently supports company tax_regime=regular only; other regimes remain blocked until their document rules are implemented and homologated', false);
+    if (!input.service.nationalServiceCode || !/^\d{6}$/.test(input.service.nationalServiceCode)) throw new FiscalEngineError('TA_NATIONAL_SERVICE_CODE_REQUIRED', 'Live NFS-e transmission requires a 6-digit cTribNac/national_service_code', false);
+    if (!input.service.serviceLocationCityCode) throw new FiscalEngineError('TA_SERVICE_LOCATION_REQUIRED', 'Live NFS-e transmission requires service_location_city_code; TaxAgent will not infer it from the customer address', false);
+    if (!input.service.issTaxation || !input.service.issWithholding) throw new FiscalEngineError('TA_ISS_FIELDS_REQUIRED', 'Live NFS-e transmission requires iss_taxation (tribISSQN) and iss_withholding (tpRetISSQN)', false);
+    const rtcRequiredSince = Date.parse('2026-08-03T00:00:00-03:00');
+    if (Date.now() >= rtcRequiredSince && (!input.service.operationIndicator || !input.service.taxSituation || !input.service.taxClassification)) throw new FiscalEngineError('TA_RTC_FIELDS_REQUIRED', 'Live NFS-e transmission requires cIndOp, CST and cClassTrib under the active IBS/CBS rules. Resolve the tax decision before issuance.', false);
     const certificate = await this.vault.getActiveMaterial(input.companyId);
     const existingSigned = await this.documents.latestContent(operation.invoiceId, 'dps-signed-xml');
     if (existingSigned) {

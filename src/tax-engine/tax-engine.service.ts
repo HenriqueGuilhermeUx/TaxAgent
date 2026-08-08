@@ -11,7 +11,7 @@ import { calculate2026StandardReference } from './tax-rules';
 @Injectable()
 export class TaxEngineService {
   constructor(private readonly db: DatabaseService, private readonly rtc: RtcOpenDataClient, private readonly domains: TaxDomainRegistryService, private readonly position: TaxPositionService) {}
-  validate(input: CanonicalInvoiceInput): CanonicalInvoiceInput { if (!input.companyId) throw new BadRequestException('companyId is required'); if (!input.customer.taxId || !input.customer.name) throw new BadRequestException('Customer identity is required'); if (!/^\d{7}$/.test(input.customer.cityCode)) throw new BadRequestException('customer.cityCode must be a 7-digit IBGE code'); if (!input.service.description.trim()) throw new BadRequestException('Service description is required'); if (!Number.isFinite(input.service.amount) || input.service.amount <= 0) throw new BadRequestException('Service amount must be positive'); return input; }
+  validate(input: CanonicalInvoiceInput): CanonicalInvoiceInput { if (!input.companyId) throw new BadRequestException('companyId is required'); if (!input.customer.taxId || !input.customer.name) throw new BadRequestException('Customer identity is required'); if (!/^\d{7}$/.test(input.customer.cityCode)) throw new BadRequestException('customer.cityCode must be a 7-digit IBGE code'); if (input.service.serviceLocationCityCode && !/^\d{7}$/.test(input.service.serviceLocationCityCode)) throw new BadRequestException('service.serviceLocationCityCode must be a 7-digit IBGE code'); if (!input.service.description.trim()) throw new BadRequestException('Service description is required'); if (!Number.isFinite(input.service.amount) || input.service.amount <= 0) throw new BadRequestException('Service amount must be positive'); return input; }
 
   async hydrateServiceFromDecision(companyId: string, decisionId: string, service: CanonicalService): Promise<CanonicalService> {
     const decision = await this.position.getDecision(decisionId, companyId);
@@ -27,13 +27,7 @@ export class TaxEngineService {
     this.assertNoConflict('tax_situation', service.taxSituation, resolved.taxSituation);
     this.assertNoConflict('tax_classification', service.taxClassification, resolved.taxClassification);
     this.assertNoConflict('national_service_code', service.nationalServiceCode, resolved.nationalServiceCode);
-    return {
-      ...service,
-      operationIndicator: service.operationIndicator ?? resolved.operationIndicator,
-      taxSituation: service.taxSituation ?? resolved.taxSituation,
-      taxClassification: service.taxClassification ?? resolved.taxClassification,
-      nationalServiceCode: service.nationalServiceCode ?? resolved.nationalServiceCode,
-    };
+    return { ...service, operationIndicator: service.operationIndicator ?? resolved.operationIndicator, taxSituation: service.taxSituation ?? resolved.taxSituation, taxClassification: service.taxClassification ?? resolved.taxClassification, nationalServiceCode: service.nationalServiceCode ?? resolved.nationalServiceCode };
   }
 
   async resolve(dto: ResolveTaxDto) {
