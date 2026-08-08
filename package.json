@@ -1,6 +1,6 @@
 {
   "name": "taxagent",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "private": true,
   "description": "API-first fiscal infrastructure for Brazil's new tax system",
   "license": "UNLICENSED",
@@ -14,7 +14,9 @@
     "schemas:sync": "tsx scripts/sync-nfse-schemas.ts",
     "homologation:bootstrap": "tsx scripts/homologation-bootstrap.ts",
     "homologation:certificate": "tsx scripts/homologation-certificate.ts",
-    "homologation:preflight": "tsx scripts/homologation-preflight.ts"
+    "homologation:preflight": "tsx scripts/homologation-preflight.ts",
+    "homologation:dps": "tsx scripts/homologation-dps.ts",
+    "homologation:first-invoice": "tsx scripts/homologation-first-invoice.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
