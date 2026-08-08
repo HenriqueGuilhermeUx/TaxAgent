@@ -37,12 +37,12 @@ export class DanfseRendererService {
     const headerH = 48;
     doc.rect(x, y, width, headerH).fillAndStroke(LIGHT_GRAY, 'black');
     if (resources?.logo) doc.image(resources.logo, x + 8, y + 8, { fit: [110, 30] });
-    doc.fillColor('black').font(titleFont).fontSize(9).text('DANFSe v2.0', x + 135, y + 9, width - 270, { align: 'center' });
-    doc.text('Documento Auxiliar da NFS-e', x + 135, y + 22, width - 270, { align: 'center' });
-    if (model.environment === 'test') doc.fillColor('red').font(boldFont).fontSize(9).text('NFS-e SEM VALIDADE JURÍDICA', x + 135, y + 34, width - 270, { align: 'center' });
-    doc.fillColor('black').font(bodyFont).fontSize(6).text(`Município: ${this.v(join([model.issuerMunicipality, model.issuerUf], ' / '))}`, x + width - 155, y + 8, 145);
-    doc.text(`Ambiente Gerador: ${this.v(model.generator)}`, x + width - 155, y + 19, 145);
-    doc.text(`Tipo de Ambiente: ${model.environment === 'test' ? 'Homologação' : 'Produção'}`, x + width - 155, y + 30, 145);
+    doc.fillColor('black').font(titleFont).fontSize(9).text('DANFSe v2.0', x + 135, y + 9, { width: width - 270, align: 'center' });
+    doc.text('Documento Auxiliar da NFS-e', x + 135, y + 22, { width: width - 270, align: 'center' });
+    if (model.environment === 'test') doc.fillColor('red').font(boldFont).fontSize(9).text('NFS-e SEM VALIDADE JURÍDICA', x + 135, y + 34, { width: width - 270, align: 'center' });
+    doc.fillColor('black').font(bodyFont).fontSize(6).text(`Município: ${this.v(join([model.issuerMunicipality, model.issuerUf], ' / '))}`, x + width - 155, y + 8, { width: 145 });
+    doc.text(`Ambiente Gerador: ${this.v(model.generator)}`, x + width - 155, y + 19, { width: 145 });
+    doc.text(`Tipo de Ambiente: ${model.environment === 'test' ? 'Homologação' : 'Produção'}`, x + width - 155, y + 30, { width: 145 });
     y += headerH;
 
     const qr = model.accessKey ? await QRCode.toBuffer(`https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=${encodeURIComponent(model.accessKey)}`, { margin: 0, width: 92, errorCorrectionLevel: 'M' }) : undefined;
@@ -56,7 +56,7 @@ export class DanfseRendererService {
       ['EMITENTE DA NFS-E', model.issuer], ['SITUAÇÃO DA NFS-E', invoiceState ?? model.status], ['FINALIDADE', model.purpose],
     ], 3);
     if (qr) doc.image(qr, x + width - 105, y + 8, { width: 60, height: 60 });
-    doc.font(bodyFont).fontSize(5.5).text('A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e.', x + width - 120, y + 70, 112, { align: 'center' });
+    doc.font(bodyFont).fontSize(5.5).text('A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e.', x + width - 120, y + 70, { width: 112, align: 'center' });
     y += idH;
 
     y = this.partyBlock(doc, bodyFont, boldFont, x, y, width, 'PRESTADOR / FORNECEDOR', model.provider, true);
@@ -78,8 +78,8 @@ export class DanfseRendererService {
     const compH = Math.max(42, remaining - 4);
     doc.rect(x, y, width, compH).stroke();
     doc.rect(x, y, width, 13).fillAndStroke(LIGHT_GRAY, 'black');
-    doc.fillColor('black').font(boldFont).fontSize(7).text('INFORMAÇÕES COMPLEMENTARES', x + 5, y + 3, width - 10);
-    doc.font(bodyFont).fontSize(6.5).text(this.v(model.complementary), x + 5, y + 17, width - 10, { height: compH - 21, ellipsis: true });
+    doc.fillColor('black').font(boldFont).fontSize(7).text('INFORMAÇÕES COMPLEMENTARES', x + 5, y + 3, { width: width - 10 });
+    doc.font(bodyFont).fontSize(6.5).text(this.v(model.complementary), x + 5, y + 17, { width: width - 10, height: compH - 21, ellipsis: true });
 
     if (invoiceState === 'cancelled' || String(model.status).toLowerCase().includes('cancel')) this.watermark(doc, titleFont, 'CANCELADA');
     if (String(model.status).toLowerCase().includes('substit')) this.watermark(doc, titleFont, 'SUBSTITUÍDA');
@@ -111,7 +111,7 @@ export class DanfseRendererService {
   private section(doc: PDFKit.PDFDocument, body: string, bold: string, x: number, y: number, width: number, title: string, height: number, fields: Array<[string, string | undefined]>): number {
     doc.rect(x, y, width, height).stroke();
     doc.rect(x, y, width, 13).fillAndStroke(LIGHT_GRAY, 'black');
-    doc.fillColor('black').font(bold).fontSize(7).text(title, x + 5, y + 3, width - 10);
+    doc.fillColor('black').font(bold).fontSize(7).text(title, x + 5, y + 3, { width: width - 10 });
     const columns = fields.length <= 3 ? 3 : 4;
     const rows = Math.max(1, Math.ceil(fields.length / columns));
     const rowH = (height - 14) / rows;
@@ -129,11 +129,11 @@ export class DanfseRendererService {
     const colW = width / columns;
     fields.forEach(([label, value], index) => { const row = Math.floor(index / columns); const col = index % columns; const fx = x + col * colW; const fy = y + row * rowH; this.label(doc, bold, label, fx, fy, colW - 5); this.value(doc, body, value, fx, fy + 9, colW - 5, 11); });
   }
-  private label(doc: PDFKit.PDFDocument, font: string, label: string, x: number, y: number, width: number) { doc.fillColor('black').font(font).fontSize(6).text(label, x, y, width, { ellipsis: true }); }
-  private value(doc: PDFKit.PDFDocument, font: string, value: string | undefined, x: number, y: number, width: number, height: number) { doc.fillColor('black').font(font).fontSize(7).text(this.v(value), x, y, width, { height, ellipsis: true }); }
+  private label(doc: PDFKit.PDFDocument, font: string, label: string, x: number, y: number, width: number) { doc.fillColor('black').font(font).fontSize(6).text(label, x, y, { width, ellipsis: true }); }
+  private value(doc: PDFKit.PDFDocument, font: string, value: string | undefined, x: number, y: number, width: number, height: number) { doc.fillColor('black').font(font).fontSize(7).text(this.v(value), x, y, { width, height, ellipsis: true }); }
   private v(value?: string) { return value && value.trim() ? value : '-'; }
   private human(value: string) { return value.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()); }
-  private watermark(doc: PDFKit.PDFDocument, font: string, text: string) { doc.save(); doc.fillColor('#a6a6a6').opacity(0.35).font(font).fontSize(58).rotate(-35, { origin: [doc.page.width / 2, doc.page.height / 2] }).text(text, 120, doc.page.height / 2 - 30, 360, { align: 'center' }); doc.restore(); }
+  private watermark(doc: PDFKit.PDFDocument, font: string, text: string) { doc.save(); doc.fillColor('#a6a6a6').opacity(0.35).font(font).fontSize(58).rotate(-35, { origin: [doc.page.width / 2, doc.page.height / 2] }).text(text, 120, doc.page.height / 2 - 30, { width: 360, align: 'center' }); doc.restore(); }
 }
 
 function join(parts: Array<string | undefined>, separator: string): string | undefined { const values = parts.filter((part): part is string => Boolean(part)); return values.length ? values.join(separator) : undefined; }
