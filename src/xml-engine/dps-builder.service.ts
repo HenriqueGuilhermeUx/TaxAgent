@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { XMLBuilder } from 'fast-xml-parser';
-import { CanonicalInvoiceInput } from '../fiscal-core/fiscal.types';
+import { CanonicalInvoiceInput, CanonicalService } from '../fiscal-core/fiscal.types';
 import { DpsSequenceService } from './dps-sequence.service';
 
 export interface FiscalCompany { id: string; tax_id: string; municipal_registration: string | null; city_code: string }
@@ -24,6 +24,31 @@ export function buildDpsId(cityCode: string, taxId: string, series: string, sequ
   return `DPS${cityCode}${identity.typeCode}${identity.idValue}${normalizedSeries.padStart(5, '0')}${String(sequence).padStart(15, '0')}`;
 }
 
+export function buildIbsCbsGroup(service: CanonicalService): Record<string, unknown> | undefined {
+  const values = [service.operationIndicator, service.taxSituation, service.taxClassification];
+  if (values.every((value) => !value)) return undefined;
+  if (values.some((value) => !value)) {
+    throw new BadRequestException('IBS/CBS group is incomplete: cIndOp, CST and cClassTrib must be supplied together');
+  }
+  if (!/^\d{6}$/.test(service.operationIndicator!)) throw new BadRequestException('cIndOp must contain exactly 6 numeric positions');
+  if (!/^\d{3}$/.test(service.taxSituation!)) throw new BadRequestException('CST IBS/CBS must contain exactly 3 numeric positions');
+  if (!/^\d{6}$/.test(service.taxClassification!)) throw new BadRequestException('cClassTrib must contain exactly 6 numeric positions');
+
+  return {
+    finNFSe: 0,
+    cIndOp: service.operationIndicator,
+    indDest: 0,
+    valores: {
+      trib: {
+        gIBSCBS: {
+          CST: service.taxSituation,
+          cClassTrib: service.taxClassification,
+        },
+      },
+    },
+  };
+}
+
 @Injectable()
 export class DpsBuilderService {
   constructor(private readonly sequences: DpsSequenceService) {}
@@ -36,18 +61,23 @@ export class DpsBuilderService {
     const customerIdentity = normalizeTaxIdentity(input.customer.taxId);
     const issuedAt = input.issuedAt ?? new Date().toISOString();
     const competence = input.competence ?? issuedAt.slice(0, 10);
+    const ibsCbs = buildIbsCbsGroup(input.service);
     const verifiedLayout = process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified';
     const doc = { DPS: { '@_xmlns': 'http://www.sped.fazenda.gov.br/nfse', '@_versao': '1.01', infDPS: {
-      '@_Id': id, tpAmb: input.environment === 'production' ? 1 : 2, dhEmi: issuedAt, verAplic: 'TaxAgent_0.10', serie: series, nDPS: sequence, dCompet: competence, tpEmit: 1, cLocEmi: company.city_code,
+      '@_Id': id,
+      tpAmb: input.environment === 'production' ? 1 : 2,
+      dhEmi: issuedAt,
+      verAplic: 'TaxAgent_0.11',
+      serie: series,
+      nDPS: sequence,
+      dCompet: competence,
+      tpEmit: 1,
+      cLocEmi: company.city_code,
       prest: { CNPJ: providerIdentity.xmlValue, ...(company.municipal_registration ? { IM: company.municipal_registration } : {}) },
       toma: { [customerIdentity.kind]: customerIdentity.xmlValue, xNome: input.customer.name },
       serv: { locPrest: { cLocPrestacao: input.customer.cityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description } },
       valores: { vServPrest: { vServ: input.service.amount.toFixed(2) } },
-      ...(input.service.operationIndicator || input.service.taxSituation || input.service.taxClassification ? { IBSCBS: {
-        ...(input.service.operationIndicator ? { cIndOp: input.service.operationIndicator } : {}),
-        ...(input.service.taxSituation ? { CST: input.service.taxSituation } : {}),
-        ...(input.service.taxClassification ? { cClassTrib: input.service.taxClassification } : {}),
-      } } : {}),
+      ...(ibsCbs ? { IBSCBS: ibsCbs } : {}),
     } } };
     const builder = new XMLBuilder({ ignoreAttributes: false, format: false });
     return { xml: `<?xml version="1.0" encoding="UTF-8"?>${builder.build(doc)}`, id, sequence, series, verifiedLayout };
