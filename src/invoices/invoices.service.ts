@@ -26,15 +26,13 @@ export class InvoicesService {
     const input = this.taxEngine.validate({
       companyId: dto.company_id,
       environment: dto.environment,
-      customer: {
-        taxId: dto.customer.tax_id,
-        name: dto.customer.name,
-        cityCode: dto.customer.city_code,
-      },
+      customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code },
       service: {
         description: dto.service.description,
         amount: dto.service.amount,
         nationalServiceCode: dto.service.national_service_code,
+        operationIndicator: dto.service.operation_indicator,
+        taxClassification: dto.service.tax_classification,
       },
     });
 
@@ -54,7 +52,6 @@ export class InvoicesService {
   async process(id: string, attemptNumber: number): Promise<void> {
     const invoice = await this.repository.findById(id);
     if (!invoice || invoice.status === 'authorized' || invoice.status === 'cancelled') return;
-
     await this.repository.markProcessing(id);
     await this.ledger.append({ invoiceId: id, type: 'invoice.processing', payload: { attempt: attemptNumber } });
 
@@ -69,20 +66,12 @@ export class InvoicesService {
       const result = await provider.issue(invoice.canonical_input);
       await this.repository.finishAttempt(attemptId, result.status, result);
       await this.repository.saveResult(id, result);
-      await this.ledger.append({
-        invoiceId: id,
-        type: result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected',
-        payload: result,
-      });
+      await this.ledger.append({ invoiceId: id, type: result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected', payload: result });
     } catch (error) {
       const result: IssueResult = {
         status: 'rejected',
         provider: 'taxagent',
-        rejection: {
-          code: 'TA_ENGINE_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown engine error',
-          retryable: true,
-        },
+        rejection: { code: 'TA_ENGINE_ERROR', message: error instanceof Error ? error.message : 'Unknown engine error', retryable: true },
       };
       if (attemptId) await this.repository.finishAttempt(attemptId, 'error', result, result.rejection?.code, result.rejection?.message);
       await this.repository.saveResult(id, result);

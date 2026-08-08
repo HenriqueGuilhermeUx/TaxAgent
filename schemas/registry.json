@@ -1,0 +1,27 @@
+{
+  "updatedAt": "2026-08-08",
+  "sources": {
+    "production": {
+      "id": "nfse-production-v1.01-20260209",
+      "status": "active",
+      "xsdLabel": "NFSe-ESQUEMAS_XSD-v1.01-20260209",
+      "officialUrl": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/nfse-esquemas_xsd-v1-01-20260209.zip",
+      "rtc": "NT004",
+      "notes": "Current production documentation published by Portal NFS-e. Runtime XSD must be synced separately."
+    },
+    "test": {
+      "id": "nfse-prodrest-v1.01-20260727",
+      "status": "active",
+      "xsdLabel": "NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20260727",
+      "officialUrl": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita/esquemas-nfse-rtc-v1-01-20260727.zip",
+      "rtc": "NT004",
+      "notes": "Production-restricted schema listed by Portal NFS-e on 2026-07-28."
+    },
+    "nt009Preview": {
+      "id": "nt009-preview-v1.04.00",
+      "status": "preview-not-active-aug-2026",
+      "rtc": "NT009",
+      "notes": "Published but explicitly not available in Production or Production Restricted during August 2026. Never auto-activate."
+    }
+  }
+}

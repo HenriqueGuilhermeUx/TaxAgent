@@ -1,19 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Length,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Length, MaxLength, ValidateNested } from 'class-validator';
 
 class CustomerDto {
-  @ApiProperty() @IsString() @IsNotEmpty() tax_id!: string;
-  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  tax_id!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  name!: string;
+
   @ApiProperty({ example: '3550308' })
   @IsString()
   @Length(7, 7)
@@ -21,21 +22,43 @@ class CustomerDto {
 }
 
 class ServiceDto {
-  @ApiProperty() @IsString() @IsNotEmpty() description!: string;
-  @ApiProperty() @IsNumber() @Min(0.01) amount!: number;
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  description!: string;
+
+  @ApiProperty({ example: 5000 })
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  amount!: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   national_service_code?: string;
+
+  @ApiPropertyOptional({ description: 'cIndOp when applicable to IBS/CBS.' })
+  @IsOptional()
+  @IsString()
+  operation_indicator?: string;
+
+  @ApiPropertyOptional({ description: 'cClassTrib when applicable to IBS/CBS.' })
+  @IsOptional()
+  @IsString()
+  tax_classification?: string;
 }
 
 export class CreateInvoiceDto {
-  @ApiProperty() @IsString() @IsNotEmpty() company_id!: string;
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  company_id!: string;
 
-  @ApiPropertyOptional({ enum: ['test', 'production'], default: 'test' })
-  @IsOptional()
+  @ApiProperty({ enum: ['test', 'production'], default: 'test' })
   @IsIn(['test', 'production'])
-  environment: 'test' | 'production' = 'test';
+  environment!: 'test' | 'production';
 
   @ApiProperty({ type: CustomerDto })
   @ValidateNested()
