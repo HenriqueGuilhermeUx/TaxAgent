@@ -23,10 +23,7 @@ export class InvoicesRepository {
   constructor(private readonly db: DatabaseService) {}
 
   async findByIdempotency(companyId: string, key: string): Promise<InvoiceRecord | null> {
-    const { rows } = await this.db.query<InvoiceRecord>(
-      'SELECT * FROM invoices WHERE company_id=$1 AND idempotency_key=$2',
-      [companyId, key],
-    );
+    const { rows } = await this.db.query<InvoiceRecord>('SELECT * FROM invoices WHERE company_id=$1 AND idempotency_key=$2', [companyId, key]);
     return rows[0] ?? null;
   }
 
@@ -34,8 +31,7 @@ export class InvoicesRepository {
     const id = createId('inv');
     const { rows } = await this.db.query<InvoiceRecord>(
       `INSERT INTO invoices(id, company_id, environment, status, idempotency_key, canonical_input)
-       VALUES ($1,$2,$3,'queued',$4,$5::jsonb)
-       RETURNING *`,
+       VALUES ($1,$2,$3,'queued',$4,$5::jsonb) RETURNING *`,
       [id, input.companyId, input.environment, idempotencyKey ?? null, JSON.stringify(input)],
     );
     return rows[0];
@@ -48,6 +44,10 @@ export class InvoicesRepository {
 
   async markProcessing(id: string): Promise<void> {
     await this.db.query("UPDATE invoices SET status='processing', updated_at=NOW() WHERE id=$1", [id]);
+  }
+
+  async markRetrying(id: string): Promise<void> {
+    await this.db.query("UPDATE invoices SET status='retrying', updated_at=NOW() WHERE id=$1", [id]);
   }
 
   async saveResult(id: string, result: IssueResult): Promise<void> {
@@ -70,8 +70,7 @@ export class InvoicesRepository {
 
   async finishAttempt(id: string, status: string, response: unknown, errorCode?: string, errorMessage?: string): Promise<void> {
     await this.db.query(
-      `UPDATE invoice_attempts SET status=$2, response_payload=$3::jsonb, error_code=$4, error_message=$5, finished_at=NOW()
-       WHERE id=$1`,
+      `UPDATE invoice_attempts SET status=$2, response_payload=$3::jsonb, error_code=$4, error_message=$5, finished_at=NOW() WHERE id=$1`,
       [id, status, JSON.stringify(response ?? null), errorCode ?? null, errorMessage ?? null],
     );
   }

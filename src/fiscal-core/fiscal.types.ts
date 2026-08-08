@@ -1,5 +1,5 @@
 export type FiscalEnvironment = 'test' | 'production';
-export type InvoiceStatus = 'queued' | 'processing' | 'authorized' | 'rejected' | 'cancelled';
+export type InvoiceStatus = 'queued' | 'processing' | 'retrying' | 'authorized' | 'rejected' | 'cancelled';
 
 export interface CanonicalCustomer {
   taxId: string;
@@ -28,6 +28,10 @@ export interface FiscalContext {
   customerCityCode: string;
 }
 
+export interface FiscalOperationContext {
+  invoiceId: string;
+}
+
 export interface IssueResult {
   status: 'authorized' | 'rejected';
   provider: string;
@@ -38,5 +42,6 @@ export interface IssueResult {
     code: string;
     message: string;
     retryable: boolean;
+    category?: string;
   };
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 
@@ -14,11 +14,13 @@ interface SchemaSource {
 
 interface RegistryFile {
   updatedAt: string;
-  sources: {
-    production: SchemaSource;
-    test: SchemaSource;
-    nt009Preview: SchemaSource;
-  };
+  sources: { production: SchemaSource; test: SchemaSource; nt009Preview: SchemaSource };
+}
+
+interface LocalManifest {
+  dpsXsd: string;
+  archiveSha256: string;
+  downloadedAt: string;
 }
 
 @Injectable()
@@ -38,7 +40,25 @@ export class SchemaRegistryService {
     return this.registry.sources.nt009Preview;
   }
 
+  localDpsXsd(environment: FiscalEnvironment): string | undefined {
+    const override = process.env.TAXAGENT_NFSE_DPS_XSD;
+    if (override) return override;
+    const source = this.active(environment);
+    const dir = join(process.cwd(), 'schemas', 'vendor', source.id);
+    const manifestPath = join(dir, 'manifest.json');
+    if (!existsSync(manifestPath)) return undefined;
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as LocalManifest;
+    const resolved = join(dir, manifest.dpsXsd);
+    return existsSync(resolved) ? resolved : undefined;
+  }
+
   metadata() {
-    return this.registry;
+    return {
+      ...this.registry,
+      runtime: {
+        productionSynced: Boolean(this.localDpsXsd('production')),
+        testSynced: Boolean(this.localDpsXsd('test')),
+      },
+    };
   }
 }

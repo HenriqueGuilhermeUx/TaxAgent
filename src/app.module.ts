@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { DatabaseModule } from './database/database.module';
+import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { SchemaRegistryModule } from './schema-registry/schema-registry.module';
@@ -10,6 +11,6 @@ import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
-  imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, WebhooksModule, InvoicesModule],
+  imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, DocumentsModule, WebhooksModule, InvoicesModule],
 })
 export class AppModule {}

@@ -1,6 +1,6 @@
 {
   "name": "taxagent",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "description": "API-first fiscal infrastructure for Brazil's new tax system",
   "license": "UNLICENSED",
@@ -9,13 +9,15 @@
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "db:migrate": "tsx scripts/migrate.ts",
+    "schemas:sync": "tsx scripts/sync-nfse-schemas.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/swagger": "^11.2.0",
+    "adm-zip": "^0.5.16",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "fast-xml-parser": "^5.2.5",
@@ -26,6 +28,7 @@
     "xml-crypto": "^6.1.2"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^22.17.0",
     "@types/node-forge": "^1.3.13",
     "@types/pg": "^8.15.5",

@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { FiscalRouterService } from '../fiscal-core/fiscal-router.service';
+import { normalizeEngineError } from '../fiscal-core/fiscal-engine.error';
 import { IssueResult } from '../fiscal-core/fiscal.types';
 import { JobsService } from '../jobs/jobs.service';
 import { FiscalLedgerService } from '../ledger/fiscal-ledger.service';
@@ -7,6 +8,8 @@ import { TaxEngineService } from '../tax-engine/tax-engine.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoicesRepository } from './invoices.repository';
+
+const MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class InvoicesService {
@@ -63,23 +66,35 @@ export class InvoicesService {
         customerCityCode: invoice.canonical_input.customer.cityCode,
       });
       attemptId = await this.repository.createAttempt(id, provider.name, attemptNumber, invoice.canonical_input);
-      const result = await provider.issue(invoice.canonical_input);
+      const result = await provider.issue(invoice.canonical_input, { invoiceId: id });
       await this.repository.finishAttempt(attemptId, result.status, result);
       await this.repository.saveResult(id, result);
       const eventType = result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected';
       await this.ledger.append({ invoiceId: id, type: eventType, payload: result });
       await this.webhooks.emit(invoice.company_id, eventType, { invoice_id: id, result });
     } catch (error) {
+      const normalized = normalizeEngineError(error);
+      if (attemptId) await this.repository.finishAttempt(attemptId, 'error', normalized, normalized.code, normalized.message);
+      const exhausted = attemptNumber >= MAX_ATTEMPTS;
+      if (normalized.retryable && !exhausted) {
+        await this.repository.markRetrying(id);
+        await this.ledger.append({ invoiceId: id, type: 'invoice.retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message } });
+        throw error;
+      }
+
       const result: IssueResult = {
         status: 'rejected',
         provider: 'taxagent',
-        rejection: { code: 'TA_ENGINE_ERROR', message: error instanceof Error ? error.message : 'Unknown engine error', retryable: true },
+        rejection: {
+          code: exhausted && normalized.retryable ? 'TA_RETRIES_EXHAUSTED' : normalized.code,
+          message: normalized.message,
+          retryable: false,
+          category: exhausted ? 'retry-exhausted' : 'engine',
+        },
       };
-      if (attemptId) await this.repository.finishAttempt(attemptId, 'error', result, result.rejection?.code, result.rejection?.message);
       await this.repository.saveResult(id, result);
-      await this.ledger.append({ invoiceId: id, type: 'invoice.error', payload: result });
-      await this.webhooks.emit(invoice.company_id, 'invoice.error', { invoice_id: id, result });
-      throw error;
+      await this.ledger.append({ invoiceId: id, type: 'invoice.rejected', payload: result });
+      await this.webhooks.emit(invoice.company_id, 'invoice.rejected', { invoice_id: id, result });
     }
   }
 
