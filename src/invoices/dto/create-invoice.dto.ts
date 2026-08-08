@@ -18,6 +18,7 @@ class ServiceDto {
 export class CreateInvoiceDto {
   @ApiProperty() @IsString() @IsNotEmpty() company_id!: string;
   @ApiProperty({ enum: ['test', 'production'], default: 'test' }) @IsIn(['test', 'production']) environment!: 'test' | 'production';
+  @ApiPropertyOptional({ description: 'Resolved TaxAgent tax decision to bind to this invoice.' }) @IsOptional() @IsString() tax_decision_id?: string;
   @ApiProperty({ type: CustomerDto }) @ValidateNested() @Type(() => CustomerDto) customer!: CustomerDto;
   @ApiProperty({ type: ServiceDto }) @ValidateNested() @Type(() => ServiceDto) service!: ServiceDto;
 }
