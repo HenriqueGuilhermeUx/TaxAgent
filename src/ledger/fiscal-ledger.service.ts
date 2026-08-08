@@ -1,21 +1,22 @@
 import { Injectable } from '@nestjs/common';
-
-export interface LedgerEntry {
-  invoiceId: string;
-  type: 'invoice.created' | 'invoice.authorized' | 'invoice.rejected';
-  at: string;
-  payload?: unknown;
-}
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class FiscalLedgerService {
-  private readonly entries: LedgerEntry[] = [];
+  constructor(private readonly db: DatabaseService) {}
 
-  append(entry: LedgerEntry): void {
-    this.entries.push(entry);
+  async append(entry: { invoiceId: string; type: string; payload?: unknown }): Promise<void> {
+    await this.db.query(
+      'INSERT INTO ledger_entries(invoice_id, event_type, payload) VALUES ($1,$2,$3::jsonb)',
+      [entry.invoiceId, entry.type, JSON.stringify(entry.payload ?? null)],
+    );
   }
 
-  findByInvoice(invoiceId: string): LedgerEntry[] {
-    return this.entries.filter((entry) => entry.invoiceId === invoiceId);
+  async findByInvoice(invoiceId: string) {
+    const { rows } = await this.db.query(
+      'SELECT id, event_type AS type, payload, created_at AS at FROM ledger_entries WHERE invoice_id=$1 ORDER BY id',
+      [invoiceId],
+    );
+    return rows;
   }
 }

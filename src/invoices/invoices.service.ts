@@ -1,35 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import { FiscalRouterService } from '../fiscal-core/fiscal-router.service';
-import {
-  CanonicalInvoiceInput,
-  InvoiceStatus,
-  IssueResult,
-} from '../fiscal-core/fiscal.types';
+import { IssueResult } from '../fiscal-core/fiscal.types';
+import { JobsService } from '../jobs/jobs.service';
 import { FiscalLedgerService } from '../ledger/fiscal-ledger.service';
 import { TaxEngineService } from '../tax-engine/tax-engine.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
-
-interface InvoiceRecord {
-  id: string;
-  status: InvoiceStatus;
-  input: CanonicalInvoiceInput;
-  result?: IssueResult;
-  createdAt: string;
-  updatedAt: string;
-}
+import { InvoicesRepository } from './invoices.repository';
 
 @Injectable()
 export class InvoicesService {
-  private readonly invoices = new Map<string, InvoiceRecord>();
-
   constructor(
+    private readonly repository: InvoicesRepository,
     private readonly router: FiscalRouterService,
     private readonly taxEngine: TaxEngineService,
     private readonly ledger: FiscalLedgerService,
+    private readonly jobs: JobsService,
   ) {}
 
-  create(dto: CreateInvoiceDto) {
+  async create(dto: CreateInvoiceDto, idempotencyKey?: string) {
+    if (idempotencyKey) {
+      const existing = await this.repository.findByIdempotency(dto.company_id, idempotencyKey);
+      if (existing) return this.toAccepted(existing);
+    }
+
     const input = this.taxEngine.validate({
       companyId: dto.company_id,
       environment: dto.environment,
@@ -45,70 +38,60 @@ export class InvoicesService {
       },
     });
 
-    const now = new Date().toISOString();
-    const invoice: InvoiceRecord = {
-      id: `inv_${randomUUID().replaceAll('-', '')}`,
-      status: 'processing',
-      input,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.invoices.set(invoice.id, invoice);
-    this.ledger.append({ invoiceId: invoice.id, type: 'invoice.created', at: now });
-    void this.process(invoice.id);
-
-    return { id: invoice.id, status: invoice.status, environment: input.environment };
+    const invoice = await this.repository.create(input, idempotencyKey);
+    await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.created', payload: { environment: input.environment } });
+    await this.jobs.enqueue('issue_invoice', { invoiceId: invoice.id });
+    await this.ledger.append({ invoiceId: invoice.id, type: 'invoice.queued' });
+    return this.toAccepted(invoice);
   }
 
-  findOne(id: string) {
-    const invoice = this.invoices.get(id);
+  async findOne(id: string) {
+    const invoice = await this.repository.findById(id);
     if (!invoice) throw new NotFoundException('Invoice not found');
-
-    return {
-      ...invoice,
-      ledger: this.ledger.findByInvoice(id),
-    };
+    return { ...invoice, ledger: await this.ledger.findByInvoice(id) };
   }
 
-  private async process(id: string): Promise<void> {
-    const invoice = this.invoices.get(id);
-    if (!invoice) return;
+  async process(id: string, attemptNumber: number): Promise<void> {
+    const invoice = await this.repository.findById(id);
+    if (!invoice || invoice.status === 'authorized' || invoice.status === 'cancelled') return;
 
+    await this.repository.markProcessing(id);
+    await this.ledger.append({ invoiceId: id, type: 'invoice.processing', payload: { attempt: attemptNumber } });
+
+    let attemptId: string | undefined;
     try {
       const provider = await this.router.resolve({
-        companyId: invoice.input.companyId,
-        environment: invoice.input.environment,
-        customerCityCode: invoice.input.customer.cityCode,
+        companyId: invoice.canonical_input.companyId,
+        environment: invoice.canonical_input.environment,
+        customerCityCode: invoice.canonical_input.customer.cityCode,
       });
-      const result = await provider.issue(invoice.input);
-      invoice.status = result.status;
-      invoice.result = result;
-      invoice.updatedAt = new Date().toISOString();
-      this.ledger.append({
+      attemptId = await this.repository.createAttempt(id, provider.name, attemptNumber, invoice.canonical_input);
+      const result = await provider.issue(invoice.canonical_input);
+      await this.repository.finishAttempt(attemptId, result.status, result);
+      await this.repository.saveResult(id, result);
+      await this.ledger.append({
         invoiceId: id,
         type: result.status === 'authorized' ? 'invoice.authorized' : 'invoice.rejected',
-        at: invoice.updatedAt,
         payload: result,
       });
     } catch (error) {
-      invoice.status = 'rejected';
-      invoice.updatedAt = new Date().toISOString();
-      invoice.result = {
+      const result: IssueResult = {
         status: 'rejected',
         provider: 'taxagent',
         rejection: {
           code: 'TA_ENGINE_ERROR',
           message: error instanceof Error ? error.message : 'Unknown engine error',
-          retryable: false,
+          retryable: true,
         },
       };
-      this.ledger.append({
-        invoiceId: id,
-        type: 'invoice.rejected',
-        at: invoice.updatedAt,
-        payload: invoice.result,
-      });
+      if (attemptId) await this.repository.finishAttempt(attemptId, 'error', result, result.rejection?.code, result.rejection?.message);
+      await this.repository.saveResult(id, result);
+      await this.ledger.append({ invoiceId: id, type: 'invoice.error', payload: result });
+      throw error;
     }
+  }
+
+  private toAccepted(invoice: { id: string; status: string; environment: string }) {
+    return { id: invoice.id, status: invoice.status, environment: invoice.environment };
   }
 }
