@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { gunzipSync, gzipSync } from 'node:zlib';
 import { request } from 'node:https';
+import { connect } from 'node:tls';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { CertificateMaterial } from '../../certificates/certificate-vault.service';
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 import { FiscalEnvironment } from '../../fiscal-core/fiscal.types';
+import { resolveNfseBase } from './nfse-endpoints';
 
 export interface NationalApiResponse {
   chaveAcesso?: string;
@@ -32,19 +34,33 @@ export class NfseNationalClient {
     const body = JSON.stringify({ pedidoRegistroEventoXmlGZipB64: gzipSync(Buffer.from(signedXml, 'utf8')).toString('base64') });
     return this.requestJson(new URL(`/nfse/${encodeURIComponent(accessKey)}/eventos`, this.normalizedBase(environment)), 'POST', body, certificate);
   }
+  probeMutualTls(environment: FiscalEnvironment, certificate: CertificateMaterial): Promise<{ host: string; protocol: string | null; cipher: string | null; authorized: boolean }> {
+    const base = new URL(this.normalizedBase(environment));
+    return new Promise((resolve, reject) => {
+      const socket = connect({ host: base.hostname, port: Number(base.port || 443), servername: base.hostname, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true });
+      const timer = setTimeout(() => socket.destroy(new Error('mTLS handshake timeout')), 15_000);
+      socket.once('secureConnect', () => {
+        clearTimeout(timer);
+        const cipher = socket.getCipher();
+        const result = { host: base.hostname, protocol: socket.getProtocol(), cipher: cipher?.name ?? null, authorized: socket.authorized };
+        socket.end();
+        resolve(result);
+      });
+      socket.once('error', (error) => {
+        clearTimeout(timer);
+        reject(new FiscalEngineError('NFSE_MTLS_PROBE_FAILED', `SEFIN mTLS handshake failed: ${error.message}`, true));
+      });
+    });
+  }
   decodeNfseXml(response: NationalApiResponse): string | undefined { return response.nfseXmlGZipB64 ? gunzipSync(Buffer.from(response.nfseXmlGZipB64, 'base64')).toString('utf8') : undefined; }
   decodeEventXml(response: NationalApiResponse): string | undefined { return response.eventoXmlGZipB64 ? gunzipSync(Buffer.from(response.eventoXmlGZipB64, 'base64')).toString('utf8') : undefined; }
   sanitize(response: NationalApiResponse): NationalApiResponse {
     return { ...response, ...(response.nfseXmlGZipB64 ? { nfseXmlGZipB64: '[stored-as-fiscal-document]' } : {}), ...(response.eventoXmlGZipB64 ? { eventoXmlGZipB64: '[stored-as-fiscal-document]' } : {}) };
   }
-  private normalizedBase(environment: FiscalEnvironment): string {
-    const base = environment === 'production' ? process.env.NFSE_PRODUCTION_BASE_URL : process.env.NFSE_TEST_BASE_URL;
-    if (!base) throw new FiscalEngineError('TA_NFSE_ENDPOINT_MISSING', `NFS-e base URL not configured for ${environment}`, false);
-    return base.endsWith('/') ? base : `${base}/`;
-  }
+  private normalizedBase(environment: FiscalEnvironment): string { return resolveNfseBase(environment); }
   private requestJson(url: URL, method: 'GET' | 'POST', body: string | undefined, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     return new Promise((resolve, reject) => {
-      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.6' } }, (res) => {
+      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.9' } }, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {

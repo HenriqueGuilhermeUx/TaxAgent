@@ -83,8 +83,15 @@ export class CertificateVaultService {
       const asn1 = forge.asn1.fromDer(der);
       const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, password);
       const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] ?? [];
+      const shroudedKeyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
+      const keyBags = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? [];
       const cert = certBags[0]?.cert;
+      const privateKey = [...shroudedKeyBags, ...keyBags].find((bag) => Boolean(bag.key))?.key;
       if (!cert) throw new Error('Certificate bag not found');
+      if (!privateKey) throw new Error('Private key bag not found; TaxAgent requires a complete A1 PKCS#12/PFX');
+      const now = Date.now();
+      if (cert.validity.notAfter.getTime() <= now) throw new Error(`Certificate expired at ${cert.validity.notAfter.toISOString()}`);
+      if (cert.validity.notBefore.getTime() > now + 5 * 60_000) throw new Error(`Certificate is not valid before ${cert.validity.notBefore.toISOString()}`);
       const certDer = Buffer.from(forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes(), 'binary');
       const label = (attrs: forge.pki.CertificateField[]) => attrs.map((a) => `${a.shortName ?? a.name}=${a.value}`).join(',');
       return {

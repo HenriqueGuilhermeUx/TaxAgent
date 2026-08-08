@@ -8,11 +8,12 @@ import { HealthModule } from './health/health.module';
 import { FiscalInboxModule } from './inbox/fiscal-inbox.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { MunicipalParametersModule } from './municipal-parameters/municipal-parameters.module';
+import { OperationsModule } from './operations/operations.module';
 import { SchemaRegistryModule } from './schema-registry/schema-registry.module';
 import { SecurityModule } from './security/security.module';
 import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, DocumentsModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule] })
 export class AppModule {}
