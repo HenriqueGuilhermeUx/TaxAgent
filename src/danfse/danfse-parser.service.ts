@@ -41,7 +41,16 @@ function party(source: unknown): DanfseParty {
 @Injectable()
 export class DanfseParserService {
   parse(xml: string): DanfseModel {
-    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, attributeNamePrefix: '@_' });
+    // Fiscal XML values must remain strings: auto-number parsing can destroy
+    // decimal scale and leading zeros in official codes/identifiers.
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      removeNSPrefix: true,
+      attributeNamePrefix: '@_',
+      parseTagValue: false,
+      parseAttributeValue: false,
+      trimValues: true,
+    });
     const parsed = parser.parse(xml) as Node;
     const nfse = node(parsed.NFSe ?? parsed.nfse ?? parsed);
     const inf = node(nfse.infNFSe ?? nfse.InfNFSe ?? nfse);
