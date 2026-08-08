@@ -1,0 +1,42 @@
+{
+  "updatedAt": "2026-08-08",
+  "sources": {
+    "rtcOpenData": {
+      "authority": "runtime-reference",
+      "status": "beta",
+      "url": "https://piloto-cbs.tributos.gov.br/servico/calculadora-consumo/api/swagger-ui/index.html",
+      "notes": "Official Calculadora de Tributos sobre o Consumo open-data API. Use runtime version endpoint and preserve source payloads."
+    },
+    "nfseAnnexB": {
+      "authority": "official-domain",
+      "status": "active",
+      "version": "v1.01-20260122",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+      "notes": "NBS2 / Lista de Serviço Nacional domain annex published by Portal NFS-e."
+    },
+    "nfseAnnexC": {
+      "authority": "official-domain",
+      "status": "active",
+      "version": "v1.01-20260122",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+      "notes": "INDOP IBS/CBS domain annex published by Portal NFS-e."
+    },
+    "nfseAnnexVIII": {
+      "authority": "advisory-only",
+      "status": "development",
+      "version": "1.01.00",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/rtc",
+      "notes": "Official portal explicitly states there are no business rules based on this correlation annex in Production or Production Restricted. Never auto-promote its correlations to authoritative tax decisions."
+    },
+    "transition2026": {
+      "authority": "official-law-guidance",
+      "status": "active",
+      "effectiveFrom": "2026-01-01",
+      "effectiveTo": "2026-12-31",
+      "ibsReferenceRate": "0.001",
+      "cbsReferenceRate": "0.009",
+      "url": "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/programas-e-atividades/reforma-tributaria-do-consumo/entenda",
+      "notes": "2026 test-year reference rates. Do not apply blindly to differentiated/special operations."
+    }
+  }
+}

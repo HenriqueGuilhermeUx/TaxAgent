@@ -3,70 +3,21 @@ import { Type } from 'class-transformer';
 import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Length, MaxLength, ValidateNested } from 'class-validator';
 
 class CustomerDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(32)
-  tax_id!: string;
-
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200)
-  name!: string;
-
-  @ApiProperty({ example: '3550308' })
-  @IsString()
-  @Length(7, 7)
-  city_code!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(32) tax_id!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(200) name!: string;
+  @ApiProperty({ example: '3550308' }) @IsString() @Length(7, 7) city_code!: string;
 }
-
 class ServiceDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(2000)
-  description!: string;
-
-  @ApiProperty({ example: 5000 })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  amount!: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  national_service_code?: string;
-
-  @ApiPropertyOptional({ description: 'cIndOp when applicable to IBS/CBS.' })
-  @IsOptional()
-  @IsString()
-  operation_indicator?: string;
-
-  @ApiPropertyOptional({ description: 'cClassTrib when applicable to IBS/CBS.' })
-  @IsOptional()
-  @IsString()
-  tax_classification?: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(2000) description!: string;
+  @ApiProperty({ example: 5000 }) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @IsPositive() amount!: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() national_service_code?: string;
+  @ApiPropertyOptional({ description: 'cIndOp when applicable to IBS/CBS.' }) @IsOptional() @IsString() operation_indicator?: string;
+  @ApiPropertyOptional({ description: 'CST IBS/CBS.' }) @IsOptional() @IsString() tax_situation?: string;
+  @ApiPropertyOptional({ description: 'cClassTrib IBS/CBS.' }) @IsOptional() @IsString() tax_classification?: string;
 }
-
 export class CreateInvoiceDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  company_id!: string;
-
-  @ApiProperty({ enum: ['test', 'production'], default: 'test' })
-  @IsIn(['test', 'production'])
-  environment!: 'test' | 'production';
-
-  @ApiProperty({ type: CustomerDto })
-  @ValidateNested()
-  @Type(() => CustomerDto)
-  customer!: CustomerDto;
-
-  @ApiProperty({ type: ServiceDto })
-  @ValidateNested()
-  @Type(() => ServiceDto)
-  service!: ServiceDto;
+  @ApiProperty() @IsString() @IsNotEmpty() company_id!: string;
+  @ApiProperty({ enum: ['test', 'production'], default: 'test' }) @IsIn(['test', 'production']) environment!: 'test' | 'production';
+  @ApiProperty({ type: CustomerDto }) @ValidateNested() @Type(() => CustomerDto) customer!: CustomerDto;
+  @ApiProperty({ type: ServiceDto }) @ValidateNested() @Type(() => ServiceDto) service!: ServiceDto;
 }
