@@ -13,6 +13,8 @@ export interface CanonicalService {
 export interface CanonicalInvoiceInput {
   companyId: string;
   environment: FiscalEnvironment;
+  competence?: string;
+  issuedAt?: string;
   customer: CanonicalCustomer;
   service: CanonicalService;
 }

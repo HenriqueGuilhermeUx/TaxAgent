@@ -30,6 +30,10 @@ export class NfseNationalClient {
   getByDpsId(environment: FiscalEnvironment, dpsId: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     return this.requestJson(new URL(`/dps/${encodeURIComponent(dpsId)}`, this.normalizedBase(environment)), 'GET', undefined, certificate);
   }
+  async findByDpsId(environment: FiscalEnvironment, dpsId: string, certificate: CertificateMaterial): Promise<NationalApiResponse | null> {
+    try { return await this.getByDpsId(environment, dpsId, certificate); }
+    catch (error) { if (error instanceof FiscalEngineError && error.code === 'NFSE_NOT_FOUND') return null; throw error; }
+  }
   registerEvent(environment: FiscalEnvironment, accessKey: string, signedXml: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     const body = JSON.stringify({ pedidoRegistroEventoXmlGZipB64: gzipSync(Buffer.from(signedXml, 'utf8')).toString('base64') });
     return this.requestJson(new URL(`/nfse/${encodeURIComponent(accessKey)}/eventos`, this.normalizedBase(environment)), 'POST', body, certificate);
@@ -60,7 +64,7 @@ export class NfseNationalClient {
   private normalizedBase(environment: FiscalEnvironment): string { return resolveNfseBase(environment); }
   private requestJson(url: URL, method: 'GET' | 'POST', body: string | undefined, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     return new Promise((resolve, reject) => {
-      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.9' } }, (res) => {
+      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.10' } }, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
@@ -69,6 +73,7 @@ export class NfseNationalClient {
           try { parsed = raw ? JSON.parse(raw) as NationalApiResponse : {}; }
           catch { return reject(new FiscalEngineError('NFSE_NON_JSON_RESPONSE', `NFS-e returned non-JSON response (${res.statusCode}): ${raw.slice(0, 500)}`, (res.statusCode ?? 500) >= 500)); }
           const status = res.statusCode ?? 500;
+          if (status === 404) return reject(new FiscalEngineError('NFSE_NOT_FOUND', 'DPS/NFS-e not found in SEFIN', false, parsed));
           if (status >= 500 || status === 408 || status === 429) return reject(new FiscalEngineError('NFSE_TRANSIENT_HTTP', `NFS-e HTTP ${status}`, true, parsed));
           if (status >= 400 && !parsed.erros?.length) return reject(new FiscalEngineError('NFSE_HTTP_ERROR', `NFS-e HTTP ${status}: ${raw.slice(0, 1000)}`, false, parsed));
           resolve(parsed);

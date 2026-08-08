@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Length, MaxLength, ValidateNested } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Length, MaxLength, ValidateNested } from 'class-validator';
 
 class CustomerDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(32) tax_id!: string;
@@ -18,6 +18,7 @@ class ServiceDto {
 export class CreateInvoiceDto {
   @ApiProperty() @IsString() @IsNotEmpty() company_id!: string;
   @ApiProperty({ enum: ['test', 'production'], default: 'test' }) @IsIn(['test', 'production']) environment!: 'test' | 'production';
+  @ApiPropertyOptional({ example: '2026-08-08', description: 'Data de competência fiscal. Se omitida, TaxAgent fixa a data de criação da operação.' }) @IsOptional() @IsDateString({ strict: true }) competence?: string;
   @ApiPropertyOptional({ description: 'Resolved TaxAgent tax decision to bind to this invoice.' }) @IsOptional() @IsString() tax_decision_id?: string;
   @ApiProperty({ type: CustomerDto }) @ValidateNested() @Type(() => CustomerDto) customer!: CustomerDto;
   @ApiProperty({ type: ServiceDto }) @ValidateNested() @Type(() => ServiceDto) service!: ServiceDto;
