@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { FiscalRouterService } from '../fiscal-core/fiscal-router.service';
 import { IssueResult } from '../fiscal-core/fiscal.types';
 import { JobsService } from '../jobs/jobs.service';
@@ -43,9 +43,10 @@ export class InvoicesService {
     return this.toAccepted(invoice);
   }
 
-  async findOne(id: string) {
+  async findOneForCompany(id: string, companyId?: string) {
     const invoice = await this.repository.findById(id);
     if (!invoice) throw new NotFoundException('Invoice not found');
+    if (companyId && invoice.company_id !== companyId) throw new ForbiddenException('Invoice belongs to another company');
     return { ...invoice, ledger: await this.ledger.findByInvoice(id) };
   }
 

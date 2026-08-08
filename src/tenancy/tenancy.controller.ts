@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import { BootstrapGuard } from '../auth/bootstrap.guard';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { TenancyService } from './tenancy.service';
@@ -10,16 +11,22 @@ export class TenancyController {
   constructor(private readonly tenancy: TenancyService) {}
 
   @Post('organizations')
+  @ApiHeader({ name: 'X-TaxAgent-Bootstrap-Token', required: true })
+  @UseGuards(BootstrapGuard)
   createOrganization(@Body() dto: CreateOrganizationDto) {
     return this.tenancy.createOrganization(dto.name);
   }
 
   @Post('organizations/:organizationId/companies')
+  @ApiHeader({ name: 'X-TaxAgent-Bootstrap-Token', required: true })
+  @UseGuards(BootstrapGuard)
   createCompany(@Param('organizationId') organizationId: string, @Body() dto: CreateCompanyDto) {
     return this.tenancy.createCompany(organizationId, dto);
   }
 
   @Get('companies/:id')
+  @ApiHeader({ name: 'X-TaxAgent-Bootstrap-Token', required: true })
+  @UseGuards(BootstrapGuard)
   getCompany(@Param('id') id: string) {
     return this.tenancy.getCompany(id);
   }

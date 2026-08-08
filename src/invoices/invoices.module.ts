@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { CertificatesModule } from '../certificates/certificates.module';
 import { FiscalRouterService } from '../fiscal-core/fiscal-router.service';
 import { JobsModule } from '../jobs/jobs.module';
@@ -16,7 +17,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
 @Module({
-  imports: [JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, XmlEngineModule, WebhooksModule],
+  imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, XmlEngineModule, WebhooksModule],
   controllers: [InvoicesController],
   providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, FiscalRouterService, FiscalLedgerService, TaxEngineService, NfseNationalClient, NfseNationalProvider],
 })
