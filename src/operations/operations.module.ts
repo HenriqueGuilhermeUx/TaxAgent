@@ -4,13 +4,12 @@ import { CertificatesModule } from '../certificates/certificates.module';
 import { MunicipalParametersModule } from '../municipal-parameters/municipal-parameters.module';
 import { NfseNationalClient } from '../providers/nfse-national/nfse-national.client';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
+import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
+import { XmlEngineModule } from '../xml-engine/xml-engine.module';
+import { DpsPreflightService } from './dps-preflight.service';
 import { OperationsController } from './operations.controller';
 import { ReadinessService } from './readiness.service';
 
-@Module({
-  imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule],
-  controllers: [OperationsController],
-  providers: [ReadinessService, NfseNationalClient],
-})
+@Module({ imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule], controllers: [OperationsController], providers: [ReadinessService, DpsPreflightService, NfseNationalClient] })
 export class OperationsModule {}

@@ -42,6 +42,12 @@ export class DpsBuilderService {
   constructor(private readonly sequences: DpsSequenceService) {}
   async build(input: CanonicalInvoiceInput, company: FiscalCompany): Promise<DpsBuildResult> {
     const sequence = await this.sequences.next(input.companyId, input.environment);
+    return this.buildWithSequence(input, company, sequence);
+  }
+  buildPreview(input: CanonicalInvoiceInput, company: FiscalCompany, sequence = 1): DpsBuildResult {
+    return this.buildWithSequence(input, company, sequence);
+  }
+  private buildWithSequence(input: CanonicalInvoiceInput, company: FiscalCompany, sequence: number): DpsBuildResult {
     const series = process.env.TAXAGENT_DPS_SERIES ?? '1';
     const id = buildDpsId(company.city_code, company.tax_id, series, sequence);
     const providerIdentity = normalizeTaxIdentity(company.tax_id);
