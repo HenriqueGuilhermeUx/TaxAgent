@@ -8,6 +8,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: taxagent
+          POSTGRES_PASSWORD: taxagent
+          POSTGRES_DB: taxagent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxagent -d taxagent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://taxagent:taxagent@127.0.0.1:5432/taxagent
+      TAXAGENT_MASTER_KEY_B64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      TAXAGENT_BOOTSTRAP_TOKEN: ci-bootstrap-token
+      TAXAGENT_AUTH_MODE: required
+      TAXAGENT_NFSE_MODE: mock
+      TAXAGENT_LIVE_ENABLED: 'false'
+      TAXAGENT_DPS_BUILDER_MODE: draft
+      NFSE_TEST_BASE_URL: https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional
+      NFSE_PRODUCTION_BASE_URL: https://sefin.nfse.gov.br/SefinNacional
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -17,3 +41,21 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Run database migrations
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+      - name: Boot API against PostgreSQL
+        run: |
+          npm start > /tmp/taxagent-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/v1/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/taxagent-api.log
+          exit 1

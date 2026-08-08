@@ -14,13 +14,13 @@ export class HealthController {
       return {
         status: 'ok',
         service: 'taxagent-api',
-        version: '0.4.0',
+        version: '0.10.0',
         database: 'ok',
         nfse_mode: process.env.TAXAGENT_NFSE_MODE ?? 'mock',
         timestamp: new Date().toISOString(),
       };
     } catch {
-      throw new ServiceUnavailableException({ status: 'degraded', service: 'taxagent-api', database: 'unavailable', timestamp: new Date().toISOString() });
+      throw new ServiceUnavailableException({ status: 'degraded', service: 'taxagent-api', version: '0.10.0', database: 'unavailable', timestamp: new Date().toISOString() });
     }
   }
 }
