@@ -1,0 +1,22 @@
+name: nfse-schema-watch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * *'
+
+jobs:
+  verify-official-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Download and inspect official NFS-e schemas
+        run: npm run schemas:sync
+      - name: Verify manifests were produced
+        run: |
+          test -f schemas/vendor/nfse-production-v1.01-20260209/manifest.json
+          test -f schemas/vendor/nfse-prodrest-v1.01-20260727/manifest.json
