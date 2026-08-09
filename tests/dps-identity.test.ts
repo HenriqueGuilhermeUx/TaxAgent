@@ -14,7 +14,7 @@ test('pads CPF to 14 positions and uses inscription type 1', () => {
 });
 test('preserves alphanumeric CNPJ but keeps DPS series numeric', () => {
   const id = buildDpsId('3550308', 'AB345678000190', '81', 9);
-  assert.equal(id, 'DPS35503082AB345678000190000810000000000000009');
+  assert.equal(id, 'DPS35503082AB34567800019000081000000000000009');
   assert.equal(id.length, 45);
 });
 test('rejects nonnumeric or out-of-range DPS series from active XSD', () => {
