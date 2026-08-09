@@ -21,6 +21,8 @@ services:
         generateValue: true
       - key: TAXAGENT_AUTH_MODE
         value: required
+      - key: TAXAGENT_HOMOLOGATION_CONSOLE_ENABLED
+        value: "true"
       - key: TAXAGENT_NFSE_MODE
         value: mock
       - key: TAXAGENT_LIVE_ENABLED
