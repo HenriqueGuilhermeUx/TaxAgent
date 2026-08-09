@@ -23,8 +23,8 @@
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
-    "@nestjs/swagger": "^11.2.0",
-    "adm-zip": "^0.5.16",
+    "@nestjs/swagger": "11.4.6",
+    "adm-zip": "0.6.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "fast-xml-parser": "^5.2.5",
@@ -45,6 +45,9 @@
     "@types/qrcode": "^1.5.5",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "js-yaml": "5.2.2"
   },
   "engines": { "node": ">=22" }
 }
