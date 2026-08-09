@@ -27,6 +27,7 @@ jobs:
       TAXAGENT_MASTER_KEY_B64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       TAXAGENT_BOOTSTRAP_TOKEN: ci-bootstrap-token
       TAXAGENT_AUTH_MODE: required
+      TAXAGENT_HOMOLOGATION_CONSOLE_ENABLED: 'true'
       TAXAGENT_NFSE_MODE: mock
       TAXAGENT_LIVE_ENABLED: 'false'
       TAXAGENT_DPS_BUILDER_MODE: draft
@@ -38,6 +39,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
