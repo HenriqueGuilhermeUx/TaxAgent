@@ -14,16 +14,25 @@ export class ReadinessService {
   constructor(private readonly tenancy: TenancyService, private readonly vault: CertificateVaultService, private readonly schemas: SchemaRegistryService, private readonly parameters: MunicipalParametersClient, private readonly nfse: NfseNationalClient) {}
   async report(companyId: string, environment: FiscalEnvironment) {
     const company = await this.tenancy.getCompany(companyId) as CompanyRecord;
-    const certificates = await this.vault.metadata(companyId) as Array<{ status: string; valid_to?: Date | string | null; certificate_fingerprint?: string }>;
+    const certificates = await this.vault.metadata(companyId) as Array<{ status: string; valid_to?: Date | string | null; certificate_fingerprint?: string; subject_tax_id?: string | null }>;
     const activeCertificate = certificates.find((certificate) => certificate.status === 'active');
     const endpoint = nfseEndpointPolicy(environment); const schema = this.schemas.active(environment); const gates: ReadinessGate[] = [];
-    const taxId = String(company.tax_id ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const taxId = normalizeTaxId(company.tax_id);
     gates.push({ id: 'company_tax_id', label: 'CNPJ do prestador', status: /^[A-Z0-9]{14}$/.test(taxId) ? 'pass' : 'fail', blocking: true, detail: /^[A-Z0-9]{14}$/.test(taxId) ? 'Identificador de 14 posições compatível com CNPJ numérico/alfanumérico.' : 'CNPJ deve possuir 14 posições alfanuméricas.' });
     gates.push({ id: 'company_city_code', label: 'Código IBGE do município emissor', status: /^\d{7}$/.test(String(company.city_code ?? '')) ? 'pass' : 'fail', blocking: true, detail: /^\d{7}$/.test(String(company.city_code ?? '')) ? `Município emissor ${company.city_code}.` : 'Código IBGE municipal deve possuir 7 dígitos.' });
     gates.push({ id: 'tax_regime', label: 'Regime tributário suportado pelo builder live atual', status: String(company.tax_regime ?? '').toLowerCase() === 'regular' ? 'pass' : 'fail', blocking: true, detail: String(company.tax_regime ?? '').toLowerCase() === 'regular' ? 'Regime regular habilitado para o primeiro ciclo de homologação.' : 'Primeiro ciclo live está deliberadamente limitado a tax_regime=regular; Simples e regimes especiais serão liberados após regras específicas.' });
     gates.push({ id: 'municipal_registration', label: 'Inscrição municipal', status: company.municipal_registration ? 'pass' : 'warn', blocking: false, detail: company.municipal_registration ? 'Inscrição municipal cadastrada.' : 'Não cadastrada; algumas operações/municípios podem exigir IM.' });
-    if (!activeCertificate) gates.push({ id: 'certificate_a1', label: 'Certificado A1', status: 'fail', blocking: true, detail: 'Nenhum certificado A1 ativo no Certificate Vault.' });
-    else { const validTo = activeCertificate.valid_to ? new Date(activeCertificate.valid_to).getTime() : NaN; const valid = Number.isFinite(validTo) && validTo > Date.now(); gates.push({ id: 'certificate_a1', label: 'Certificado A1', status: valid ? 'pass' : 'fail', blocking: true, detail: valid ? `A1 ativo; fingerprint ${activeCertificate.certificate_fingerprint ?? 'registrado'}; expira em ${new Date(validTo).toISOString()}.` : 'Certificado A1 ativo está expirado ou sem validade reconhecível.' }); }
+    if (!activeCertificate) {
+      gates.push({ id: 'certificate_a1', label: 'Certificado A1', status: 'fail', blocking: true, detail: 'Nenhum certificado A1 ativo no Certificate Vault.' });
+      gates.push({ id: 'certificate_company_binding', label: 'A1 pertence ao CNPJ emissor', status: 'fail', blocking: true, detail: 'Não há A1 ativo para validar a vinculação com a Company.' });
+    } else {
+      const validTo = activeCertificate.valid_to ? new Date(activeCertificate.valid_to).getTime() : NaN;
+      const valid = Number.isFinite(validTo) && validTo > Date.now();
+      gates.push({ id: 'certificate_a1', label: 'Certificado A1', status: valid ? 'pass' : 'fail', blocking: true, detail: valid ? `A1 ativo; fingerprint ${activeCertificate.certificate_fingerprint ?? 'registrado'}; expira em ${new Date(validTo).toISOString()}.` : 'Certificado A1 ativo está expirado ou sem validade reconhecível.' });
+      const subjectTaxId = normalizeTaxId(activeCertificate.subject_tax_id ?? '');
+      const bound = subjectTaxId.length === 14 && subjectTaxId === taxId;
+      gates.push({ id: 'certificate_company_binding', label: 'A1 pertence ao CNPJ emissor', status: bound ? 'pass' : 'fail', blocking: true, detail: bound ? `OID ICP-Brasil 2.16.76.1.3.3 confirma o CNPJ ${subjectTaxId}.` : 'CNPJ do certificado A1 não foi extraído do OID ICP-Brasil 2.16.76.1.3.3 ou não corresponde à Company.' });
+    }
     gates.push({ id: 'official_schema', label: 'XSD oficial sincronizado', status: this.schemas.localDpsXsd(environment) ? 'pass' : 'fail', blocking: true, detail: this.schemas.localDpsXsd(environment) ? `Schema ${schema.id} disponível no runtime.` : `Schema ${schema.id} ainda não foi sincronizado no runtime.` });
     gates.push({ id: 'dps_builder_verified', label: 'DPS Builder homologado', status: process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified' ? 'pass' : 'fail', blocking: true, detail: process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified' ? 'Builder explicitamente marcado como verificado.' : 'TAXAGENT_DPS_BUILDER_MODE ainda não está em verified.' });
     gates.push({ id: 'nfse_endpoint', label: 'Endpoint SEFIN', status: endpoint.configured && (endpoint.official || endpoint.customAllowed) ? 'pass' : 'fail', blocking: true, detail: endpoint.official ? `Endpoint oficial: ${endpoint.url}` : endpoint.customAllowed ? `Endpoint custom explicitamente permitido: ${endpoint.url}` : `Endpoint deve ser o oficial ${endpoint.expectedHost}${endpoint.expectedPath}.` });
@@ -39,3 +48,5 @@ export class ReadinessService {
     return { ...base, probes, network_ready: networkReady, ready_to_enable_live: base.readyToEnableLive && networkReady, ready_for_transmission: base.readyForTransmission && networkReady, probed_at: new Date().toISOString() };
   }
 }
+
+function normalizeTaxId(value: string): string { return String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }

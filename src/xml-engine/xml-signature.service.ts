@@ -2,23 +2,20 @@ import { Injectable } from '@nestjs/common';
 import * as forge from 'node-forge';
 import { SignedXml } from 'xml-crypto';
 import { CertificateMaterial } from '../certificates/certificate-vault.service';
+import { loadPkcs12Identity } from '../certificates/pkcs12-identity';
 
 @Injectable()
 export class XmlSignatureService {
   sign(xml: string, elementId: string, signedElementLocalName: string, material: CertificateMaterial): string {
-    const der = forge.util.createBuffer(material.pfx.toString('binary'));
-    const asn1 = forge.asn1.fromDer(der);
-    const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, material.password);
-    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] ?? [];
-    const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
-    const cert = certBags[0]?.cert;
-    const key = keyBags[0]?.key;
-    if (!cert || !key) throw new Error('PKCS#12 must contain certificate and private key');
-    const signer = new SignedXml({ privateKey: forge.pki.privateKeyToPem(key), publicCert: forge.pki.certificateToPem(cert) });
+    const { certificate, privateKey } = loadPkcs12Identity(material.pfx, material.password);
+    const signer = new SignedXml({ privateKey: forge.pki.privateKeyToPem(privateKey), publicCert: forge.pki.certificateToPem(certificate) });
     signer.canonicalizationAlgorithm = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
     signer.signatureAlgorithm = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
     signer.addReference({ xpath: `//*[@Id='${elementId}']`, digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256', transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315'] });
     signer.computeSignature(xml, { location: { reference: `//*[local-name(.)='${signedElementLocalName}']`, action: 'after' } });
-    return signer.getSignedXml();
+    const signed = signer.getSignedXml();
+    const forbidden = ['X509SubjectName', 'X509IssuerSerial', 'X509IssuerName', 'X509SerialNumber', 'X509SKI', 'KeyValue', 'RSAKeyValue', 'Modulus', 'Exponent'];
+    for (const tag of forbidden) if (signed.includes(`<${tag}`) || signed.includes(`:${tag}`)) throw new Error(`Generated XMLDSig contains forbidden KeyInfo field ${tag}`);
+    return signed;
   }
 }
