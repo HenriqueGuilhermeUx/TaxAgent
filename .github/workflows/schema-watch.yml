@@ -2,6 +2,11 @@ name: nfse-schema-watch
 
 on:
   workflow_dispatch:
+  push:
+    branches: [agent/engine-v0.1]
+    paths:
+      - '.github/workflows/schema-watch.yml'
+      - 'schemas/registry.json'
   schedule:
     - cron: '17 7 * * *'
 
@@ -14,9 +19,14 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - name: Download and inspect official NFS-e schemas
-        run: npm run schemas:sync
-      - name: Verify manifests were produced
-        run: |
-          test -f schemas/vendor/nfse-production-v1.01-20260209/manifest.json
-          test -f schemas/vendor/nfse-prodrest-v1.01-20260727/manifest.json
+      - name: Download and inspect Produção Restrita NFS-e schemas
+        run: npm run schemas:sync -- --environment=test
+      - name: Verify manifest was produced
+        run: test -f schemas/vendor/nfse-prodrest-v1.01-20260727/manifest.json
+      - name: Upload official schema snapshot for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfse-prodrest-schema-${{ github.sha }}
+          path: schemas/vendor/nfse-prodrest-v1.01-20260727/
+          if-no-files-found: error
+          retention-days: 14
