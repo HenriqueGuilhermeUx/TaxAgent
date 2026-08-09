@@ -22,13 +22,14 @@ export function buildDpsId(cityCode: string, taxId: string, series: string, sequ
   return `DPS${cityCode}${identity.typeCode}${identity.idValue}${normalizedSeries.padStart(5, '0')}${String(sequence).padStart(15, '0')}`;
 }
 export function buildIbsCbsGroup(service: CanonicalService): Record<string, unknown> | undefined {
-  const values = [service.operationIndicator, service.taxSituation, service.taxClassification];
+  const values = [service.finalConsumption, service.operationIndicator, service.taxSituation, service.taxClassification];
   if (values.every((value) => !value)) return undefined;
-  if (values.some((value) => !value)) throw new BadRequestException('IBS/CBS group is incomplete: cIndOp, CST and cClassTrib must be supplied together');
+  if (values.some((value) => !value)) throw new BadRequestException('IBS/CBS group is incomplete: indFinal, cIndOp, CST and cClassTrib must be supplied together');
+  if (service.finalConsumption !== '0' && service.finalConsumption !== '1') throw new BadRequestException('indFinal/final_consumption must be 0 or 1');
   if (!/^\d{6}$/.test(service.operationIndicator!)) throw new BadRequestException('cIndOp must contain exactly 6 numeric positions');
   if (!/^\d{3}$/.test(service.taxSituation!)) throw new BadRequestException('CST IBS/CBS must contain exactly 3 numeric positions');
   if (!/^\d{6}$/.test(service.taxClassification!)) throw new BadRequestException('cClassTrib must contain exactly 6 numeric positions');
-  return { finNFSe: 0, cIndOp: service.operationIndicator, indDest: 0, valores: { trib: { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } } } };
+  return { finNFSe: 0, indFinal: service.finalConsumption, cIndOp: service.operationIndicator, indDest: 0, valores: { trib: { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } } } };
 }
 export function buildMunicipalTaxGroup(service: CanonicalService, taxRegime?: string | null): Record<string, unknown> {
   if (String(taxRegime ?? '').toLowerCase() !== 'regular') throw new BadRequestException('Current verified live builder supports tax_regime=regular only');
@@ -40,34 +41,13 @@ export function buildMunicipalTaxGroup(service: CanonicalService, taxRegime?: st
 @Injectable()
 export class DpsBuilderService {
   constructor(private readonly sequences: DpsSequenceService) {}
-  async build(input: CanonicalInvoiceInput, company: FiscalCompany): Promise<DpsBuildResult> {
-    const sequence = await this.sequences.next(input.companyId, input.environment);
-    return this.buildWithSequence(input, company, sequence);
-  }
-  buildPreview(input: CanonicalInvoiceInput, company: FiscalCompany, sequence = 1): DpsBuildResult {
-    return this.buildWithSequence(input, company, sequence);
-  }
+  async build(input: CanonicalInvoiceInput, company: FiscalCompany): Promise<DpsBuildResult> { const sequence = await this.sequences.next(input.companyId, input.environment); return this.buildWithSequence(input, company, sequence); }
+  buildPreview(input: CanonicalInvoiceInput, company: FiscalCompany, sequence = 1): DpsBuildResult { return this.buildWithSequence(input, company, sequence); }
   private buildWithSequence(input: CanonicalInvoiceInput, company: FiscalCompany, sequence: number): DpsBuildResult {
-    const series = process.env.TAXAGENT_DPS_SERIES ?? '1';
-    const id = buildDpsId(company.city_code, company.tax_id, series, sequence);
-    const providerIdentity = normalizeTaxIdentity(company.tax_id);
+    const series = process.env.TAXAGENT_DPS_SERIES ?? '1'; const id = buildDpsId(company.city_code, company.tax_id, series, sequence); const providerIdentity = normalizeTaxIdentity(company.tax_id);
     if (providerIdentity.kind !== 'CNPJ') throw new BadRequestException('TaxAgent company issuance currently requires a CNPJ prestador');
-    const customerIdentity = normalizeTaxIdentity(input.customer.taxId);
-    const issuedAt = input.issuedAt ?? new Date().toISOString();
-    const competence = input.competence ?? issuedAt.slice(0, 10);
-    const serviceLocationCityCode = input.service.serviceLocationCityCode ?? input.customer.cityCode;
-    const municipalTax = buildMunicipalTaxGroup(input.service, company.tax_regime);
-    const ibsCbs = buildIbsCbsGroup(input.service);
-    const verifiedLayout = process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified';
-    const doc = { DPS: { '@_xmlns': 'http://www.sped.fazenda.gov.br/nfse', '@_versao': '1.01', infDPS: {
-      '@_Id': id, tpAmb: input.environment === 'production' ? 1 : 2, dhEmi: issuedAt, verAplic: 'TaxAgent_0.12', serie: series, nDPS: sequence, dCompet: competence, tpEmit: 1, cLocEmi: company.city_code,
-      prest: { CNPJ: providerIdentity.xmlValue, ...(company.municipal_registration ? { IM: company.municipal_registration } : {}) },
-      toma: { [customerIdentity.kind]: customerIdentity.xmlValue, xNome: input.customer.name },
-      serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description } },
-      valores: { vServPrest: { vServ: input.service.amount.toFixed(2) }, trib: municipalTax },
-      ...(ibsCbs ? { IBSCBS: ibsCbs } : {}),
-    } } };
-    const builder = new XMLBuilder({ ignoreAttributes: false, format: false });
-    return { xml: `<?xml version="1.0" encoding="UTF-8"?>${builder.build(doc)}`, id, sequence, series, verifiedLayout };
+    const customerIdentity = normalizeTaxIdentity(input.customer.taxId); const issuedAt = input.issuedAt ?? new Date().toISOString(); const competence = input.competence ?? issuedAt.slice(0, 10); const serviceLocationCityCode = input.service.serviceLocationCityCode ?? input.customer.cityCode; const municipalTax = buildMunicipalTaxGroup(input.service, company.tax_regime); const ibsCbs = buildIbsCbsGroup(input.service); const verifiedLayout = process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified';
+    const doc = { DPS: { '@_xmlns': 'http://www.sped.fazenda.gov.br/nfse', '@_versao': '1.01', infDPS: { '@_Id': id, tpAmb: input.environment === 'production' ? 1 : 2, dhEmi: issuedAt, verAplic: 'TaxAgent_0.12', serie: series, nDPS: sequence, dCompet: competence, tpEmit: 1, cLocEmi: company.city_code, prest: { CNPJ: providerIdentity.xmlValue, ...(company.municipal_registration ? { IM: company.municipal_registration } : {}) }, toma: { [customerIdentity.kind]: customerIdentity.xmlValue, xNome: input.customer.name }, serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description } }, valores: { vServPrest: { vServ: input.service.amount.toFixed(2) }, trib: municipalTax }, ...(ibsCbs ? { IBSCBS: ibsCbs } : {}) } } };
+    const builder = new XMLBuilder({ ignoreAttributes: false, format: false }); return { xml: `<?xml version="1.0" encoding="UTF-8"?>${builder.build(doc)}`, id, sequence, series, verifiedLayout };
   }
 }

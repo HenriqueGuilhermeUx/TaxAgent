@@ -27,6 +27,7 @@ export class InvoicesService {
       issTaxation: dto.service.iss_taxation,
       issWithholding: dto.service.iss_withholding,
       issRate: dto.service.iss_rate,
+      finalConsumption: dto.service.final_consumption,
       operationIndicator: dto.service.operation_indicator,
       taxSituation: dto.service.tax_situation,
       taxClassification: dto.service.tax_classification,
