@@ -38,13 +38,14 @@ export function extractIcpBrasilCnpj(certificate: forge.pki.Certificate): string
 export function extractIcpBrasilCnpjFromSubjectAltNameDer(derBytes: string): string | undefined {
   try {
     const root = forge.asn1.fromDer(forge.util.createBuffer(derBytes));
-    return findOidSiblingValue(root, ICP_BRASIL_CNPJ_OID);
+    return findOidSiblingValue(root, ICP_BRASIL_CNPJ_OID, 0);
   } catch {
     return undefined;
   }
 }
 
-function findOidSiblingValue(node: forge.asn1.Asn1, oid: string): string | undefined {
+function findOidSiblingValue(node: forge.asn1.Asn1, oid: string, depth: number): string | undefined {
+  if (depth > 8) return undefined;
   const children = Array.isArray(node.value) ? node.value as forge.asn1.Asn1[] : [];
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
@@ -56,8 +57,17 @@ function findOidSiblingValue(node: forge.asn1.Asn1, oid: string): string | undef
         }
       } catch { /* continue recursive search */ }
     }
-    const nested = findOidSiblingValue(child, oid);
+    const nested = findOidSiblingValue(child, oid, depth + 1);
     if (nested) return nested;
+  }
+
+  // Some ASN.1 libraries expose the extension value still wrapped in an OCTET STRING.
+  // Decode one additional DER layer instead of relying on a single representation.
+  if (!children.length && node.type === forge.asn1.Type.OCTETSTRING && typeof node.value === 'string') {
+    try {
+      const nested = forge.asn1.fromDer(forge.util.createBuffer(node.value));
+      return findOidSiblingValue(nested, oid, depth + 1);
+    } catch { /* not an embedded DER value */ }
   }
   return undefined;
 }
