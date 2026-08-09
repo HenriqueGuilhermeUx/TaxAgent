@@ -45,16 +45,37 @@ Para a primeira NFS-e, tenha uma prestação de serviço real/representativa com
 
 Os códigos fiscais não devem ser copiados de exemplos. Devem representar a operação e serão vinculados a uma `tax_decision` persistida antes do dry-run/live.
 
-## 2. Deploy pelo painel do Render
+## 2. Banco PostgreSQL externo pelo Neon
 
-O repositório contém `render.yaml` para criar:
+O Blueprint do TaxAgent não cria mais PostgreSQL no Render. Isso evita consumir a única vaga de banco Free do workspace e permite homologar sem tocar em bancos de outros projetos.
 
-- Web Service Docker `taxagent-homologation`;
-- PostgreSQL 17 `taxagent-homologation-db`;
-- `DATABASE_URL` ligada ao banco;
-- `TAXAGENT_MASTER_KEY_B64` gerada automaticamente;
-- `TAXAGENT_BOOTSTRAP_TOKEN` gerado automaticamente;
-- live desligado por padrão.
+No navegador:
+
+1. crie/acesse uma conta Neon;
+2. crie um projeto chamado `taxagent-homologation`;
+3. use o Postgres/database padrão criado pelo Neon;
+4. clique em **Connect** no dashboard do projeto;
+5. escolha **Connection string**;
+6. copie a URL completa `postgresql://...` com SSL;
+7. guarde essa URL como segredo. Não publique no GitHub nem envie por chat.
+
+Essa URL será usada no Render como `DATABASE_URL`.
+
+## 3. Deploy pelo painel do Render
+
+O repositório contém `render.yaml` para criar somente o Web Service Docker `taxagent-homologation`.
+
+O Blueprint:
+
+- pede `DATABASE_URL` externamente;
+- gera `TAXAGENT_MASTER_KEY_B64` automaticamente;
+- gera `TAXAGENT_BOOTSTRAP_TOKEN` automaticamente;
+- mantém live desligado por padrão;
+- habilita somente a Console técnica de homologação.
+
+Para um Blueprint novo, o Render solicita o valor de `DATABASE_URL` durante a criação porque a variável está definida como `sync: false`.
+
+Se você já criou um Blueprint anterior do TaxAgent que falhou tentando criar Postgres no Render, remova/desconecte apenas esse Blueprint sem apagar recursos de outros projetos e crie um Blueprint novo a partir da branch atual. O Blueprint anterior não deve ser usado para segredos novos porque o Render não solicita novamente variáveis `sync: false` em um Blueprint já existente.
 
 No Render Dashboard:
 
@@ -62,9 +83,11 @@ No Render Dashboard:
 2. conecte `HenriqueGuilhermeUx/TaxAgent`;
 3. selecione a branch `agent/engine-v0.1` enquanto o PR permanecer Draft;
 4. confirme o Blueprint `render.yaml`;
-5. aguarde Web Service e Postgres ficarem disponíveis;
-6. abra o Web Service e copie a URL `https://...onrender.com`;
-7. em **Environment**, consulte o valor do `TAXAGENT_BOOTSTRAP_TOKEN` para usar somente durante o bootstrap da empresa.
+5. quando o Render pedir `DATABASE_URL`, cole a connection string do Neon;
+6. confirme o deploy do Web Service `taxagent-homologation`;
+7. aguarde o serviço ficar disponível;
+8. abra o Web Service e copie a URL `https://...onrender.com`;
+9. em **Environment**, consulte o valor do `TAXAGENT_BOOTSTRAP_TOKEN` para usar somente durante o bootstrap da empresa.
 
 Não altere ainda:
 
@@ -72,7 +95,7 @@ Não altere ainda:
 - `TAXAGENT_LIVE_ENABLED=false`;
 - `TAXAGENT_DPS_BUILDER_MODE=draft`.
 
-## 3. Abrir a Console
+## 4. Abrir a Console
 
 Com a API online:
 
@@ -82,7 +105,7 @@ Com a API online:
 
 A Console não usa `localStorage` nem `sessionStorage`. Bootstrap token, API key e senha do A1 ficam apenas na memória da aba e são perdidos ao recarregar.
 
-## 4. Wizard da Console
+## 5. Wizard da Console
 
 ### Passo 0 — sessão
 
@@ -151,7 +174,7 @@ Só avançar após revisão do dry-run e readiness. O botão exige:
 - confirmação exata `YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS`;
 - runtime explicitamente promovido para os gates live.
 
-## 5. O que compartilhar no chat durante a homologação
+## 6. O que compartilhar no chat durante a homologação
 
 Pode compartilhar:
 
@@ -170,8 +193,8 @@ Não compartilhar:
 - `TAXAGENT_MASTER_KEY_B64`;
 - `TAXAGENT_BOOTSTRAP_TOKEN`;
 - API key `ta_test_*` ou `ta_live_*`;
-- credenciais do Postgres.
+- `DATABASE_URL`/credenciais do Neon.
 
-## 6. Diferença importante: NFS-e x NF-e
+## 7. Diferença importante: NFS-e x NF-e
 
 O primeiro ciclo do TaxAgent é **NFS-e Nacional para serviços**. NF-e de mercadorias virá como outro provider/documento e exigirá campos próprios como IE, NCM, CFOP, ICMS, IPI e itens de produto. Não misture esses dados na primeira homologação NFS-e.
