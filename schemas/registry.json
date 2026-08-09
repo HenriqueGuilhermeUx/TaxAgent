@@ -14,8 +14,9 @@
       "status": "active",
       "xsdLabel": "NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20260727",
       "officialUrl": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita/esquemas-nfse-rtc-v1-01-20260727.zip",
+      "expectedArchiveSha256": "6c7e0510d3ecff4454f291f4e10b742d27a4818f23aab181494f96d0ea79f3dc",
       "rtc": "NT004",
-      "notes": "Production-restricted schema listed by Portal NFS-e on 2026-07-28."
+      "notes": "Production-restricted schema listed by Portal NFS-e on 2026-07-28; archive checksum audited by TaxAgent schema-watch."
     },
     "nt009Preview": {
       "id": "nt009-preview-v1.04.00",

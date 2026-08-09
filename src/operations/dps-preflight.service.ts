@@ -7,6 +7,7 @@ import { SchemaRegistryService } from '../schema-registry/schema-registry.servic
 import { TaxEngineService } from '../tax-engine/tax-engine.service';
 import { TenancyService } from '../tenancy/tenancy.service';
 import { DpsBuilderService, FiscalCompany } from '../xml-engine/dps-builder.service';
+import { formatNfseDateTimeUtc } from '../xml-engine/nfse-datetime';
 import { XmlSignatureService } from '../xml-engine/xml-signature.service';
 import { XmlValidationService } from '../xml-engine/xml-validation.service';
 
@@ -19,7 +20,8 @@ export class DpsPreflightService {
     let service: CanonicalService = { description: dto.service.description, amount: dto.service.amount, nationalServiceCode: dto.service.national_service_code, serviceLocationCityCode: dto.service.service_location_city_code, issTaxation: dto.service.iss_taxation, issWithholding: dto.service.iss_withholding, issRate: dto.service.iss_rate, finalConsumption: dto.service.final_consumption, operationIndicator: dto.service.operation_indicator, taxSituation: dto.service.tax_situation, taxClassification: dto.service.tax_classification };
     if (dto.tax_decision_id) service = await this.taxEngine.hydrateServiceFromDecision(dto.company_id, dto.tax_decision_id, service);
     this.assertLiveInputs(company, service);
-    const issuedAt = new Date().toISOString(); const input = this.taxEngine.validate({ companyId: dto.company_id, environment: 'test', competence: dto.competence ?? issuedAt.slice(0, 10), issuedAt, customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code }, service });
+    const issuedAt = formatNfseDateTimeUtc();
+    const input = this.taxEngine.validate({ companyId: dto.company_id, environment: 'test', competence: dto.competence ?? issuedAt.slice(0, 10), issuedAt, customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code }, service });
     const built = this.builder.buildPreview(input, company, 1); await this.validation.validateWellFormed(built.xml); await this.validation.validateStrict(built.xml, 'test');
     const certificate = await this.vault.getActiveMaterial(dto.company_id); const signed = this.signature.sign(built.xml, built.id, 'infDPS', certificate); await this.validation.validateWellFormed(signed); await this.validation.validateStrict(signed, 'test');
     const hash = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
@@ -30,7 +32,6 @@ export class DpsPreflightService {
     if (!service.nationalServiceCode || !/^\d{6}$/.test(service.nationalServiceCode)) throw new BadRequestException('national_service_code must be a 6-digit cTribNac');
     if (!service.serviceLocationCityCode) throw new BadRequestException('service_location_city_code is required for dry-run');
     if (!service.issTaxation || !service.issWithholding) throw new BadRequestException('iss_taxation and iss_withholding are required for dry-run');
-    if (!service.finalConsumption) throw new BadRequestException('final_consumption/indFinal is required for dry-run');
     if (!service.operationIndicator || !service.taxSituation || !service.taxClassification) throw new BadRequestException('cIndOp, CST and cClassTrib are required for dry-run');
   }
 }
