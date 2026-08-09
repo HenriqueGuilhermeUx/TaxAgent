@@ -18,6 +18,11 @@ test('extracts legal-person CNPJ from ICP-Brasil subjectAltName otherName OID', 
   assert.equal(extractIcpBrasilCnpjFromSubjectAltNameDer(subjectAltNameWithCnpj('12345678000190')), '12345678000190');
 });
 
+test('also handles subjectAltName DER wrapped in an OCTET STRING', () => {
+  const wrapped = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.OCTETSTRING, false, subjectAltNameWithCnpj('12345678000190'));
+  assert.equal(extractIcpBrasilCnpjFromSubjectAltNameDer(forge.asn1.toDer(wrapped).getBytes()), '12345678000190');
+});
+
 test('does not confuse an unrelated otherName OID with company CNPJ', () => {
   const unrelated = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [
     forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 0, true, [
