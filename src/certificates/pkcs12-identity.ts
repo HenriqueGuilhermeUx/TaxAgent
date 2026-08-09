@@ -2,9 +2,11 @@ import * as forge from 'node-forge';
 
 export const ICP_BRASIL_CNPJ_OID = '2.16.76.1.3.3';
 
+type ForgePrivateKey = any;
+
 export interface Pkcs12Identity {
   certificate: forge.pki.Certificate;
-  privateKey: forge.pki.PrivateKey;
+  privateKey: ForgePrivateKey;
 }
 
 export function loadPkcs12Identity(pfx: Buffer, password: string): Pkcs12Identity {
@@ -15,7 +17,7 @@ export function loadPkcs12Identity(pfx: Buffer, password: string): Pkcs12Identit
   const shrouded = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
   const plain = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? [];
   const certificates = certBags.map((bag) => bag.cert).filter((certificate): certificate is forge.pki.Certificate => Boolean(certificate));
-  const privateKeys = [...shrouded, ...plain].map((bag) => bag.key).filter((key): key is forge.pki.PrivateKey => Boolean(key));
+  const privateKeys = [...shrouded, ...plain].map((bag) => bag.key).filter(Boolean) as ForgePrivateKey[];
   if (!certificates.length) throw new Error('Certificate bag not found');
   if (!privateKeys.length) throw new Error('Private key bag not found; TaxAgent requires a complete A1 PKCS#12/PFX');
 
@@ -28,7 +30,7 @@ export function loadPkcs12Identity(pfx: Buffer, password: string): Pkcs12Identit
 }
 
 export function extractIcpBrasilCnpj(certificate: forge.pki.Certificate): string | undefined {
-  const extension = certificate.getExtension('subjectAltName') as (forge.pki.CertificateExtension & { value?: string }) | null;
+  const extension = certificate.getExtension('subjectAltName') as unknown as { value?: string } | null;
   if (!extension?.value) return undefined;
   return extractIcpBrasilCnpjFromSubjectAltNameDer(extension.value);
 }
@@ -79,9 +81,9 @@ function findFourteenPositionIdentifier(node: forge.asn1.Asn1): string | undefin
   return undefined;
 }
 
-function rsaKeyMatches(certificate: forge.pki.Certificate, privateKey: forge.pki.PrivateKey): boolean {
+function rsaKeyMatches(certificate: forge.pki.Certificate, privateKey: ForgePrivateKey): boolean {
   try {
-    const key = privateKey as unknown as { n?: forge.jsbn.BigInteger; e?: forge.jsbn.BigInteger };
+    const key = privateKey as { n?: forge.jsbn.BigInteger; e?: forge.jsbn.BigInteger };
     if (!key.n || !key.e) return false;
     const derivedPublic = forge.pki.rsa.setPublicKey(key.n, key.e);
     return forge.pki.publicKeyToPem(derivedPublic) === forge.pki.publicKeyToPem(certificate.publicKey);
