@@ -45,7 +45,7 @@ jobs:
         run: |
           npm run db:migrate
           npm run db:migrate
-      - name: Boot API against PostgreSQL
+      - name: Boot API and smoke-test browser console against PostgreSQL
         run: |
           npm start > /tmp/taxagent-api.log 2>&1 &
           API_PID=$!
@@ -53,6 +53,10 @@ jobs:
           for i in $(seq 1 30); do
             if curl --fail --silent --show-error http://127.0.0.1:3000/v1/health > /tmp/health.json; then
               cat /tmp/health.json
+              curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/homologation.html
+              grep -q 'Console de Homologação' /tmp/homologation.html
+              grep -q 'certificates/upload' /tmp/homologation.html
+              echo 'Browser homologation console smoke test: OK'
               exit 0
             fi
             sleep 1
