@@ -63,3 +63,7 @@ jobs:
           done
           cat /tmp/taxagent-api.log
           exit 1
+      - name: Build deployable Docker image
+        run: |
+          docker build -t taxagent-ci .
+          docker run --rm --entrypoint /bin/sh taxagent-ci -c "test -f dist/database/migrate-cli.js && xmllint --version >/dev/null"
