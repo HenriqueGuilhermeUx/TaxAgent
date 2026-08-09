@@ -69,4 +69,4 @@ jobs:
       - name: Build deployable Docker image
         run: |
           docker build -t taxagent-ci .
-          docker run --rm --entrypoint /bin/sh taxagent-ci -c "test -f dist/database/migrate-cli.js && xmllint --version >/dev/null"
+          docker run --rm --entrypoint /bin/sh taxagent-ci -c "test -f dist/database/migrate-cli.js && test -f tax-domains/registry.json && test -f schemas/registry.json && xmllint --version >/dev/null"
