@@ -18,5 +18,6 @@ RUN npm install --omit=dev --no-audit --no-fund \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/schemas ./schemas
+COPY --from=build /app/tax-domains ./tax-domains
 EXPOSE 3000
 CMD ["/bin/sh", "-c", "node dist/database/migrate-cli.js && node dist/main.js"]
