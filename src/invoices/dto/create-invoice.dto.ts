@@ -14,8 +14,8 @@ class ServiceDto {
   @ApiPropertyOptional({ example: '3550308', description: 'Município IBGE onde o serviço é prestado. Explicitamente exigido pelo TaxAgent antes de live.' }) @IsOptional() @IsString() @Length(7, 7) service_location_city_code?: string;
   @ApiPropertyOptional({ enum: ['1', '2', '3', '4'], description: 'tribISSQN: 1 tributável, 2 imunidade, 3 exportação, 4 não incidência.' }) @IsOptional() @IsIn(['1', '2', '3', '4']) iss_taxation?: '1' | '2' | '3' | '4';
   @ApiPropertyOptional({ enum: ['1', '2', '3'], description: 'tpRetISSQN: 1 não retido, 2 tomador, 3 intermediário.' }) @IsOptional() @IsIn(['1', '2', '3']) iss_withholding?: '1' | '2' | '3';
-  @ApiPropertyOptional({ example: 5, description: 'Alíquota ISS percentual, quando deve ser declarada pelo emitente.' }) @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) iss_rate?: number;
-  @ApiPropertyOptional({ enum: ['0', '1'], description: 'indFinal RTC: 0 não é uso/consumo pessoal; 1 é uso/consumo pessoal.' }) @IsOptional() @IsIn(['0', '1']) final_consumption?: '0' | '1';
+  @ApiPropertyOptional({ example: 5, description: 'Alíquota ISS percentual, quando deve ser declarada pelo emitente. O XSD ativo admite até 9,99.' }) @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(9.99) iss_rate?: number;
+  @ApiPropertyOptional({ enum: ['0', '1'], description: 'indFinal RTC opcional: 0 não é uso/consumo pessoal; 1 é uso/consumo pessoal.' }) @IsOptional() @IsIn(['0', '1']) final_consumption?: '0' | '1';
   @ApiPropertyOptional({ description: 'cIndOp when applicable to IBS/CBS.' }) @IsOptional() @IsString() operation_indicator?: string;
   @ApiPropertyOptional({ description: 'CST IBS/CBS.' }) @IsOptional() @IsString() tax_situation?: string;
   @ApiPropertyOptional({ description: 'cClassTrib IBS/CBS.' }) @IsOptional() @IsString() tax_classification?: string;
