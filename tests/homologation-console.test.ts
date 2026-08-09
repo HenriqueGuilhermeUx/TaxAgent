@@ -9,7 +9,10 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /operations\/dps\/validate/);
   assert.match(html, /tax\/resolve/);
   assert.match(html, /YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS/);
-  assert.doesNotMatch(html, /localStorage\s*\./);
-  assert.doesNotMatch(html, /sessionStorage\s*\./);
-  assert.doesNotMatch(html, /console\.log/);
+
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
+  assert.ok(script.length > 0, 'inline console script must exist');
+  assert.doesNotMatch(script, /localStorage\s*[.\[]/);
+  assert.doesNotMatch(script, /sessionStorage\s*[.\[]/);
+  assert.doesNotMatch(script, /console\.(?:log|debug|info)\s*\(/);
 });
