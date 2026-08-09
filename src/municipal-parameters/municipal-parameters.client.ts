@@ -7,14 +7,15 @@ export interface ConventionCheck { supported: boolean; payload: unknown; status:
 @Injectable()
 export class MunicipalParametersClient {
   async getConvention(environment: FiscalEnvironment, cityCode: string): Promise<ConventionCheck> {
-    const base = environment === 'production' ? process.env.NFSE_PRODUCTION_PARAMETERS_BASE_URL : process.env.NFSE_TEST_PARAMETERS_BASE_URL;
-    if (!base) throw new FiscalEngineError('TA_PARAMETERS_ENDPOINT_MISSING', `Municipal parameters base URL not configured for ${environment}`, false);
-    const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/parametrizacao/{cityCode}/convenio';
+    const base = environment === 'production'
+      ? (process.env.NFSE_PRODUCTION_PARAMETERS_BASE_URL ?? 'https://adn.nfse.gov.br')
+      : (process.env.NFSE_TEST_PARAMETERS_BASE_URL ?? 'https://adn.producaorestrita.nfse.gov.br');
+    const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/parametros_municipais/{cityCode}/convenio';
     const path = template.replace('{cityCode}', encodeURIComponent(cityCode));
     const url = new URL(path, base.endsWith('/') ? base : `${base}/`);
     let response: Response;
     try {
-      response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.6' }, signal: AbortSignal.timeout(15_000), redirect: 'error' });
+      response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.12' }, signal: AbortSignal.timeout(15_000), redirect: 'error' });
     } catch (error) {
       throw new FiscalEngineError('NFSE_PARAMETERS_NETWORK', error instanceof Error ? error.message : 'Municipal parameters network error', true);
     }
