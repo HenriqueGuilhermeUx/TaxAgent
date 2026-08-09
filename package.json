@@ -15,6 +15,7 @@
     "homologation:bootstrap": "tsx scripts/homologation-bootstrap.ts",
     "homologation:certificate": "tsx scripts/homologation-certificate.ts",
     "homologation:preflight": "tsx scripts/homologation-preflight.ts",
+    "homologation:tax": "tsx scripts/homologation-tax.ts",
     "homologation:dps": "tsx scripts/homologation-dps.ts",
     "homologation:first-invoice": "tsx scripts/homologation-first-invoice.ts"
   },
