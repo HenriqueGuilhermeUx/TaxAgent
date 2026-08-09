@@ -66,7 +66,34 @@ jobs:
           done
           cat /tmp/taxagent-api.log
           exit 1
-      - name: Build deployable Docker image
+      - name: Build and boot deployable Docker image
         run: |
           docker build -t taxagent-ci .
           docker run --rm --entrypoint /bin/sh taxagent-ci -c "test -f dist/database/migrate-cli.js && test -f tax-domains/registry.json && test -f schemas/registry.json && xmllint --version >/dev/null"
+          docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e TAXAGENT_MASTER_KEY_B64="$TAXAGENT_MASTER_KEY_B64" \
+            -e TAXAGENT_BOOTSTRAP_TOKEN="$TAXAGENT_BOOTSTRAP_TOKEN" \
+            -e TAXAGENT_AUTH_MODE=required \
+            -e TAXAGENT_HOMOLOGATION_CONSOLE_ENABLED=true \
+            -e TAXAGENT_NFSE_MODE=mock \
+            -e TAXAGENT_LIVE_ENABLED=false \
+            -e TAXAGENT_DPS_BUILDER_MODE=draft \
+            -e NFSE_TEST_BASE_URL="$NFSE_TEST_BASE_URL" \
+            -e NFSE_PRODUCTION_BASE_URL="$NFSE_PRODUCTION_BASE_URL" \
+            taxagent-ci > /tmp/taxagent-docker.log 2>&1 &
+          DOCKER_PID=$!
+          trap 'kill $DOCKER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/v1/health > /tmp/docker-health.json; then
+              cat /tmp/docker-health.json
+              curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/docker-homologation.html
+              grep -q 'Console de Homologação' /tmp/docker-homologation.html
+              grep -q 'certificates/upload' /tmp/docker-homologation.html
+              echo 'Final Docker runtime smoke test: OK'
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/taxagent-docker.log
+          exit 1
