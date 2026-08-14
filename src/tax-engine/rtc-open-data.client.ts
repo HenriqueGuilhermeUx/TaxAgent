@@ -3,6 +3,17 @@ import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
 
 export interface OpenDataResult { url: string; payload: unknown; fetchedAt: string }
 
+export const DEFAULT_RTC_OPEN_DATA_BASE_URL = 'https://piloto-cbs.tributos.gov.br/servico/calculadora-consumo/api';
+
+export function resolveRtcOpenDataUrl(path: string, base = DEFAULT_RTC_OPEN_DATA_BASE_URL): URL {
+  // URL paths beginning with "/" replace the pathname of the base URL. The RTC
+  // base intentionally contains the official API prefix, so requests must be
+  // resolved relative to that prefix instead of from the host root.
+  const normalizedBase = `${base.replace(/\/+$/, '')}/`;
+  const normalizedPath = path.replace(/^\/+/, '');
+  return new URL(normalizedPath, normalizedBase);
+}
+
 @Injectable()
 export class RtcOpenDataClient {
   getVersion(): Promise<OpenDataResult> { return this.get('/calculadora/dados-abertos/versao'); }
@@ -19,13 +30,8 @@ export class RtcOpenDataClient {
   getMunicipalityRates(): Promise<OpenDataResult> { return this.get('/calculadora/dados-abertos/aliquota-municipio'); }
 
   private async get(path: string): Promise<OpenDataResult> {
-    const base = process.env.RTC_OPEN_DATA_BASE_URL ?? 'https://piloto-cbs.tributos.gov.br/servico/calculadora-consumo/api';
-    // Important: URL paths beginning with "/" replace the pathname of the base URL.
-    // RTC_OPEN_DATA_BASE_URL intentionally contains the official API prefix, so keep
-    // requested paths relative to that prefix instead of resolving them from host root.
-    const normalizedBase = `${base.replace(/\/+$/, '')}/`;
-    const normalizedPath = path.replace(/^\/+/, '');
-    const url = new URL(normalizedPath, normalizedBase);
+    const base = process.env.RTC_OPEN_DATA_BASE_URL ?? DEFAULT_RTC_OPEN_DATA_BASE_URL;
+    const url = resolveRtcOpenDataUrl(path, base);
     let response: Response;
     try {
       response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-TaxEngine/0.12' }, redirect: 'error', signal: AbortSignal.timeout(Number(process.env.RTC_REQUEST_TIMEOUT_MS ?? 15_000)) });
