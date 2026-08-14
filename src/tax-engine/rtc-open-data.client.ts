@@ -20,10 +20,15 @@ export class RtcOpenDataClient {
 
   private async get(path: string): Promise<OpenDataResult> {
     const base = process.env.RTC_OPEN_DATA_BASE_URL ?? 'https://piloto-cbs.tributos.gov.br/servico/calculadora-consumo/api';
-    const url = new URL(path, base.endsWith('/') ? base : `${base}/`);
+    // Important: URL paths beginning with "/" replace the pathname of the base URL.
+    // RTC_OPEN_DATA_BASE_URL intentionally contains the official API prefix, so keep
+    // requested paths relative to that prefix instead of resolving them from host root.
+    const normalizedBase = `${base.replace(/\/+$/, '')}/`;
+    const normalizedPath = path.replace(/^\/+/, '');
+    const url = new URL(normalizedPath, normalizedBase);
     let response: Response;
     try {
-      response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-TaxEngine/0.9' }, redirect: 'error', signal: AbortSignal.timeout(Number(process.env.RTC_REQUEST_TIMEOUT_MS ?? 15_000)) });
+      response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-TaxEngine/0.12' }, redirect: 'error', signal: AbortSignal.timeout(Number(process.env.RTC_REQUEST_TIMEOUT_MS ?? 15_000)) });
     } catch (error) {
       throw new FiscalEngineError('RTC_OPEN_DATA_NETWORK', error instanceof Error ? error.message : 'RTC open-data network error', true);
     }
