@@ -18,13 +18,18 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.doesNotMatch(script, /console\.(?:log|debug|info)\s*\(/);
 });
 
-test('company correction tool patches an existing company without browser persistence', () => {
+test('company correction tool patches an existing company and can replace a lost TEST key without browser persistence', () => {
   const html = companyCorrectionHtml();
   assert.match(html, /Corrigir cadastro da Company/);
   assert.match(html, /Corrigir município/);
-  assert.match(html, /request\('PATCH',\{city_code:city\}\)/);
+  assert.match(html, /companyRequest\('PATCH',\{city_code:city\}\)/);
   assert.match(html, /x-taxagent-bootstrap-token/);
   assert.match(html, /CNPJ, Organization e API keys foram preservados/);
+  assert.match(html, /Gerar nova API key TEST/);
+  assert.match(html, /\/api-keys/);
+  assert.match(html, /environment:'test'/);
+  assert.match(html, /scopes:\['\*'\]/);
+  assert.match(html, /ta_test_/);
 
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
   assert.ok(script.length > 0, 'inline correction script must exist');
