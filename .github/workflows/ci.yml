@@ -59,7 +59,20 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/homologation.html
               grep -q 'Console de Homologação' /tmp/homologation.html
               grep -q 'certificates/upload' /tmp/homologation.html
-              echo 'Browser homologation console smoke test: OK'
+              curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/company-correction.html
+              grep -q 'Corrigir cadastro da Company' /tmp/company-correction.html
+
+              ORG_ID=$(curl --fail --silent --show-error -X POST http://127.0.0.1:3000/v1/organizations \
+                -H 'content-type: application/json' -H 'x-taxagent-bootstrap-token: ci-bootstrap-token' \
+                -d '{"name":"CI Company Correction"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+              COMP_ID=$(curl --fail --silent --show-error -X POST "http://127.0.0.1:3000/v1/organizations/$ORG_ID/companies" \
+                -H 'content-type: application/json' -H 'x-taxagent-bootstrap-token: ci-bootstrap-token' \
+                -d '{"name":"CI LTDA","tax_id":"99999999000199","city_code":"3530307","tax_regime":"regular"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+              curl --fail --silent --show-error -X PATCH "http://127.0.0.1:3000/v1/companies/$COMP_ID" \
+                -H 'content-type: application/json' -H 'x-taxagent-bootstrap-token: ci-bootstrap-token' \
+                -d '{"city_code":"3530607"}' > /tmp/company-corrected.json
+              python3 -c 'import json; d=json.load(open("/tmp/company-corrected.json")); assert d["city_code"]=="3530607"'
+              echo 'Browser homologation + company correction smoke test: OK'
               exit 0
             fi
             sleep 1
@@ -90,6 +103,8 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/docker-homologation.html
               grep -q 'Console de Homologação' /tmp/docker-homologation.html
               grep -q 'certificates/upload' /tmp/docker-homologation.html
+              curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/docker-company-correction.html
+              grep -q 'Corrigir cadastro da Company' /tmp/docker-company-correction.html
               echo 'Final Docker runtime smoke test: OK'
               exit 0
             fi
