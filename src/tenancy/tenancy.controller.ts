@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { BootstrapGuard } from '../auth/bootstrap.guard';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { TenancyService } from './tenancy.service';
 
 @ApiTags('tenancy')
@@ -22,6 +23,13 @@ export class TenancyController {
   @UseGuards(BootstrapGuard)
   createCompany(@Param('organizationId') organizationId: string, @Body() dto: CreateCompanyDto) {
     return this.tenancy.createCompany(organizationId, dto);
+  }
+
+  @Patch('companies/:id')
+  @ApiHeader({ name: 'X-TaxAgent-Bootstrap-Token', required: true })
+  @UseGuards(BootstrapGuard)
+  updateCompany(@Param('id') id: string, @Body() dto: UpdateCompanyDto) {
+    return this.tenancy.updateCompany(id, dto);
   }
 
   @Get('companies/:id')
