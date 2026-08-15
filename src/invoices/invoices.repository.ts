@@ -4,16 +4,31 @@ import { DatabaseService } from '../database/database.service';
 import { CanonicalInvoiceInput, InvoiceStatus, IssueResult } from '../fiscal-core/fiscal.types';
 import { formatNfseDateTimeUtc } from '../xml-engine/nfse-datetime';
 
-export interface InvoiceRecord { id: string; company_id: string; environment: 'test' | 'production'; status: InvoiceStatus; idempotency_key: string | null; canonical_input: CanonicalInvoiceInput; provider: string | null; provider_reference: string | null; access_key: string | null; rejection: unknown; tax_decision_id: string | null; created_at: Date; updated_at: Date }
+export interface InvoiceRecord { id: string; company_id: string; environment: 'test' | 'production'; status: InvoiceStatus; idempotency_key: string | null; canonical_input: CanonicalInvoiceInput; provider: string | null; provider_reference: string | null; access_key: string | null; rejection: unknown; tax_decision_id: string | null; prepared_dps_id: string | null; created_at: Date; updated_at: Date }
 @Injectable()
 export class InvoicesRepository {
   constructor(private readonly db: DatabaseService) {}
   async findByIdempotency(companyId: string, key: string): Promise<InvoiceRecord | null> { const { rows } = await this.db.query<InvoiceRecord>('SELECT * FROM invoices WHERE company_id=$1 AND idempotency_key=$2', [companyId, key]); return rows[0] ?? null; }
-  async create(input: CanonicalInvoiceInput, idempotencyKey?: string, taxDecisionId?: string): Promise<InvoiceRecord> {
+  async findByPreparedDps(preparedDpsId: string): Promise<InvoiceRecord | null> { const { rows } = await this.db.query<InvoiceRecord>('SELECT * FROM invoices WHERE prepared_dps_id=$1', [preparedDpsId]); return rows[0] ?? null; }
+  async create(input: CanonicalInvoiceInput, idempotencyKey?: string, taxDecisionId?: string, preparedDpsId?: string): Promise<InvoiceRecord> {
     const id = createId('inv');
     const issuedAt = formatNfseDateTimeUtc(input.issuedAt ?? new Date());
     const stableInput: CanonicalInvoiceInput = { ...input, issuedAt, competence: input.competence ?? issuedAt.slice(0, 10) };
-    try { const { rows } = await this.db.query<InvoiceRecord>(`INSERT INTO invoices(id, company_id, environment, status, idempotency_key, canonical_input, tax_decision_id) VALUES ($1,$2,$3,'queued',$4,$5::jsonb,$6) RETURNING *`, [id, input.companyId, input.environment, idempotencyKey ?? null, JSON.stringify(stableInput), taxDecisionId ?? null]); return rows[0]; } catch (error) { const pgCode = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : undefined; if (pgCode === '23505' && idempotencyKey) { const existing = await this.findByIdempotency(input.companyId, idempotencyKey); if (existing) return existing; } throw error; }
+    try {
+      const { rows } = await this.db.query<InvoiceRecord>(
+        `INSERT INTO invoices(id, company_id, environment, status, idempotency_key, canonical_input, tax_decision_id, prepared_dps_id)
+         VALUES ($1,$2,$3,'queued',$4,$5::jsonb,$6,$7) RETURNING *`,
+        [id, input.companyId, input.environment, idempotencyKey ?? null, JSON.stringify(stableInput), taxDecisionId ?? null, preparedDpsId ?? null],
+      );
+      return rows[0];
+    } catch (error) {
+      const pgCode = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+      if (pgCode === '23505') {
+        if (idempotencyKey) { const existing = await this.findByIdempotency(input.companyId, idempotencyKey); if (existing) return existing; }
+        if (preparedDpsId) { const existing = await this.findByPreparedDps(preparedDpsId); if (existing) return existing; }
+      }
+      throw error;
+    }
   }
   async findById(id: string): Promise<InvoiceRecord | null> { const { rows } = await this.db.query<InvoiceRecord>('SELECT * FROM invoices WHERE id=$1', [id]); return rows[0] ?? null; }
   async markProcessing(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='processing', updated_at=NOW() WHERE id=$1", [id]); }
