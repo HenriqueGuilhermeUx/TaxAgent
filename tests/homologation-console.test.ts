@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fiscalAutopilotHtml } from '../src/homologation-console/autopilot.page';
 import { companyCorrectionHtml } from '../src/homologation-console/company-correction.page';
 import { prepareHomologationConsoleHtml } from '../src/homologation-console/homologation-console.controller';
 import { homologationConsoleHtml } from '../src/homologation-console/homologation-console.page';
@@ -40,6 +41,24 @@ test('served homologation console uses the browser local calendar date instead o
   assert.match(html, /now\.getFullYear\(\)/);
   assert.match(html, /now\.getMonth\(\)\+1/);
   assert.match(html, /now\.getDate\(\)/);
+});
+
+test('fiscal autopilot page exposes a one-click human-first flow without browser persistence', () => {
+  const html = fiscalAutopilotHtml();
+  assert.match(html, /Autopilot fiscal/);
+  assert.match(html, /Resolver e preparar automaticamente/);
+  assert.match(html, /fiscal\/autopilot/);
+  assert.match(html, /Continuar automaticamente/);
+  assert.match(html, /O cliente vai reter ISS/);
+  assert.match(html, /certificates\/upload/);
+  assert.doesNotMatch(html, /cClassTrib/);
+  assert.doesNotMatch(html, /cIndOp/);
+
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
+  assert.ok(script.length > 0, 'inline autopilot script must exist');
+  assert.doesNotMatch(script, /localStorage\s*[.\[]/);
+  assert.doesNotMatch(script, /sessionStorage\s*[.\[]/);
+  assert.doesNotMatch(script, /console\.(?:log|debug|info)\s*\(/);
 });
 
 test('company correction tool patches an existing company and can replace a lost TEST key without browser persistence', () => {
