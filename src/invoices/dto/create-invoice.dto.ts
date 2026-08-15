@@ -25,6 +25,7 @@ export class CreateInvoiceDto {
   @ApiProperty({ enum: ['test', 'production'], default: 'test' }) @IsIn(['test', 'production']) environment!: 'test' | 'production';
   @ApiPropertyOptional({ example: '2026-08-08', description: 'Data de competência fiscal. Se omitida, TaxAgent fixa a data de criação da operação.' }) @IsOptional() @IsDateString({ strict: true }) competence?: string;
   @ApiPropertyOptional({ description: 'Resolved TaxAgent tax decision to bind to this invoice.' }) @IsOptional() @IsString() tax_decision_id?: string;
+  @ApiPropertyOptional({ description: 'Immutable Prepared DPS to consume exactly once. When supplied, TaxAgent verifies that this payload matches the frozen canonical input.' }) @IsOptional() @IsString() prepared_dps_id?: string;
   @ApiProperty({ type: CustomerDto }) @ValidateNested() @Type(() => CustomerDto) customer!: CustomerDto;
   @ApiProperty({ type: ServiceDto }) @ValidateNested() @Type(() => ServiceDto) service!: ServiceDto;
 }
