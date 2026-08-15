@@ -20,5 +20,10 @@ import { InvoicesController } from './invoices.controller';
 import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
-@Module({ imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule], controllers: [InvoicesController], providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider] })
+@Module({
+  imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
+  controllers: [InvoicesController],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider],
+  exports: [InvoicesService],
+})
 export class InvoicesModule {}
