@@ -52,6 +52,11 @@ export class CustomersService {
   }
 
   async list(companyId: string, query?: string) {
+    // Self-heal the customer registry from immutable Fiscal Intent snapshots.
+    // This is deliberately insert-only on conflict: a newer explicit customer edit
+    // must never be overwritten by an older historical Fiscal Intent snapshot.
+    await this.syncFromFiscalIntents(companyId);
+
     const q = String(query ?? '').trim();
     if (!q) {
       const { rows } = await this.db.query<CustomerRecord>(
@@ -99,6 +104,28 @@ export class CustomersService {
     await this.get(companyId, customerId);
     await this.db.query('DELETE FROM customer_fiscal_memory WHERE customer_id=$1 AND service_profile=$2', [customerId, serviceProfile]);
     return { customer_id: customerId, service_profile: serviceProfile, cleared: true };
+  }
+
+  private async syncFromFiscalIntents(companyId: string): Promise<void> {
+    await this.db.query(
+      `INSERT INTO customers(id, company_id, tax_id, normalized_tax_id, name, normalized_name, city_code)
+       SELECT
+         'cust_' || substr(md5(fi.company_id || ':' || regexp_replace(upper(fi.request->'customer'->>'tax_id'), '[^A-Z0-9]', '', 'g')), 1, 32),
+         fi.company_id,
+         fi.request->'customer'->>'tax_id',
+         regexp_replace(upper(fi.request->'customer'->>'tax_id'), '[^A-Z0-9]', '', 'g'),
+         fi.request->'customer'->>'name',
+         lower(trim(fi.request->'customer'->>'name')),
+         fi.request->'customer'->>'city_code'
+       FROM fiscal_intents fi
+       WHERE fi.company_id=$1
+         AND jsonb_typeof(fi.request->'customer')='object'
+         AND COALESCE(fi.request->'customer'->>'tax_id','') <> ''
+         AND COALESCE(fi.request->'customer'->>'name','') <> ''
+         AND COALESCE(fi.request->'customer'->>'city_code','') ~ '^\\d{7}$'
+       ON CONFLICT(company_id, normalized_tax_id) DO NOTHING`,
+      [companyId],
+    );
   }
 
   private async toPublicWithMemory(row: CustomerRecord) {
