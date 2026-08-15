@@ -8,7 +8,9 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   const html = prepareHomologationConsoleHtml(homologationConsoleHtml());
   assert.match(html, /Console de Homologação/);
   assert.match(html, /certificates\/upload/);
+  assert.match(html, /operations\/dps\/prebuild/);
   assert.match(html, /operations\/dps\/validate/);
+  assert.match(html, /Prebuild sem A1/);
   assert.match(html, /tax\/resolve/);
   assert.match(html, /YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS/);
   assert.match(html, /Consultoria empresarial padrão \(TaxAgent\)/);
