@@ -6,6 +6,13 @@ function fixture() {
   const intents = new Map<string, any>();
   let taxCalls = 0;
   let prepareCalls = 0;
+  let remembered: string | undefined;
+  let rememberCalls = 0;
+  let upsertCalls = 0;
+  const customer = {
+    id: 'cust_test', company_id: 'comp_test', tax_id: '12345678000199', normalized_tax_id: '12345678000199',
+    name: 'Cliente LTDA', normalized_name: 'cliente ltda', city_code: '3550308', created_at: new Date(), updated_at: new Date(),
+  };
 
   const db = {
     async query(sql: string, params: any[] = []) {
@@ -42,6 +49,24 @@ function fixture() {
   };
 
   const tenancy = { async getCompany() { return { id: 'comp_test', city_code: '3530607' }; } };
+  const customers = {
+    async upsertFromOperation(companyId: string, input: any) {
+      upsertCalls += 1;
+      assert.equal(companyId, 'comp_test');
+      assert.equal(input.tax_id, customer.tax_id);
+      return customer;
+    },
+    async get(companyId: string, id: string) {
+      assert.equal(companyId, 'comp_test'); assert.equal(id, 'cust_test'); return customer;
+    },
+    async getFiscalDefault(companyId: string, id: string, profile: string) {
+      assert.equal(companyId, 'comp_test'); assert.equal(id, 'cust_test'); assert.equal(profile, 'business_consulting'); return remembered;
+    },
+    async rememberFiscalDefault(companyId: string, id: string, profile: string, value: string) {
+      assert.equal(companyId, 'comp_test'); assert.equal(id, 'cust_test'); assert.equal(profile, 'business_consulting');
+      rememberCalls += 1; remembered = value; return customer;
+    },
+  };
   const taxEngine = {
     async resolve(input: any) {
       taxCalls += 1;
@@ -70,40 +95,69 @@ function fixture() {
     async probe() { throw new Error('must not probe before certificate is ready'); },
   };
   const invoices = { async findOneForCompany() { throw new Error('not used'); }, async create() { throw new Error('not used'); } };
-  const service = new FiscalAutopilotService(db as any, tenancy as any, taxEngine as any, preparedDps as any, readiness as any, invoices as any);
+  const service = new FiscalAutopilotService(db as any, tenancy as any, customers as any, taxEngine as any, preparedDps as any, readiness as any, invoices as any);
 
   const base = {
     company_id: 'comp_test', environment: 'test' as const, competence: '2026-08-15',
     customer: { tax_id: '12345678000199', name: 'Cliente LTDA', city_code: '3550308' },
     service: { description: 'Serviços de consultoria empresarial', amount: 100 },
   };
-  return { service, base, taxCalls: () => taxCalls, prepareCalls: () => prepareCalls };
+  return {
+    service, base,
+    taxCalls: () => taxCalls,
+    prepareCalls: () => prepareCalls,
+    rememberCalls: () => rememberCalls,
+    upsertCalls: () => upsertCalls,
+    setRemembered: (value: string | undefined) => { remembered = value; },
+  };
 }
 
-test('Fiscal Autopilot turns a human operation into Tax Decision + Prepared DPS in one call', async () => {
+test('Fiscal Autopilot turns a human operation into saved customer + Tax Decision + Prepared DPS in one call', async () => {
   const f = fixture();
   const result: any = await f.service.start({ ...f.base, iss_withholding: 'not_withheld' }, 'auto-one-click');
   assert.equal(result.status, 'prepared');
+  assert.equal(result.operation.customer_id, 'cust_test');
   assert.equal(result.tax_decision_id, 'taxdec_auto');
   assert.equal(result.prepared_dps_id, 'pdps_auto');
   assert.equal(result.stage, 'prepared_waiting_certificate');
   assert.equal(result.next_action.kind, 'install_a1');
   assert.equal(f.taxCalls(), 1);
   assert.equal(f.prepareCalls(), 1);
+  assert.equal(f.upsertCalls(), 1);
 
   const retry: any = await f.service.start({ ...f.base, iss_withholding: 'not_withheld' }, 'auto-one-click');
   assert.equal(retry.prepared_dps_id, 'pdps_auto');
   assert.equal(f.taxCalls(), 1);
   assert.equal(f.prepareCalls(), 1);
+  assert.equal(f.upsertCalls(), 1);
 });
 
-test('Fiscal Autopilot asks a human retention question instead of inventing tpRetISSQN', async () => {
+test('Fiscal Autopilot asks a human retention question instead of inventing tpRetISSQN when no memory exists', async () => {
   const f = fixture();
   const result: any = await f.service.start(f.base, 'auto-needs-retention');
   assert.equal(result.status, 'needs_input');
   assert.equal(result.question.id, 'iss_withholding');
   assert.equal(f.taxCalls(), 0);
   assert.equal(f.prepareCalls(), 0);
+});
+
+test('Fiscal Autopilot reuses an explicitly remembered retention default for a saved customer', async () => {
+  const f = fixture();
+  f.setRemembered('not_withheld');
+  const result: any = await f.service.start({ ...f.base, customer: undefined, customer_id: 'cust_test' }, 'auto-memory');
+  assert.equal(result.status, 'prepared');
+  assert.equal(result.customer.remembered_iss_withholding_used, true);
+  assert.equal(result.customer.remembered_iss_withholding, 'not_withheld');
+  assert.equal(f.taxCalls(), 1);
+  assert.equal(f.prepareCalls(), 1);
+});
+
+test('Fiscal Autopilot only stores a retention default when the user explicitly asks to remember it', async () => {
+  const f = fixture();
+  const result: any = await f.service.start({ ...f.base, iss_withholding: 'not_withheld', remember_iss_withholding: true }, 'auto-remember');
+  assert.equal(result.status, 'prepared');
+  assert.equal(result.customer.fiscal_default_saved, true);
+  assert.equal(f.rememberCalls(), 1);
 });
 
 test('Fiscal Autopilot asks for service clarification when text is not safely classifiable', async () => {
