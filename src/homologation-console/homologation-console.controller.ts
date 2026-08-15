@@ -2,6 +2,13 @@ import { Controller, Get, Header, NotFoundException } from '@nestjs/common';
 import { companyCorrectionHtml } from './company-correction.page';
 import { homologationConsoleHtml } from './homologation-console.page';
 
+const UTC_DATE_INITIALIZER = "const today=new Date().toISOString().slice(0,10);$('effectiveAt').value=today;$('competence').value=today;";
+const LOCAL_DATE_INITIALIZER = "const now=new Date();const pad=(n)=>String(n).padStart(2,'0');const today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());$('effectiveAt').value=today;$('competence').value=today;";
+
+export function useBrowserLocalDateDefaults(html: string): string {
+  return html.replace(UTC_DATE_INITIALIZER, LOCAL_DATE_INITIALIZER);
+}
+
 @Controller('homologation')
 export class HomologationConsoleController {
   private assertEnabled(): void {
@@ -20,7 +27,7 @@ export class HomologationConsoleController {
   @Header('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
   page(): string {
     this.assertEnabled();
-    return homologationConsoleHtml();
+    return useBrowserLocalDateDefaults(homologationConsoleHtml());
   }
 
   @Get('company-correction')
