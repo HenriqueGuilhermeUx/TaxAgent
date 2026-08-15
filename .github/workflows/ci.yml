@@ -48,6 +48,19 @@ jobs:
         run: |
           npm run db:migrate
           npm run db:migrate
+          node <<'NODE'
+          const { Client } = require('pg');
+          (async () => {
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            await client.connect();
+            const table = await client.query("SELECT to_regclass('public.prepared_dps') AS name");
+            if (table.rows[0]?.name !== 'prepared_dps') throw new Error('prepared_dps table missing');
+            const column = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='invoices' AND column_name='prepared_dps_id'");
+            if (column.rowCount !== 1) throw new Error('invoices.prepared_dps_id missing');
+            await client.end();
+            console.log('Prepared DPS migration: OK');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
       - name: Boot API and smoke-test browser console against PostgreSQL
         run: |
           npm start > /tmp/taxagent-api.log 2>&1 &
@@ -60,6 +73,8 @@ jobs:
               grep -q 'Console de Homologação' /tmp/homologation.html
               grep -q 'certificates/upload' /tmp/homologation.html
               grep -q 'Consultoria empresarial padrão (TaxAgent)' /tmp/homologation.html
+              grep -q 'Congelar Prepared DPS' /tmp/homologation.html
+              grep -q 'operations/dps/prepare' /tmp/homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/company-correction.html
 
@@ -73,7 +88,7 @@ jobs:
                 -H 'content-type: application/json' -H 'x-taxagent-bootstrap-token: ci-bootstrap-token' \
                 -d '{"city_code":"3530607"}' > /tmp/company-corrected.json
               python3 -c 'import json; d=json.load(open("/tmp/company-corrected.json")); assert d["city_code"]=="3530607"'
-              echo 'Browser homologation + company correction smoke test: OK'
+              echo 'Browser homologation + Prepared DPS + company correction smoke test: OK'
               exit 0
             fi
             sleep 1
@@ -105,6 +120,8 @@ jobs:
               grep -q 'Console de Homologação' /tmp/docker-homologation.html
               grep -q 'certificates/upload' /tmp/docker-homologation.html
               grep -q 'Consultoria empresarial padrão (TaxAgent)' /tmp/docker-homologation.html
+              grep -q 'Congelar Prepared DPS' /tmp/docker-homologation.html
+              grep -q 'operations/dps/prepare' /tmp/docker-homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/docker-company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/docker-company-correction.html
               echo 'Final Docker runtime smoke test: OK'
