@@ -47,3 +47,32 @@ test('CustomersService only reuses ISS retention when an explicit fiscal default
   await service.clearFiscalDefault('comp_test', 'cust_test', 'business_consulting');
   assert.equal(await service.getFiscalDefault('comp_test', 'cust_test', 'business_consulting'), undefined);
 });
+
+test('CustomersService self-heals an empty registry from existing Fiscal Intent customer snapshots', async () => {
+  const customer = {
+    id: 'cust_from_intent', company_id: 'comp_test', tax_id: '61922930000197', normalized_tax_id: '61922930000197',
+    name: 'nexa tecnologia', normalized_name: 'nexa tecnologia', city_code: '3550308', created_at: new Date(), updated_at: new Date(),
+  };
+  let synced = false;
+  const db = {
+    async query(sql: string, params: any[] = []) {
+      if (sql.includes("FROM fiscal_intents fi")) {
+        assert.equal(params[0], 'comp_test');
+        assert.match(sql, /ON CONFLICT\(company_id, normalized_tax_id\) DO NOTHING/);
+        synced = true;
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith('SELECT * FROM customers WHERE company_id=')) {
+        return { rows: synced ? [customer] : [], rowCount: synced ? 1 : 0 };
+      }
+      if (sql.startsWith('SELECT service_profile')) return { rows: [], rowCount: 0 };
+      throw new Error(`unexpected SQL: ${sql}`);
+    },
+  };
+  const service = new CustomersService(db as any);
+  const rows: any[] = await service.list('comp_test');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].name, 'nexa tecnologia');
+  assert.equal(rows[0].tax_id, '61922930000197');
+  assert.equal(rows[0].city_code, '3550308');
+});
