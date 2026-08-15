@@ -48,6 +48,11 @@ test('fiscal autopilot page exposes a one-click human-first flow without browser
   assert.match(html, /Autopilot fiscal/);
   assert.match(html, /Resolver e preparar automaticamente/);
   assert.match(html, /fiscal\/autopilot/);
+  assert.match(html, /fiscal\/autopilot\/context/);
+  assert.match(html, /identifica automaticamente a Company/);
+  assert.match(html, /Carregar clientes salvos/);
+  assert.doesNotMatch(html, /<label>Company ID<\/label>/);
+  assert.match(html, /id="companyId" type="hidden"/);
   assert.match(html, /Continuar automaticamente/);
   assert.match(html, /O cliente vai reter ISS/);
   assert.match(html, /certificates\/upload/);
