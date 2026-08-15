@@ -21,6 +21,12 @@ const RESOLVE_BODY_OLD = "destination_city_code:val('destinationCity')||undefine
 const RESOLVE_BODY_NEW = "destination_city_code:val('destinationCity')||undefined,service_profile:val('serviceProfile')||undefined,iss_withholding:val('taxIssWithholding')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')";
 const RESOLVED_ACTION_OLD = "if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');syncStatus();}";
 const RESOLVED_ACTION_NEW = "if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}";
+const DPS_ACTIONS_OLD = '<div class="actions"><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>';
+const DPS_ACTIONS_NEW = '<div class="actions"><button class="secondary" onclick="prebuildDps()">Prebuild sem A1 · Build → XSD</button><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>';
+const DRYRUN_FUNCTION_ANCHOR = '  window.dryRunDps=async function(){';
+const PREBUILD_FUNCTION = `  window.prebuildDps=async function(){try{const body=buildInvoiceBody();state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Montando e validando XSD sem certificado...');const result=await request('/v1/operations/dps/prebuild',{method:'POST',body});show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
+
+${DRYRUN_FUNCTION_ANCHOR}`;
 
 export function prepareHomologationConsoleHtml(html: string): string {
   return html
@@ -28,7 +34,9 @@ export function prepareHomologationConsoleHtml(html: string): string {
     .replace(DESTINATION_CITY_CONTROL, PROFILE_CONTROLS)
     .replace(RESOLVE_FUNCTION_ANCHOR, PROFILE_CHANGE_FUNCTION)
     .replace(RESOLVE_BODY_OLD, RESOLVE_BODY_NEW)
-    .replace(RESOLVED_ACTION_OLD, RESOLVED_ACTION_NEW);
+    .replace(RESOLVED_ACTION_OLD, RESOLVED_ACTION_NEW)
+    .replace(DPS_ACTIONS_OLD, DPS_ACTIONS_NEW)
+    .replace(DRYRUN_FUNCTION_ANCHOR, PREBUILD_FUNCTION);
 }
 
 // Kept as a compatibility alias for existing tests/imports.
