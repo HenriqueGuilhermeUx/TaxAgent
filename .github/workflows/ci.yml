@@ -59,6 +59,7 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/homologation.html
               grep -q 'Console de Homologação' /tmp/homologation.html
               grep -q 'certificates/upload' /tmp/homologation.html
+              grep -q 'Consultoria empresarial padrão (TaxAgent)' /tmp/homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/company-correction.html
 
@@ -103,6 +104,7 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation > /tmp/docker-homologation.html
               grep -q 'Console de Homologação' /tmp/docker-homologation.html
               grep -q 'certificates/upload' /tmp/docker-homologation.html
+              grep -q 'Consultoria empresarial padrão (TaxAgent)' /tmp/docker-homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/docker-company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/docker-company-correction.html
               echo 'Final Docker runtime smoke test: OK'
