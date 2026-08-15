@@ -19,6 +19,7 @@ export class InvoicesService {
   constructor(private readonly repository: InvoicesRepository, private readonly router: FiscalRouterService, private readonly taxEngine: TaxEngineService, private readonly taxPosition: TaxPositionService, private readonly ledger: FiscalLedgerService, private readonly jobs: JobsService, private readonly webhooks: WebhooksService, private readonly tenancy: TenancyService, private readonly preparedDps: PreparedDpsService) {}
   async create(dto: CreateInvoiceDto, idempotencyKey?: string) {
     if (idempotencyKey) { const existing = await this.repository.findByIdempotency(dto.company_id, idempotencyKey); if (existing) return this.toAccepted(existing); }
+    if (dto.prepared_dps_id) { const existing = await this.repository.findByPreparedDps(dto.prepared_dps_id); if (existing) { if (existing.company_id !== dto.company_id) throw new ForbiddenException('Prepared DPS is already bound to another company invoice'); return this.toAccepted(existing); } }
     await this.tenancy.getCompany(dto.company_id);
 
     let prepared = dto.prepared_dps_id ? await this.preparedDps.get(dto.prepared_dps_id, dto.company_id) : undefined;
