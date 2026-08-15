@@ -3,7 +3,9 @@ import { companyCorrectionHtml } from './company-correction.page';
 import { homologationConsoleHtml } from './homologation-console.page';
 
 const UTC_DATE_INITIALIZER = "const today=new Date().toISOString().slice(0,10);$('effectiveAt').value=today;$('competence').value=today;";
-const LOCAL_DATE_INITIALIZER = "const now=new Date();const pad=(n)=>String(n).padStart(2,'0');const today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());$('effectiveAt').value=today;$('competence').value=today;";
+const LOCAL_DATE_INITIALIZER = "const now=new Date();const pad=(n)=>String(n).padStart(2,'0');const today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());$('effectiveAt').value=today;$('competence').value=today;if($('prepareKey'))$('prepareKey').value='prep-'+crypto.randomUUID();";
+const STATE_OLD = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false};";
+const STATE_NEW = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',preparedDpsId:'',lastInvoiceBody:null,dryRunValid:false};";
 const DESTINATION_CITY_CONTROL = '<div><label>Município destino (IBGE)</label><input id="destinationCity" maxlength="7" /></div>';
 const PROFILE_CONTROLS = `${DESTINATION_CITY_CONTROL}
       <div><label>Perfil de serviço</label><select id="serviceProfile" onchange="serviceProfileChanged()"><option value="">Manual / sem perfil</option><option value="business_consulting">Consultoria empresarial padrão (TaxAgent)</option></select></div>
@@ -20,23 +22,38 @@ ${RESOLVE_FUNCTION_ANCHOR}`;
 const RESOLVE_BODY_OLD = "destination_city_code:val('destinationCity')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')";
 const RESOLVE_BODY_NEW = "destination_city_code:val('destinationCity')||undefined,service_profile:val('serviceProfile')||undefined,iss_withholding:val('taxIssWithholding')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')";
 const RESOLVED_ACTION_OLD = "if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');syncStatus();}";
-const RESOLVED_ACTION_NEW = "if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');if(val('destinationCity'))$('customerCity').value=val('destinationCity');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}";
+const RESOLVED_ACTION_NEW = "if(result.status==='resolved'){state.taxDecisionId=result.id;state.preparedDpsId='';$('invoiceAmount').value=val('taxAmount');if($('preparedDpsId'))$('preparedDpsId').value='';if(val('destinationCity'))$('customerCity').value=val('destinationCity');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}";
+const ISS_RATE_CONTROL = '<div><label>Alíquota ISS (%) · quando aplicável</label><input id="issRate" type="number" step="0.01" min="0" max="9.99" /></div>';
+const PREPARED_CONTROLS = `${ISS_RATE_CONTROL}
+      <div><label>Prepared DPS · Idempotency-Key</label><input id="prepareKey" autocomplete="off" placeholder="prep-..." /></div>
+      <div><label>Prepared DPS ID</label><input id="preparedDpsId" autocomplete="off" placeholder="pdps_..." /></div>`;
 const DPS_ACTIONS_OLD = '<div class="actions"><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>';
-const DPS_ACTIONS_NEW = '<div class="actions"><button class="secondary" onclick="prebuildDps()">Prebuild sem A1 · Build → XSD</button><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>';
+const DPS_ACTIONS_NEW = '<div class="actions"><button class="secondary" onclick="prebuildDps()">Preview sem persistir · Build → XSD</button><button class="secondary" onclick="preparePersistentDps()">Congelar Prepared DPS · sequência real + XSD</button><button class="secondary" onclick="loadPreparedDps()">Consultar Prepared DPS</button><button onclick="signPreparedDps()">Assinar Prepared DPS com A1</button><button onclick="dryRunDps()">Dry-run legado · reconstruir + A1</button></div>';
 const DRYRUN_FUNCTION_ANCHOR = '  window.dryRunDps=async function(){';
-const PREBUILD_FUNCTION = `  window.prebuildDps=async function(){try{const body=buildInvoiceBody();state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Montando e validando XSD sem certificado...');const result=await request('/v1/operations/dps/prebuild',{method:'POST',body});show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
+const PREBUILD_FUNCTION = `  window.prebuildDps=async function(){try{const body=buildInvoiceBody();delete body.prepared_dps_id;state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Montando preview e validando XSD sem certificado...');const result=await request('/v1/operations/dps/prebuild',{method:'POST',body});show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
+
+  window.preparePersistentDps=async function(){try{const body=buildInvoiceBody();delete body.prepared_dps_id;const idem=val('prepareKey');if(!idem)throw new Error('Informe a Idempotency-Key do Prepared DPS');state.dryRunValid=false;show('dpsOut','Congelando sequência, dhEmi, competência, Tax Decision e XML...');const result=await request('/v1/operations/dps/prepare',{method:'POST',body,idempotencyKey:idem});state.preparedDpsId=result.id;$('preparedDpsId').value=result.id;state.lastInvoiceBody={...body,prepared_dps_id:result.id};show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
+
+  window.loadPreparedDps=async function(){try{const id=val('preparedDpsId')||state.preparedDpsId;if(!id)throw new Error('Informe o Prepared DPS ID');const result=await request('/v1/operations/dps/prepared/'+encodeURIComponent(id));state.preparedDpsId=result.id;state.taxDecisionId=result.tax_decision_id;$('preparedDpsId').value=result.id;syncStatus();state.dryRunValid=result.signed===true&&result.transmitted===false;show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
+
+  window.signPreparedDps=async function(){try{const id=val('preparedDpsId')||state.preparedDpsId;if(!id)throw new Error('Crie ou informe o Prepared DPS ID');show('dpsOut','Assinando exatamente o XML persistido, sem transmitir...');const result=await request('/v1/operations/dps/prepared/'+encodeURIComponent(id)+'/sign',{method:'POST'});state.preparedDpsId=result.id;$('preparedDpsId').value=result.id;state.dryRunValid=result.valid===true&&result.signed===true&&result.transmitted===false;const body=buildInvoiceBody();state.lastInvoiceBody={...body,prepared_dps_id:result.id};show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
 
 ${DRYRUN_FUNCTION_ANCHOR}`;
+const LIVE_BODY_OLD = "const body=state.lastInvoiceBody||buildInvoiceBody();show('liveOut','Transmitindo uma única operação...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});";
+const LIVE_BODY_NEW = "const baseBody=state.lastInvoiceBody||buildInvoiceBody();const preparedId=state.preparedDpsId||val('preparedDpsId');const body={...baseBody,...(preparedId?{prepared_dps_id:preparedId}:{})};show('liveOut','Transmitindo uma única operação vinculada ao Prepared DPS...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});";
 
 export function prepareHomologationConsoleHtml(html: string): string {
   return html
     .replace(UTC_DATE_INITIALIZER, LOCAL_DATE_INITIALIZER)
+    .replace(STATE_OLD, STATE_NEW)
     .replace(DESTINATION_CITY_CONTROL, PROFILE_CONTROLS)
     .replace(RESOLVE_FUNCTION_ANCHOR, PROFILE_CHANGE_FUNCTION)
     .replace(RESOLVE_BODY_OLD, RESOLVE_BODY_NEW)
     .replace(RESOLVED_ACTION_OLD, RESOLVED_ACTION_NEW)
+    .replace(ISS_RATE_CONTROL, PREPARED_CONTROLS)
     .replace(DPS_ACTIONS_OLD, DPS_ACTIONS_NEW)
-    .replace(DRYRUN_FUNCTION_ANCHOR, PREBUILD_FUNCTION);
+    .replace(DRYRUN_FUNCTION_ANCHOR, PREBUILD_FUNCTION)
+    .replace(LIVE_BODY_OLD, LIVE_BODY_NEW);
 }
 
 // Kept as a compatibility alias for existing tests/imports.
