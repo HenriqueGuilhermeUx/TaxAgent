@@ -95,6 +95,26 @@ test('Prepared DPS freezes one real sequence and returns the same artifact for t
   assert.equal(f.sequenceCount(), 1);
   assert.equal(first.status, 'prepared');
   assert.equal(first.signed, false);
+  assert.equal(first.resume_payload.prepared_dps_id, first.id);
+  assert.equal(first.resume_payload.tax_decision_id, 'taxdec_test');
+  assert.equal(first.resume_payload.customer.tax_id, '12345678000199');
+  assert.equal(first.resume_payload.service.national_service_code, '170101');
+  assert.equal(first.resume_payload.service.iss_rate, 4);
+});
+
+test('Prepared DPS inspection can reconstruct the exact frozen invoice payload after a browser refresh', async () => {
+  const f = fixture();
+  const prepared = await f.service.prepare(f.dto, 'prep-resume');
+  const inspected = await f.service.inspect(prepared.id, 'comp_test');
+
+  assert.deepEqual(inspected.resume_payload, prepared.resume_payload);
+  assert.equal(inspected.resume_payload.competence, '2026-08-14');
+  assert.equal(inspected.resume_payload.customer.name, 'Cliente LTDA');
+  assert.equal(inspected.resume_payload.customer.city_code, '3550308');
+  assert.equal(inspected.resume_payload.service.service_location_city_code, '3530607');
+  assert.equal(inspected.resume_payload.service.cst, undefined);
+  assert.equal(inspected.resume_payload.service.tax_situation, '000');
+  assert.equal(inspected.resume_payload.service.tax_classification, '000001');
 });
 
 test('Prepared DPS rejects reuse of an Idempotency-Key with a different fiscal payload', async () => {
@@ -116,6 +136,7 @@ test('Prepared DPS signs exactly the persisted unsigned XML and signing is idemp
   assert.equal(f.signatureInput(), exactUnsigned);
   assert.equal(first.signed, true);
   assert.equal(first.signed_xml_sha256, second.signed_xml_sha256);
+  assert.equal(first.resume_payload.prepared_dps_id, prepared.id);
   assert.equal(f.vaultCalls(), 1);
 });
 
