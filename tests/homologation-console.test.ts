@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { companyCorrectionHtml } from '../src/homologation-console/company-correction.page';
+import { useBrowserLocalDateDefaults } from '../src/homologation-console/homologation-console.controller';
 import { homologationConsoleHtml } from '../src/homologation-console/homologation-console.page';
 
 test('homologation console exposes browser-only fiscal workflow without browser persistence', () => {
@@ -16,6 +17,14 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.doesNotMatch(script, /localStorage\s*[.\[]/);
   assert.doesNotMatch(script, /sessionStorage\s*[.\[]/);
   assert.doesNotMatch(script, /console\.(?:log|debug|info)\s*\(/);
+});
+
+test('served homologation console uses the browser local calendar date instead of UTC date', () => {
+  const html = useBrowserLocalDateDefaults(homologationConsoleHtml());
+  assert.doesNotMatch(html, /new Date\(\)\.toISOString\(\)\.slice\(0,10\)/);
+  assert.match(html, /now\.getFullYear\(\)/);
+  assert.match(html, /now\.getMonth\(\)\+1/);
+  assert.match(html, /now\.getDate\(\)/);
 });
 
 test('company correction tool patches an existing company and can replace a lost TEST key without browser persistence', () => {
