@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { companyCorrectionHtml } from '../src/homologation-console/company-correction.page';
-import { useBrowserLocalDateDefaults } from '../src/homologation-console/homologation-console.controller';
+import { prepareHomologationConsoleHtml } from '../src/homologation-console/homologation-console.controller';
 import { homologationConsoleHtml } from '../src/homologation-console/homologation-console.page';
 
 test('homologation console exposes browser-only fiscal workflow without browser persistence', () => {
-  const html = homologationConsoleHtml();
+  const html = prepareHomologationConsoleHtml(homologationConsoleHtml());
   assert.match(html, /Console de Homologação/);
   assert.match(html, /certificates\/upload/);
   assert.match(html, /operations\/dps\/validate/);
   assert.match(html, /tax\/resolve/);
   assert.match(html, /YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS/);
+  assert.match(html, /Consultoria empresarial padrão \(TaxAgent\)/);
+  assert.match(html, /service_profile:val\('serviceProfile'\)/);
+  assert.match(html, /iss_withholding:val\('taxIssWithholding'\)/);
+  assert.match(html, /result\.municipal_tax\.iss_rate/);
 
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
   assert.ok(script.length > 0, 'inline console script must exist');
@@ -20,7 +24,7 @@ test('homologation console exposes browser-only fiscal workflow without browser 
 });
 
 test('served homologation console uses the browser local calendar date instead of UTC date', () => {
-  const html = useBrowserLocalDateDefaults(homologationConsoleHtml());
+  const html = prepareHomologationConsoleHtml(homologationConsoleHtml());
   assert.doesNotMatch(html, /new Date\(\)\.toISOString\(\)\.slice\(0,10\)/);
   assert.match(html, /now\.getFullYear\(\)/);
   assert.match(html, /now\.getMonth\(\)\+1/);
