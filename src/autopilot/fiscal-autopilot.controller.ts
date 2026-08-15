@@ -14,6 +14,14 @@ import { FiscalAutopilotService } from './fiscal-autopilot.service';
 export class FiscalAutopilotController {
   constructor(private readonly autopilot: FiscalAutopilotService) {}
 
+  @Get('context')
+  @RequireScope('invoices:read')
+  @ApiOperation({ summary: 'Return the company/environment already bound to the authenticated API key' })
+  context(@CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+    if (!auth) throw new ForbiddenException('Authenticated API key required');
+    return { company_id: auth.companyId, environment: auth.environment };
+  }
+
   @Post()
   @RequireScope('invoices:write')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
