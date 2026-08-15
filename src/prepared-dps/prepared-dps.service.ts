@@ -238,6 +238,32 @@ export class PreparedDpsService {
   }
 
   private toPublic(record: PreparedDpsRecord) {
+    const input = record.canonical_input;
+    const resumePayload: CreateInvoiceDto & { prepared_dps_id: string } = {
+      company_id: record.company_id,
+      environment: record.environment,
+      competence: this.dateOnly(record.competence),
+      tax_decision_id: record.tax_decision_id,
+      prepared_dps_id: record.id,
+      customer: {
+        tax_id: input.customer.taxId,
+        name: input.customer.name,
+        city_code: input.customer.cityCode,
+      },
+      service: {
+        description: input.service.description,
+        amount: input.service.amount,
+        national_service_code: input.service.nationalServiceCode,
+        service_location_city_code: input.service.serviceLocationCityCode,
+        iss_taxation: input.service.issTaxation,
+        iss_withholding: input.service.issWithholding,
+        iss_rate: input.service.issRate,
+        final_consumption: input.service.finalConsumption,
+        operation_indicator: input.service.operationIndicator,
+        tax_situation: input.service.taxSituation,
+        tax_classification: input.service.taxClassification,
+      },
+    };
     return {
       id: record.id,
       status: record.status,
@@ -259,6 +285,7 @@ export class PreparedDpsService {
       unsigned_xml_sha256: record.unsigned_xml_sha256,
       signed_xml_sha256: record.signed_xml_sha256 ?? undefined,
       certificate_fingerprint: record.certificate_fingerprint ?? undefined,
+      resume_payload: resumePayload,
       created_at: record.created_at,
       signed_at: record.signed_at ?? undefined,
       consumed_at: record.consumed_at ?? undefined,
