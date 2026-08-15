@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { createId } from '../common/id';
+import { CustomersService } from '../customers/customers.service';
 import { DatabaseService } from '../database/database.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { ReadinessService } from '../operations/readiness.service';
@@ -8,10 +9,14 @@ import { PreparedDpsService } from '../prepared-dps/prepared-dps.service';
 import { TaxEngineService } from '../tax-engine/tax-engine.service';
 import { TenancyService } from '../tenancy/tenancy.service';
 import { detectServiceProfile } from './autopilot-classifier';
-import { AnswerFiscalAutopilotDto, CreateFiscalAutopilotDto } from './dto/fiscal-autopilot.dto';
+import { AnswerFiscalAutopilotDto, AutopilotCustomerDto, CreateFiscalAutopilotDto } from './dto/fiscal-autopilot.dto';
 
 type IntentStatus = 'needs_input' | 'prepared' | 'signed' | 'queued' | 'authorized' | 'blocked' | 'failed';
 type WithholdingAnswer = 'not_withheld' | 'customer' | 'intermediary';
+type ResolvedAutopilotRequest = Omit<CreateFiscalAutopilotDto, 'customer' | 'customer_id'> & {
+  customer_id: string;
+  customer: AutopilotCustomerDto;
+};
 
 interface FiscalIntentRow {
   id: string;
@@ -19,8 +24,12 @@ interface FiscalIntentRow {
   environment: 'test' | 'production';
   idempotency_key: string;
   request_sha256: string;
-  request: CreateFiscalAutopilotDto;
-  answers: { service_kind?: 'business_consulting' | 'other'; iss_withholding?: WithholdingAnswer };
+  request: ResolvedAutopilotRequest;
+  answers: {
+    service_kind?: 'business_consulting' | 'other';
+    iss_withholding?: WithholdingAnswer;
+    remember_iss_withholding?: boolean;
+  };
   status: IntentStatus;
   service_profile: 'business_consulting' | null;
   tax_decision_id: string | null;
@@ -36,6 +45,7 @@ export class FiscalAutopilotService {
   constructor(
     private readonly db: DatabaseService,
     private readonly tenancy: TenancyService,
+    private readonly customers: CustomersService,
     private readonly taxEngine: TaxEngineService,
     private readonly preparedDps: PreparedDpsService,
     private readonly readiness: ReadinessService,
@@ -45,19 +55,24 @@ export class FiscalAutopilotService {
   async start(dto: CreateFiscalAutopilotDto, idempotencyKey: string) {
     this.assertStart(dto, idempotencyKey);
     await this.tenancy.getCompany(dto.company_id);
-    const requestHash = this.hashStable(dto);
+
     const existing = await this.findByIdempotency(dto.company_id, dto.environment, idempotencyKey);
     if (existing) {
-      if (existing.request_sha256 !== requestHash) throw new BadRequestException('Autopilot Idempotency-Key was already used with a different operation');
+      this.assertReplayCompatible(existing, dto);
       return this.advance(existing.id, dto.company_id);
     }
 
+    const request = await this.resolveCustomerSnapshot(dto);
+    const requestHash = this.hashStable(request);
     const id = createId('fint');
-    const answers = dto.iss_withholding ? { iss_withholding: dto.iss_withholding } : {};
+    const answers = {
+      ...(dto.iss_withholding ? { iss_withholding: dto.iss_withholding } : {}),
+      ...(dto.remember_iss_withholding !== undefined ? { remember_iss_withholding: dto.remember_iss_withholding } : {}),
+    };
     await this.db.query(
       `INSERT INTO fiscal_intents(id, company_id, environment, idempotency_key, request_sha256, request, answers, status)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'needs_input')`,
-      [id, dto.company_id, dto.environment, idempotencyKey, requestHash, JSON.stringify(dto), JSON.stringify(answers)],
+      [id, dto.company_id, dto.environment, idempotencyKey, requestHash, JSON.stringify(request), JSON.stringify(answers)],
     );
     return this.advance(id, dto.company_id);
   }
@@ -144,9 +159,19 @@ export class FiscalAutopilotService {
       });
     }
 
-    const withholding = intent.answers?.iss_withholding ?? request.iss_withholding;
+    let withholding = intent.answers?.iss_withholding ?? request.iss_withholding;
+    let memoryUsed = false;
+    if (!withholding && request.customer_id) {
+      const remembered = await this.customers.getFiscalDefault(companyId, request.customer_id, profile);
+      if (remembered) {
+        withholding = remembered;
+        memoryUsed = true;
+      }
+    }
+
     if (!withholding) {
       return this.updateAndPublic({ ...intent, service_profile: profile }, 'needs_input', {
+        ...intent.output,
         stage: 'needs_human_input',
         service_profile: profile,
         question: {
@@ -158,7 +183,7 @@ export class FiscalAutopilotService {
             { value: 'intermediary', label: 'Sim · pelo intermediário' },
           ],
         },
-        next_action: { kind: 'answer_question', message: 'Esta informação não é inferida porque depende dos fatos da operação.' },
+        next_action: { kind: 'answer_question', message: 'Esta informação não é inferida. Você pode marcar para lembrar a resposta como padrão explícito deste cliente + tipo de serviço.' },
       });
     }
 
@@ -168,6 +193,11 @@ export class FiscalAutopilotService {
     const tpRetIss = this.mapWithholding(withholding);
 
     if (!intent.tax_decision_id || intent.status === 'blocked') {
+      const remember = intent.answers?.remember_iss_withholding ?? request.remember_iss_withholding ?? false;
+      if (remember && request.customer_id) {
+        await this.customers.rememberFiscalDefault(companyId, request.customer_id, profile, withholding);
+      }
+
       const decision = await this.taxEngine.resolve({
         company_id: companyId,
         effective_at: effectiveAt,
@@ -181,8 +211,15 @@ export class FiscalAutopilotService {
         service_profile: profile,
         tax_decision_id: decision.id,
         output: {
+          ...intent.output,
           stage: decision.status === 'resolved' ? 'tax_resolved' : 'tax_blocked',
           service_profile: profile,
+          customer: {
+            id: request.customer_id,
+            remembered_iss_withholding_used: memoryUsed,
+            remembered_iss_withholding: memoryUsed ? withholding : undefined,
+            fiscal_default_saved: remember,
+          },
           tax_decision: {
             id: decision.id,
             status: decision.status,
@@ -305,9 +342,53 @@ export class FiscalAutopilotService {
 
   private assertStart(dto: CreateFiscalAutopilotDto, idempotencyKey: string): void {
     if (dto.environment !== 'test') throw new BadRequestException('Fiscal Autopilot remains restricted to environment=test during the first homologation cycle');
+    if (!dto.customer_id && !dto.customer) throw new BadRequestException('Inform a saved customer_id or customer details');
     const key = String(idempotencyKey ?? '').trim();
     if (!key) throw new BadRequestException('Idempotency-Key is required for Fiscal Autopilot');
     if (key.length > 200) throw new BadRequestException('Idempotency-Key must contain at most 200 characters');
+  }
+
+  private async resolveCustomerSnapshot(dto: CreateFiscalAutopilotDto): Promise<ResolvedAutopilotRequest> {
+    let customer;
+    if (dto.customer_id) {
+      customer = await this.customers.get(dto.company_id, dto.customer_id);
+      if (dto.customer) {
+        const suppliedTaxId = this.normalizeTaxId(dto.customer.tax_id);
+        if (suppliedTaxId !== customer.normalized_tax_id) throw new BadRequestException('Saved customer_id conflicts with supplied customer tax_id');
+      }
+    } else {
+      customer = await this.customers.upsertFromOperation(dto.company_id, dto.customer!);
+    }
+    return {
+      company_id: dto.company_id,
+      environment: dto.environment,
+      competence: dto.competence,
+      effective_at: dto.effective_at,
+      customer_id: customer.id,
+      customer: { tax_id: customer.tax_id, name: customer.name, city_code: customer.city_code },
+      service: dto.service,
+      iss_withholding: dto.iss_withholding,
+      remember_iss_withholding: dto.remember_iss_withholding,
+    };
+  }
+
+  private assertReplayCompatible(existing: FiscalIntentRow, dto: CreateFiscalAutopilotDto): void {
+    const request = existing.request;
+    const customer = dto.customer ?? (dto.customer_id && dto.customer_id === request.customer_id ? request.customer : undefined);
+    const candidate = {
+      company_id: dto.company_id,
+      environment: dto.environment,
+      competence: dto.competence,
+      effective_at: dto.effective_at,
+      customer_id: dto.customer_id ?? request.customer_id,
+      customer,
+      service: dto.service,
+      iss_withholding: dto.iss_withholding,
+      remember_iss_withholding: dto.remember_iss_withholding,
+    };
+    if (!customer || this.hashStable(candidate) !== existing.request_sha256) {
+      throw new BadRequestException('Autopilot Idempotency-Key was already used with a different operation');
+    }
   }
 
   private mapWithholding(answer: WithholdingAnswer): '1' | '2' | '3' {
@@ -356,6 +437,7 @@ export class FiscalAutopilotService {
       prepared_dps_id: intent.prepared_dps_id ?? undefined,
       invoice_id: intent.invoice_id ?? undefined,
       operation: {
+        customer_id: intent.request.customer_id,
         customer: { name: intent.request.customer.name, tax_id: intent.request.customer.tax_id, city_code: intent.request.customer.city_code },
         service: { description: intent.request.service.description, amount: intent.request.service.amount },
         competence: intent.request.competence ?? intent.request.effective_at ?? undefined,
@@ -409,5 +491,9 @@ export class FiscalAutopilotService {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
     const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
     return `${map.year}-${map.month}-${map.day}`;
+  }
+
+  private normalizeTaxId(value: string): string {
+    return String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 }
