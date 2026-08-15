@@ -57,10 +57,14 @@ jobs:
             if (prepared.rows[0]?.name !== 'prepared_dps') throw new Error('prepared_dps table missing');
             const intents = await client.query("SELECT to_regclass('public.fiscal_intents') AS name");
             if (intents.rows[0]?.name !== 'fiscal_intents') throw new Error('fiscal_intents table missing');
+            const customers = await client.query("SELECT to_regclass('public.customers') AS name");
+            if (customers.rows[0]?.name !== 'customers') throw new Error('customers table missing');
+            const memory = await client.query("SELECT to_regclass('public.customer_fiscal_memory') AS name");
+            if (memory.rows[0]?.name !== 'customer_fiscal_memory') throw new Error('customer_fiscal_memory table missing');
             const column = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='invoices' AND column_name='prepared_dps_id'");
             if (column.rowCount !== 1) throw new Error('invoices.prepared_dps_id missing');
             await client.end();
-            console.log('Prepared DPS + Fiscal Autopilot migrations: OK');
+            console.log('Prepared DPS + Fiscal Autopilot + customer memory migrations: OK');
           })().catch((error) => { console.error(error); process.exit(1); });
           NODE
       - name: Boot API and smoke-test browser console against PostgreSQL
@@ -80,7 +84,9 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/autopilot > /tmp/autopilot.html
               grep -q 'Autopilot fiscal' /tmp/autopilot.html
               grep -q 'Resolver e preparar automaticamente' /tmp/autopilot.html
-              grep -q 'fiscal/autopilot' /tmp/autopilot.html
+              grep -q 'Carregar clientes salvos' /tmp/autopilot.html
+              grep -q '/v1/customers' /tmp/autopilot.html
+              grep -q 'remember_iss_withholding' /tmp/autopilot.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/company-correction.html
 
@@ -94,7 +100,7 @@ jobs:
                 -H 'content-type: application/json' -H 'x-taxagent-bootstrap-token: ci-bootstrap-token' \
                 -d '{"city_code":"3530607"}' > /tmp/company-corrected.json
               python3 -c 'import json; d=json.load(open("/tmp/company-corrected.json")); assert d["city_code"]=="3530607"'
-              echo 'Browser homologation + Fiscal Autopilot + Prepared DPS smoke test: OK'
+              echo 'Browser homologation + Fiscal Autopilot + customer memory + Prepared DPS smoke test: OK'
               exit 0
             fi
             sleep 1
@@ -131,7 +137,9 @@ jobs:
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/autopilot > /tmp/docker-autopilot.html
               grep -q 'Autopilot fiscal' /tmp/docker-autopilot.html
               grep -q 'Resolver e preparar automaticamente' /tmp/docker-autopilot.html
-              grep -q 'fiscal/autopilot' /tmp/docker-autopilot.html
+              grep -q 'Carregar clientes salvos' /tmp/docker-autopilot.html
+              grep -q '/v1/customers' /tmp/docker-autopilot.html
+              grep -q 'remember_iss_withholding' /tmp/docker-autopilot.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/company-correction > /tmp/docker-company-correction.html
               grep -q 'Corrigir cadastro da Company' /tmp/docker-company-correction.html
               echo 'Final Docker runtime smoke test: OK'
