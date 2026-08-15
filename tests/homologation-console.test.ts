@@ -16,6 +16,10 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /Assinar Prepared DPS com A1/);
   assert.match(html, /Prepared DPS ID/);
   assert.match(html, /prepared_dps_id/);
+  assert.match(html, /restorePreparedPayload/);
+  assert.match(html, /resume_payload/);
+  assert.match(html, /customerTaxId/);
+  assert.match(html, /serviceDescription/);
   assert.match(html, /tax\/resolve/);
   assert.match(html, /YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS/);
   assert.match(html, /Consultoria empresarial padrão \(TaxAgent\)/);
