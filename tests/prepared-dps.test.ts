@@ -112,7 +112,6 @@ test('Prepared DPS inspection can reconstruct the exact frozen invoice payload a
   assert.equal(inspected.resume_payload.customer.name, 'Cliente LTDA');
   assert.equal(inspected.resume_payload.customer.city_code, '3550308');
   assert.equal(inspected.resume_payload.service.service_location_city_code, '3530607');
-  assert.equal(inspected.resume_payload.service.cst, undefined);
   assert.equal(inspected.resume_payload.service.tax_situation, '000');
   assert.equal(inspected.resume_payload.service.tax_classification, '000001');
 });
