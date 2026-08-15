@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-08",
+  "updatedAt": "2026-08-14",
   "sources": {
     "rtcOpenData": {
       "authority": "runtime-reference",
@@ -37,6 +37,15 @@
       "cbsReferenceRate": "0.009",
       "url": "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/programas-e-atividades/reforma-tributaria-do-consumo/entenda",
       "notes": "2026 test-year reference rates. Do not apply blindly to differentiated/special operations."
+    },
+    "mogiIss": {
+      "authority": "official-municipal-domain",
+      "status": "active",
+      "municipalityCode": "3530607",
+      "url": "https://www.mogidascruzes.sp.gov.br/servico/impostos-e-taxas/cadastro-ccm-consulta-ao-cnae-item-da-lei",
+      "rateTableUrl": "https://www.mogidascruzes.sp.gov.br/public/site/doc/201804040846525ac4bb2c9a512.pdf",
+      "legalBasis": ["LC Municipal 26/2003", "LC Municipal 134/2017", "IN SMF 02/2025", "LC Federal 116/2003"],
+      "notes": "Current municipal reference page points to the service/item tables. TaxAgent's vetted business_consulting rule uses item 17.01 at 4.00% for Mogi and the LC 116 art. 3 general provider-establishment incidence rule. Withholding is never inferred."
     }
   }
 }
