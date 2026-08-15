@@ -12,5 +12,10 @@ import { DpsPreflightService } from './dps-preflight.service';
 import { OperationsController } from './operations.controller';
 import { ReadinessService } from './readiness.service';
 
-@Module({ imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule], controllers: [OperationsController], providers: [ReadinessService, DpsPreflightService, NfseNationalClient] })
+@Module({
+  imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule],
+  controllers: [OperationsController],
+  providers: [ReadinessService, DpsPreflightService, NfseNationalClient],
+  exports: [ReadinessService],
+})
 export class OperationsModule {}
