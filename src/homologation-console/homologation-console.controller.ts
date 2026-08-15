@@ -1,4 +1,5 @@
 import { Controller, Get, Header, NotFoundException } from '@nestjs/common';
+import { fiscalAutopilotHtml } from './autopilot.page';
 import { companyCorrectionHtml } from './company-correction.page';
 import { homologationConsoleHtml } from './homologation-console.page';
 
@@ -65,7 +66,6 @@ export function prepareHomologationConsoleHtml(html: string): string {
     .replace(LIVE_BODY_OLD, LIVE_BODY_NEW);
 }
 
-// Kept as a compatibility alias for existing tests/imports.
 export function useBrowserLocalDateDefaults(html: string): string {
   return prepareHomologationConsoleHtml(html);
 }
@@ -73,9 +73,7 @@ export function useBrowserLocalDateDefaults(html: string): string {
 @Controller('homologation')
 export class HomologationConsoleController {
   private assertEnabled(): void {
-    if (process.env.TAXAGENT_HOMOLOGATION_CONSOLE_ENABLED !== 'true') {
-      throw new NotFoundException();
-    }
+    if (process.env.TAXAGENT_HOMOLOGATION_CONSOLE_ENABLED !== 'true') throw new NotFoundException();
   }
 
   @Get()
@@ -86,10 +84,17 @@ export class HomologationConsoleController {
   @Header('X-Frame-Options', 'DENY')
   @Header('Referrer-Policy', 'no-referrer')
   @Header('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-  page(): string {
-    this.assertEnabled();
-    return prepareHomologationConsoleHtml(homologationConsoleHtml());
-  }
+  page(): string { this.assertEnabled(); return prepareHomologationConsoleHtml(homologationConsoleHtml()); }
+
+  @Get('autopilot')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'no-store, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('X-Content-Type-Options', 'nosniff')
+  @Header('X-Frame-Options', 'DENY')
+  @Header('Referrer-Policy', 'no-referrer')
+  @Header('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+  autopilot(): string { this.assertEnabled(); return fiscalAutopilotHtml(); }
 
   @Get('company-correction')
   @Header('Content-Type', 'text/html; charset=utf-8')
@@ -99,8 +104,5 @@ export class HomologationConsoleController {
   @Header('X-Frame-Options', 'DENY')
   @Header('Referrer-Policy', 'no-referrer')
   @Header('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-  companyCorrection(): string {
-    this.assertEnabled();
-    return companyCorrectionHtml();
-  }
+  companyCorrection(): string { this.assertEnabled(); return companyCorrectionHtml(); }
 }
