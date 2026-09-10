@@ -5,6 +5,7 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { CustomersModule } from './customers/customers.module';
 import { DanfseModule } from './danfse/danfse.module';
 import { DatabaseModule } from './database/database.module';
+import { DocumentIntakeModule } from './document-intake/document-intake.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { HomologationConsoleModule } from './homologation-console/homologation-console.module';
@@ -18,5 +19,5 @@ import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, TenancyModule, CustomersModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, TenancyModule, CustomersModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
 export class AppModule {}
