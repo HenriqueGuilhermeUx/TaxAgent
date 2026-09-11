@@ -98,7 +98,7 @@ export class PaymentMatchingService {
       );
       if (existing.rows[0]) {
         if (existing.rows[0].payment_id !== paymentId) throw new BadRequestException('Document intake already has another confirmed payment');
-        return { match: existing.rows[0], duplicate: true, ledger_recorded: Boolean(intake.linked_invoice_id) };
+        return { match: existing.rows[0], duplicate: true, ledger_recorded: Boolean(intake.linked_invoice_id), financial_evidence_recorded: true };
       }
 
       const candidate = await client.query<MatchRow>(
@@ -106,6 +106,13 @@ export class PaymentMatchingService {
         [intakeId, paymentId, companyId, environment],
       );
       if (!candidate.rows[0]) throw new BadRequestException('Suggested payment match not found');
+
+      const paymentResult = await client.query<PaymentRow>(
+        'SELECT * FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE',
+        [paymentId, companyId, environment],
+      );
+      const payment = paymentResult.rows[0];
+      if (!payment) throw new BadRequestException('Payment record not found');
 
       const confirmed = await client.query<MatchRow>(
         `UPDATE document_payment_matches SET status='confirmed', confirmed_at=NOW(), updated_at=NOW()
@@ -118,9 +125,26 @@ export class PaymentMatchingService {
         [intakeId, paymentId, companyId, environment],
       );
 
+      await client.query(
+        `INSERT INTO tax_position_financial_evidence(
+           id, company_id, environment, evidence_type, intake_id, payment_id, match_id, invoice_id,
+           effective_at, amount, currency, payload
+         ) VALUES($1,$2,$3,'payment_confirmation',$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+         ON CONFLICT(match_id) DO NOTHING`,
+        [
+          createId('tpe'), companyId, environment, intakeId, paymentId, confirmed.rows[0].id,
+          intake.linked_invoice_id ?? null, payment.occurred_at, Number(payment.amount), payment.currency ?? 'BRL',
+          JSON.stringify({
+            score: Number(confirmed.rows[0].score),
+            reasons: confirmed.rows[0].reasons,
+            reconciliation: 'human-confirmed',
+            tax_effect_applied: false,
+          }),
+        ],
+      );
+
       let ledgerRecorded = false;
       if (intake.linked_invoice_id) {
-        const payment = await client.query<PaymentRow>('SELECT * FROM payment_records WHERE id=$1', [paymentId]);
         await client.query(
           `INSERT INTO ledger_entries(invoice_id, event_type, payload)
            VALUES($1,'payment.match.confirmed',$2::jsonb)`,
@@ -130,13 +154,14 @@ export class PaymentMatchingService {
             match_id: confirmed.rows[0].id,
             score: Number(confirmed.rows[0].score),
             reasons: confirmed.rows[0].reasons,
-            payment: payment.rows[0] ?? undefined,
+            payment,
             reconciliation: 'human-confirmed',
+            tax_effect_applied: false,
           })],
         );
         ledgerRecorded = true;
       }
-      return { match: confirmed.rows[0], duplicate: false, ledger_recorded: ledgerRecorded };
+      return { match: confirmed.rows[0], duplicate: false, ledger_recorded: ledgerRecorded, financial_evidence_recorded: true };
     });
   }
 
@@ -149,9 +174,11 @@ export class PaymentMatchingService {
     const { rows } = await this.db.query<any>(
       `SELECT m.id AS match_id, m.score, m.reasons, m.confirmed_at,
               p.id AS payment_id, p.external_id, p.direction, p.amount, p.currency, p.occurred_at,
-              p.counterparty_tax_id, p.counterparty_name, p.reference
+              p.counterparty_tax_id, p.counterparty_name, p.reference,
+              e.id AS evidence_id
        FROM document_payment_matches m
        JOIN payment_records p ON p.id=m.payment_id
+       LEFT JOIN tax_position_financial_evidence e ON e.match_id=m.id
        WHERE m.intake_id=$1 AND m.company_id=$2 AND m.environment=$3 AND m.status='confirmed'
        LIMIT 1`,
       [intakeId, companyId, environment],
@@ -162,6 +189,7 @@ export class PaymentMatchingService {
       invoice_id: intakeResult.rows[0].linked_invoice_id ?? undefined,
       paid: Boolean(confirmed),
       reconciliation_status: confirmed ? 'confirmed' : 'unconfirmed',
+      financial_evidence_id: confirmed?.evidence_id ?? undefined,
       payment: confirmed ? {
         id: confirmed.payment_id,
         external_id: confirmed.external_id ?? undefined,
@@ -179,7 +207,10 @@ export class PaymentMatchingService {
         reasons: confirmed.reasons,
         confirmed_at: confirmed.confirmed_at,
       } : undefined,
-      warning: confirmed ? undefined : 'No payment has been explicitly confirmed for this fiscal document.',
+      tax_effect_applied: false,
+      warning: confirmed
+        ? 'Confirmed payment is financial evidence only; it does not create IBS/CBS credits, debits or assessment effects automatically.'
+        : 'No payment has been explicitly confirmed for this fiscal document.',
     };
   }
 
