@@ -144,17 +144,130 @@ export class PaymentMatchingService {
         [companyId, environment, windowDays],
       ),
     ]);
+
+    const unmatchedPayments = payments.rows.filter((row) => !row.has_confirmed_document);
+    const divergencePaymentIds = new Set<string>();
     const documentIssues = documents.rows.filter((row) => !row.has_confirmed_payment).map((row) => {
       const doc = row.canonical_document ?? {};
-      return { type: Number(row.best_score) >= 0.6 ? 'document_match_unconfirmed' : 'document_without_payment', severity: Number(row.best_score) >= 0.6 ? 'medium' : 'high', intake_id: row.id, document_number: doc.document_number, amount: doc.total?.amount, currency: doc.total?.currency ?? 'BRL', issued_at: doc.issued_at, best_match_score: Number(row.best_score), tax_effect_applied: false };
+      const amount = Number(doc.total?.amount ?? 0);
+      const issuedAt = doc.issued_at ? new Date(doc.issued_at) : null;
+      const taxIds = [this.digits(doc.supplier?.tax_id), this.digits(doc.customer?.tax_id)].filter(Boolean) as string[];
+      if (Number(row.best_score) >= 0.6) {
+        return { type: 'document_match_unconfirmed', severity: 'medium', intake_id: row.id, document_number: doc.document_number, amount: doc.total?.amount, currency: doc.total?.currency ?? 'BRL', issued_at: doc.issued_at, best_match_score: Number(row.best_score), tax_effect_applied: false };
+      }
+
+      const candidates = unmatchedPayments.map((payment) => {
+        const paymentAmount = Number(payment.amount);
+        const paymentTaxId = this.digits(payment.counterparty_tax_id);
+        const daysApart = issuedAt && !Number.isNaN(issuedAt.getTime()) ? Math.abs(new Date(payment.occurred_at).getTime() - issuedAt.getTime()) / 86400000 : Infinity;
+        const sameTaxId = Boolean(paymentTaxId && taxIds.includes(paymentTaxId));
+        const exactAmount = amount > 0 && Math.abs(paymentAmount - amount) <= 0.01;
+        let rank = 0;
+        if (daysApart <= 45 && sameTaxId && !exactAmount && amount > 0) rank = 3;
+        else if (daysApart <= 45 && exactAmount && paymentTaxId && taxIds.length > 0 && !sameTaxId) rank = 2;
+        return { payment, paymentAmount, paymentTaxId, daysApart, sameTaxId, exactAmount, rank };
+      }).filter((candidate) => candidate.rank > 0).sort((a, b) => b.rank - a.rank || a.daysApart - b.daysApart);
+
+      const divergence = candidates[0];
+      if (divergence) {
+        divergencePaymentIds.add(divergence.payment.id);
+        if (divergence.sameTaxId && !divergence.exactAmount) {
+          const delta = this.money(divergence.paymentAmount - amount);
+          return {
+            type: delta < 0 ? 'payment_under_amount' : 'payment_over_amount',
+            severity: 'high',
+            intake_id: row.id,
+            payment_id: divergence.payment.id,
+            document_number: doc.document_number,
+            document_amount: amount,
+            payment_amount: divergence.paymentAmount,
+            delta,
+            currency: doc.total?.currency ?? divergence.payment.currency ?? 'BRL',
+            counterparty_tax_id: divergence.paymentTaxId,
+            days_apart: Number(divergence.daysApart.toFixed(2)),
+            tax_effect_applied: false,
+          };
+        }
+        return {
+          type: 'counterparty_divergence',
+          severity: 'high',
+          intake_id: row.id,
+          payment_id: divergence.payment.id,
+          document_number: doc.document_number,
+          amount,
+          currency: doc.total?.currency ?? divergence.payment.currency ?? 'BRL',
+          document_tax_ids: taxIds,
+          payment_tax_id: divergence.paymentTaxId,
+          days_apart: Number(divergence.daysApart.toFixed(2)),
+          tax_effect_applied: false,
+        };
+      }
+
+      return { type: 'document_without_payment', severity: 'high', intake_id: row.id, document_number: doc.document_number, amount: doc.total?.amount, currency: doc.total?.currency ?? 'BRL', issued_at: doc.issued_at, best_match_score: Number(row.best_score), tax_effect_applied: false };
     });
-    const paymentIssues = payments.rows.filter((row) => !row.has_confirmed_document).map((row) => ({ type: Number(row.suggestion_count) > 0 ? 'payment_match_unconfirmed' : 'payment_without_document', severity: Number(row.suggestion_count) > 0 ? 'medium' : 'high', payment_id: row.id, external_id: row.external_id ?? undefined, amount: Number(row.amount), currency: row.currency, occurred_at: row.occurred_at, counterparty_tax_id: row.counterparty_tax_id ?? undefined, suggestion_count: Number(row.suggestion_count), tax_effect_applied: false }));
-    const duplicateExternalIds = new Map<string, number>();
-    for (const row of payments.rows) if (row.external_id) duplicateExternalIds.set(row.external_id, (duplicateExternalIds.get(row.external_id) ?? 0) + 1);
-    const duplicateIssues = [...duplicateExternalIds.entries()].filter(([, count]) => count > 1).map(([external_id, count]) => ({ type: 'duplicate_payment_reference', severity: 'high', external_id, count, tax_effect_applied: false }));
+
+    const paymentIssues = unmatchedPayments
+      .filter((row) => !divergencePaymentIds.has(row.id))
+      .map((row) => ({
+        type: Number(row.suggestion_count) > 0 ? 'payment_match_unconfirmed' : 'payment_without_document',
+        severity: Number(row.suggestion_count) > 0 ? 'medium' : 'high',
+        payment_id: row.id,
+        external_id: row.external_id ?? undefined,
+        amount: Number(row.amount),
+        currency: row.currency,
+        occurred_at: row.occurred_at,
+        counterparty_tax_id: row.counterparty_tax_id ?? undefined,
+        suggestion_count: Number(row.suggestion_count),
+        tax_effect_applied: false,
+      }));
+
+    const duplicateGroups = new Map<string, any[]>();
+    for (const row of payments.rows) {
+      if (!row.reference) continue;
+      const day = new Date(row.occurred_at).toISOString().slice(0, 10);
+      const signature = `${row.reference}|${Number(row.amount).toFixed(2)}|${row.currency}|${this.digits(row.counterparty_tax_id) ?? ''}|${day}`;
+      const group = duplicateGroups.get(signature) ?? [];
+      group.push(row);
+      duplicateGroups.set(signature, group);
+    }
+    const duplicateIssues = [...duplicateGroups.values()]
+      .filter((group) => group.length > 1)
+      .map((group) => ({
+        type: 'duplicate_payment_signature',
+        severity: 'high',
+        reference: group[0].reference,
+        amount: Number(group[0].amount),
+        currency: group[0].currency,
+        counterparty_tax_id: group[0].counterparty_tax_id ?? undefined,
+        occurred_date: new Date(group[0].occurred_at).toISOString().slice(0, 10),
+        payment_ids: group.map((row) => row.id),
+        count: group.length,
+        tax_effect_applied: false,
+      }));
+
     const issues = [...documentIssues, ...paymentIssues, ...duplicateIssues];
-    return { company_id: companyId, environment, window_days: windowDays, status: issues.length ? 'attention_required' : 'reconciled', summary: { documents_checked: documents.rows.length, payments_checked: payments.rows.length, confirmed_documents: documents.rows.filter((r) => r.has_confirmed_payment).length, confirmed_payments: payments.rows.filter((r) => r.has_confirmed_document).length, issues: issues.length, high_severity: issues.filter((i) => i.severity === 'high').length, medium_severity: issues.filter((i) => i.severity === 'medium').length }, issues, authoritative_tax_effects_applied: false, warning: 'Reconciliation findings are operational evidence only. They never create IBS/CBS credits, debits or assessment effects automatically.' };
+    const byType = issues.reduce<Record<string, number>>((acc, issue) => { acc[issue.type] = (acc[issue.type] ?? 0) + 1; return acc; }, {});
+    return {
+      company_id: companyId,
+      environment,
+      window_days: windowDays,
+      status: issues.length ? 'attention_required' : 'reconciled',
+      summary: {
+        documents_checked: documents.rows.length,
+        payments_checked: payments.rows.length,
+        confirmed_documents: documents.rows.filter((r) => r.has_confirmed_payment).length,
+        confirmed_payments: payments.rows.filter((r) => r.has_confirmed_document).length,
+        issues: issues.length,
+        high_severity: issues.filter((i) => i.severity === 'high').length,
+        medium_severity: issues.filter((i) => i.severity === 'medium').length,
+        by_type: byType,
+      },
+      issues,
+      authoritative_tax_effects_applied: false,
+      warning: 'Reconciliation findings are operational evidence only. They never create IBS/CBS credits, debits or assessment effects automatically.',
+    };
   }
 
+  private money(value: number): number { return Math.round((value + Number.EPSILON) * 100) / 100; }
   private digits(value?: string | null): string | null { const normalized = String(value ?? '').replace(/\D/g, ''); return normalized || null; }
 }
