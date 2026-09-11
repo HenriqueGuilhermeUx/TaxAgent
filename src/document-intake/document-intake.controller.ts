@@ -30,6 +30,16 @@ export class DocumentIntakeController {
   @Get('intake/files/:fileId') @RequireScope('documents:read')
   getFile(@Param('fileId') fileId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.get(fileId, auth.companyId, auth.environment); }
 
+  @Post('intake/files/:fileId/ocr') @RequireScope('documents:write')
+  startOcr(@Param('fileId') fileId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
+    return this.files.startOcr(fileId, auth.companyId, auth.environment);
+  }
+
+  @Post('intake/files/:fileId/ocr/poll') @RequireScope('documents:write')
+  pollOcr(@Param('fileId') fileId: string, @Body() body: { document_type?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
+    return this.files.pollOcr(fileId, auth.companyId, auth.environment, body?.document_type ?? 'auto');
+  }
+
   @Post('intake/files/:fileId/extracted-text') @RequireScope('documents:write')
   submitExtractedText(@Param('fileId') fileId: string, @Body() body: { text?: string; document_type?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.submitExtractedText(fileId, body?.text ?? '', auth.companyId, auth.environment, body?.document_type ?? 'auto'); }
 
