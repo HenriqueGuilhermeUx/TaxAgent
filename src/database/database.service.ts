@@ -1,6 +1,21 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
+export function normalizeDatabaseConnectionString(connectionString: string): string {
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    return connectionString;
+  }
+
+  const sslMode = url.searchParams.get('sslmode')?.toLowerCase();
+  if (sslMode === 'require' || sslMode === 'prefer' || sslMode === 'verify-ca') {
+    url.searchParams.set('sslmode', 'verify-full');
+  }
+  return url.toString();
+}
+
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
   private readonly pool: Pool;
@@ -9,7 +24,7 @@ export class DatabaseService implements OnModuleDestroy {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error('DATABASE_URL is required');
     this.pool = new Pool({
-      connectionString,
+      connectionString: normalizeDatabaseConnectionString(connectionString),
       max: Number(process.env.DATABASE_POOL_MAX ?? 10),
       idleTimeoutMillis: 30_000,
     });
