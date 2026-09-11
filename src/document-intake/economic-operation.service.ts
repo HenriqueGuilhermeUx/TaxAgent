@@ -63,6 +63,16 @@ export class EconomicOperationService {
     };
   }
 
+  async findByIntake(intakeId: string, companyId: string, environment: FiscalEnvironment) {
+    const { rows } = await this.db.query<{ economic_operation_id: string | null }>(
+      `SELECT economic_operation_id FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3`,
+      [intakeId, companyId, environment],
+    );
+    if (!rows[0]) throw new BadRequestException('Document intake not found');
+    if (!rows[0].economic_operation_id) return null;
+    return this.get(rows[0].economic_operation_id, companyId, environment);
+  }
+
   async linkIntake(operationId: string, intakeId: string, companyId: string, environment: FiscalEnvironment) {
     await this.requireOperation(operationId, companyId, environment);
     const { rows } = await this.db.query<any>(
