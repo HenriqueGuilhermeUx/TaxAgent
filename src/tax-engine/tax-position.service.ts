@@ -41,6 +41,25 @@ export class TaxPositionService {
        GROUP BY tax_type, entry_type ORDER BY tax_type, entry_type`,
       [companyId, start],
     );
+    const evidence = await this.db.query<{
+      id: string;
+      evidence_type: string;
+      intake_id: string;
+      payment_id: string;
+      match_id: string;
+      invoice_id: string | null;
+      effective_at: Date;
+      amount: string;
+      currency: string;
+      payload: any;
+    }>(
+      `SELECT id, evidence_type, intake_id, payment_id, match_id, invoice_id, effective_at, amount, currency, payload
+       FROM tax_position_financial_evidence
+       WHERE company_id=$1 AND effective_at >= $2::date AND effective_at < ($2::date + INTERVAL '1 month')
+       ORDER BY effective_at ASC, id ASC`,
+      [companyId, start],
+    );
+
     const position = { IBS: { debits: 0, credits: 0, adjustments: 0, balance: 0 }, CBS: { debits: 0, credits: 0, adjustments: 0, balance: 0 } };
     for (const row of rows) {
       const amount = Number(row.amount);
@@ -50,14 +69,25 @@ export class TaxPositionService {
       else target.adjustments += amount;
     }
     for (const target of [position.IBS, position.CBS]) target.balance = this.money(target.debits - target.credits + target.adjustments);
+
+    const financialEvidence = evidence.rows.map((row) => ({
+      ...row,
+      amount: Number(row.amount),
+      tax_effect_applied: false,
+    }));
     return {
       company_id: companyId,
       period,
       mode: 'taxagent-reference-position',
       authoritative_assessment: false,
-      warning: 'This position aggregates TaxAgent ledger entries and is not the government assisted assessment. 2026 test-year entries are informational/reference-only.',
+      warning: 'This position aggregates TaxAgent ledger entries and is not the government assisted assessment. 2026 test-year entries are informational/reference-only. Confirmed payments are exposed only as financial evidence and never change IBS/CBS balances automatically.',
       position,
       entries: rows,
+      financial_evidence: {
+        count: financialEvidence.length,
+        confirmed_amount: this.money(financialEvidence.reduce((sum, row) => sum + row.amount, 0)),
+        items: financialEvidence,
+      },
     };
   }
 
