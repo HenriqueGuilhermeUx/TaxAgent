@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { JobsService } from '../jobs/jobs.service';
 import { EncryptedEnvelope, EnvelopeCryptoService } from '../security/envelope-crypto.service';
 import { AzureDocumentOcrService } from './azure-document-ocr.service';
 import { DocumentIntakeService } from './document-intake.service';
@@ -43,6 +44,7 @@ export class DocumentIntakeFileService {
     private readonly crypto: EnvelopeCryptoService,
     private readonly intake: DocumentIntakeService,
     private readonly ocr: AzureDocumentOcrService,
+    private readonly jobs: JobsService,
   ) {}
 
   async upload(file: IntakeUploadedFile | undefined, companyId: string, environment: FiscalEnvironment, documentType = 'auto') {
@@ -91,6 +93,14 @@ export class DocumentIntakeFileService {
       } catch (error) {
         record = await this.markFailed(record.id, error);
       }
+    } else if (!duplicate && !record.intake_id && record.status === 'awaiting_ocr' && this.ocr.enabled()) {
+      await this.jobs.enqueue('document_ocr', {
+        fileId: record.id,
+        companyId,
+        environment,
+        documentType,
+        phase: 'start',
+      });
     }
     return this.toPublic(record, duplicate);
   }
@@ -242,9 +252,9 @@ export class DocumentIntakeFileService {
 
   private toPublic(record: FileRecord, duplicate: boolean) {
     const nextAction = record.status === 'awaiting_ocr'
-      ? (this.ocr.enabled() ? 'start OCR with POST /v1/documents/intake/files/:fileId/ocr' : 'submit extracted text to /v1/documents/intake/files/:fileId/extracted-text')
+      ? (this.ocr.enabled() ? 'automatic OCR queued; check this file again or use the explicit OCR endpoint' : 'submit extracted text to /v1/documents/intake/files/:fileId/extracted-text')
       : record.status === 'ocr_processing'
-        ? 'poll OCR with POST /v1/documents/intake/files/:fileId/ocr/poll'
+        ? 'automatic OCR processing; check this file again or poll explicitly'
         : undefined;
     return {
       file_id: record.id,
