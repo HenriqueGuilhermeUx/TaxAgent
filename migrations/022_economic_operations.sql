@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS economic_operations (
 
 ALTER TABLE document_intakes ADD COLUMN IF NOT EXISTS economic_operation_id TEXT REFERENCES economic_operations(id) ON DELETE SET NULL;
 ALTER TABLE payment_records ADD COLUMN IF NOT EXISTS economic_operation_id TEXT REFERENCES economic_operations(id) ON DELETE SET NULL;
+ALTER TABLE payment_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE tax_position_financial_evidence ADD COLUMN IF NOT EXISTS economic_operation_id TEXT REFERENCES economic_operations(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS economic_operations_company_status_idx ON economic_operations(company_id, environment, status, occurred_at DESC);
