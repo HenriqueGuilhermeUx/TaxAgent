@@ -29,6 +29,11 @@ export type DocumentIntakeRequest = {
   provider?: IntakeProvider;
   persist?: boolean;
   send_to_inbox?: boolean;
+  source_provenance?: {
+    provider: string;
+    method: string;
+    metadata?: Record<string, unknown>;
+  };
 };
 
 export type DocumentIntakeApprovalRequest = {
