@@ -1,4 +1,5 @@
 export type IntakeSourceType = 'xml' | 'text';
+export type IntakeProvider = 'auto' | 'native' | 'docstruct';
 
 export type CanonicalFiscalDocument = {
   schema_version: 'taxagent.document-intake.v1';
@@ -14,10 +15,23 @@ export type CanonicalFiscalDocument = {
   raw: { sha256: string };
   missing: string[];
   warnings: string[];
+  lineage?: {
+    provider: string;
+    method: string;
+    authoritative: boolean;
+  };
 };
 
 export type DocumentIntakeRequest = {
   source_type: IntakeSourceType;
   content: string;
-  document_type?: 'auto' | 'nfse';
+  document_type?: 'auto' | 'nfse' | 'invoice' | 'receipt' | 'bank_statement' | 'contract';
+  provider?: IntakeProvider;
+  persist?: boolean;
+  send_to_inbox?: boolean;
+};
+
+export type DocumentIntakeApprovalRequest = {
+  invoice_id: string;
+  confirmation: 'APPROVE-DOCUMENT-INTAKE';
 };
