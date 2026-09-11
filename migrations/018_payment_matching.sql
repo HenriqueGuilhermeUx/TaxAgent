@@ -35,3 +35,7 @@ CREATE TABLE IF NOT EXISTS document_payment_matches (
 
 CREATE INDEX IF NOT EXISTS document_payment_matches_intake_idx
   ON document_payment_matches(company_id, environment, intake_id, score DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS document_payment_matches_one_confirmed_per_intake_idx
+  ON document_payment_matches(intake_id)
+  WHERE status='confirmed';
