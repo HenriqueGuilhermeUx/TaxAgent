@@ -9,6 +9,7 @@ import { DocumentIntakeController } from './document-intake.controller';
 import { DocumentIntakeFileService } from './document-intake-file.service';
 import { DocumentIntakeService } from './document-intake.service';
 import { DocumentOcrWorkerService } from './document-ocr-worker.service';
+import { EconomicOperationService } from './economic-operation.service';
 import { NativeDocumentExtractorService } from './native-document-extractor.service';
 import { PaymentMatchingService } from './payment-matching.service';
 import { ReconciliationCasesService } from './reconciliation-cases.service';
@@ -16,7 +17,7 @@ import { ReconciliationCasesService } from './reconciliation-cases.service';
 @Module({
   imports: [AuthModule, FiscalInboxModule, JobsModule, WebhooksModule],
   controllers: [DocumentIntakeController],
-  providers: [DocumentIntakeService, DocumentIntakeFileService, NativeDocumentExtractorService, DocStructExtractorService, AzureDocumentOcrService, DocumentOcrWorkerService, PaymentMatchingService, ReconciliationCasesService],
-  exports: [DocumentIntakeService, DocumentIntakeFileService, AzureDocumentOcrService, PaymentMatchingService, ReconciliationCasesService],
+  providers: [DocumentIntakeService, DocumentIntakeFileService, NativeDocumentExtractorService, DocStructExtractorService, AzureDocumentOcrService, DocumentOcrWorkerService, PaymentMatchingService, ReconciliationCasesService, EconomicOperationService],
+  exports: [DocumentIntakeService, DocumentIntakeFileService, AzureDocumentOcrService, PaymentMatchingService, ReconciliationCasesService, EconomicOperationService],
 })
 export class DocumentIntakeModule {}
