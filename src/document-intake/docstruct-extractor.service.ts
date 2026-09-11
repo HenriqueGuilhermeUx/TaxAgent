@@ -85,8 +85,13 @@ export class DocStructExtractorService implements DocumentExtractor {
   private numberValue(value: unknown): number | undefined {
     if (value === undefined || value === null) return undefined;
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-    const normalized = String(value).replace(/[^0-9,.-]/g, '').replace(',', '.');
+    let normalized = String(value).replace(/[^0-9,.-]/g, '');
     if (!normalized) return undefined;
+    const comma = normalized.lastIndexOf(',');
+    const dot = normalized.lastIndexOf('.');
+    if (comma > dot) normalized = normalized.replace(/\./g, '').replace(',', '.');
+    else if (dot > comma && comma >= 0) normalized = normalized.replace(/,/g, '');
+    else if (comma >= 0) normalized = normalized.replace(',', '.');
     const candidate = Number(normalized);
     return Number.isFinite(candidate) ? candidate : undefined;
   }
