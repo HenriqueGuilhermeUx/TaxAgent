@@ -15,8 +15,9 @@ export type PaymentInput = {
   metadata?: Record<string, unknown>;
 };
 
-type IntakeRow = { id: string; canonical_document: any };
-type PaymentRow = PaymentInput & { id: string; company_id: string; environment: FiscalEnvironment };
+type IntakeRow = { id: string; canonical_document: any; linked_invoice_id?: string | null };
+type PaymentRow = PaymentInput & { id: string; company_id: string; environment: FiscalEnvironment; amount: string | number };
+type MatchRow = { id: string; intake_id: string; payment_id: string; score: string | number; status: 'suggested' | 'confirmed' | 'rejected'; reasons: string[]; confirmed_at: Date | null };
 
 @Injectable()
 export class PaymentMatchingService {
@@ -83,18 +84,103 @@ export class PaymentMatchingService {
   }
 
   async confirm(intakeId: string, paymentId: string, companyId: string, environment: FiscalEnvironment) {
-    const { rows } = await this.db.query(
-      `UPDATE document_payment_matches SET status='confirmed', confirmed_at=NOW(), updated_at=NOW()
-       WHERE intake_id=$1 AND payment_id=$2 AND company_id=$3 AND environment=$4 RETURNING *`,
-      [intakeId, paymentId, companyId, environment],
+    return this.db.withTransaction(async (client) => {
+      const intakeResult = await client.query<IntakeRow>(
+        'SELECT id, linked_invoice_id FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE',
+        [intakeId, companyId, environment],
+      );
+      const intake = intakeResult.rows[0];
+      if (!intake) throw new BadRequestException('Document intake not found');
+
+      const existing = await client.query<MatchRow>(
+        `SELECT * FROM document_payment_matches WHERE intake_id=$1 AND company_id=$2 AND environment=$3 AND status='confirmed' FOR UPDATE`,
+        [intakeId, companyId, environment],
+      );
+      if (existing.rows[0]) {
+        if (existing.rows[0].payment_id !== paymentId) throw new BadRequestException('Document intake already has another confirmed payment');
+        return { match: existing.rows[0], duplicate: true, ledger_recorded: Boolean(intake.linked_invoice_id) };
+      }
+
+      const candidate = await client.query<MatchRow>(
+        `SELECT * FROM document_payment_matches WHERE intake_id=$1 AND payment_id=$2 AND company_id=$3 AND environment=$4 AND status='suggested' FOR UPDATE`,
+        [intakeId, paymentId, companyId, environment],
+      );
+      if (!candidate.rows[0]) throw new BadRequestException('Suggested payment match not found');
+
+      const confirmed = await client.query<MatchRow>(
+        `UPDATE document_payment_matches SET status='confirmed', confirmed_at=NOW(), updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [candidate.rows[0].id],
+      );
+      await client.query(
+        `UPDATE document_payment_matches SET status='rejected', updated_at=NOW()
+         WHERE intake_id=$1 AND payment_id<>$2 AND company_id=$3 AND environment=$4 AND status='suggested'`,
+        [intakeId, paymentId, companyId, environment],
+      );
+
+      let ledgerRecorded = false;
+      if (intake.linked_invoice_id) {
+        const payment = await client.query<PaymentRow>('SELECT * FROM payment_records WHERE id=$1', [paymentId]);
+        await client.query(
+          `INSERT INTO ledger_entries(invoice_id, event_type, payload)
+           VALUES($1,'payment.match.confirmed',$2::jsonb)`,
+          [intake.linked_invoice_id, JSON.stringify({
+            intake_id: intakeId,
+            payment_id: paymentId,
+            match_id: confirmed.rows[0].id,
+            score: Number(confirmed.rows[0].score),
+            reasons: confirmed.rows[0].reasons,
+            payment: payment.rows[0] ?? undefined,
+            reconciliation: 'human-confirmed',
+          })],
+        );
+        ledgerRecorded = true;
+      }
+      return { match: confirmed.rows[0], duplicate: false, ledger_recorded: ledgerRecorded };
+    });
+  }
+
+  async paymentStatus(intakeId: string, companyId: string, environment: FiscalEnvironment) {
+    const intakeResult = await this.db.query<IntakeRow>(
+      'SELECT id, linked_invoice_id FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3',
+      [intakeId, companyId, environment],
     );
-    if (!rows[0]) throw new BadRequestException('Suggested payment match not found');
-    await this.db.query(
-      `UPDATE document_payment_matches SET status='rejected', updated_at=NOW()
-       WHERE intake_id=$1 AND payment_id<>$2 AND company_id=$3 AND environment=$4 AND status='suggested'`,
-      [intakeId, paymentId, companyId, environment],
+    if (!intakeResult.rows[0]) throw new BadRequestException('Document intake not found');
+    const { rows } = await this.db.query<any>(
+      `SELECT m.id AS match_id, m.score, m.reasons, m.confirmed_at,
+              p.id AS payment_id, p.external_id, p.direction, p.amount, p.currency, p.occurred_at,
+              p.counterparty_tax_id, p.counterparty_name, p.reference
+       FROM document_payment_matches m
+       JOIN payment_records p ON p.id=m.payment_id
+       WHERE m.intake_id=$1 AND m.company_id=$2 AND m.environment=$3 AND m.status='confirmed'
+       LIMIT 1`,
+      [intakeId, companyId, environment],
     );
-    return rows[0];
+    const confirmed = rows[0];
+    return {
+      intake_id: intakeId,
+      invoice_id: intakeResult.rows[0].linked_invoice_id ?? undefined,
+      paid: Boolean(confirmed),
+      reconciliation_status: confirmed ? 'confirmed' : 'unconfirmed',
+      payment: confirmed ? {
+        id: confirmed.payment_id,
+        external_id: confirmed.external_id ?? undefined,
+        direction: confirmed.direction,
+        amount: Number(confirmed.amount),
+        currency: confirmed.currency,
+        occurred_at: confirmed.occurred_at,
+        counterparty_tax_id: confirmed.counterparty_tax_id ?? undefined,
+        counterparty_name: confirmed.counterparty_name ?? undefined,
+        reference: confirmed.reference ?? undefined,
+      } : undefined,
+      match: confirmed ? {
+        id: confirmed.match_id,
+        score: Number(confirmed.score),
+        reasons: confirmed.reasons,
+        confirmed_at: confirmed.confirmed_at,
+      } : undefined,
+      warning: confirmed ? undefined : 'No payment has been explicitly confirmed for this fiscal document.',
+    };
   }
 
   private digits(value?: string | null): string | null {
