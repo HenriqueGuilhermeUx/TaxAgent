@@ -52,6 +52,54 @@ export class EconomicOperationService {
     return this.get(operationId, companyId, environment);
   }
 
+  async bindConfirmedMatch(intakeId: string, paymentId: string, companyId: string, environment: FiscalEnvironment) {
+    const operationId = await this.db.withTransaction(async (client) => {
+      const intakeResult = await client.query<any>(
+        `SELECT id, economic_operation_id, linked_invoice_id, canonical_document
+         FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`,
+        [intakeId, companyId, environment],
+      );
+      const paymentResult = await client.query<any>(
+        `SELECT id, economic_operation_id, direction, amount, currency, occurred_at, counterparty_tax_id, counterparty_name
+         FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`,
+        [paymentId, companyId, environment],
+      );
+      const intake = intakeResult.rows[0];
+      const payment = paymentResult.rows[0];
+      if (!intake || !payment) throw new BadRequestException('Confirmed reconciliation references missing document or payment');
+      if (intake.economic_operation_id && payment.economic_operation_id && intake.economic_operation_id !== payment.economic_operation_id) {
+        throw new BadRequestException('Document and payment belong to different economic operations');
+      }
+
+      let id = intake.economic_operation_id ?? payment.economic_operation_id ?? null;
+      if (!id) {
+        const doc = intake.canonical_document ?? {};
+        const grossAmount = Number(doc.total?.amount ?? payment.amount ?? 0);
+        const issuedAt = doc.issued_at ? new Date(doc.issued_at) : null;
+        const taxId = this.digits(payment.counterparty_tax_id ?? doc.supplier?.tax_id ?? doc.customer?.tax_id);
+        const name = payment.counterparty_name ?? doc.supplier?.name ?? doc.customer?.name ?? null;
+        id = createId('op');
+        await client.query(
+          `INSERT INTO economic_operations(id, company_id, environment, operation_type, direction, counterparty_tax_id, counterparty_name, currency, gross_amount, occurred_at, metadata)
+           VALUES($1,$2,$3,'other',$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+          [id, companyId, environment, payment.direction, taxId, name, doc.total?.currency ?? payment.currency ?? 'BRL', grossAmount, issuedAt && !Number.isNaN(issuedAt.getTime()) ? issuedAt.toISOString() : payment.occurred_at, JSON.stringify({ source: 'confirmed_payment_match', intake_id: intakeId, payment_id: paymentId, tax_effect_applied: false })],
+        );
+      }
+
+      await client.query(`UPDATE document_intakes SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1`, [intakeId, id]);
+      await client.query(`UPDATE payment_records SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1`, [paymentId, id]);
+      await client.query(`UPDATE tax_position_financial_evidence SET economic_operation_id=$3 WHERE intake_id=$1 AND payment_id=$2`, [intakeId, paymentId, id]);
+      if (intake.linked_invoice_id) {
+        await client.query(
+          `INSERT INTO ledger_entries(invoice_id, event_type, payload) VALUES($1,'economic-operation.linked',$2::jsonb)`,
+          [intake.linked_invoice_id, JSON.stringify({ economic_operation_id: id, intake_id: intakeId, payment_id: paymentId, source: 'confirmed_payment_match', tax_effect_applied: false })],
+        );
+      }
+      return id as string;
+    });
+    return this.get(operationId, companyId, environment);
+  }
+
   async get(operationId: string, companyId: string, environment: FiscalEnvironment) {
     const operation = await this.requireOperation(operationId, companyId, environment);
     const [documents, payments] = await Promise.all([
