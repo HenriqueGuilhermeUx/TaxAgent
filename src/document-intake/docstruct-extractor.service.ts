@@ -14,6 +14,9 @@ export class DocStructExtractorService implements DocumentExtractor {
   async extract(input: DocumentIntakeRequest): Promise<DocumentExtractorResult> {
     const baseUrl = process.env.DOCSTRUCT_BASE_URL ?? 'https://docstruct.marwannaili-23-07.workers.dev';
     const timeoutMs = Math.max(1000, Number(process.env.DOCSTRUCT_REQUEST_TIMEOUT_MS ?? 15000));
+    const providerType = ['invoice', 'receipt', 'bank_statement', 'contract'].includes(String(input.document_type ?? ''))
+      ? String(input.document_type)
+      : 'invoice';
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -23,21 +26,18 @@ export class DocStructExtractorService implements DocumentExtractor {
         method: 'POST',
         headers,
         signal: controller.signal,
-        body: JSON.stringify({
-          text: input.content,
-          type: input.document_type && input.document_type !== 'auto' ? input.document_type : 'invoice',
-          output: 'json',
-        }),
+        body: JSON.stringify({ text: input.content, type: providerType, output: 'json' }),
       });
       const raw = await response.text();
       if (!response.ok) throw new BadGatewayException(`DocStruct returned HTTP ${response.status}`);
       let payload: unknown;
       try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new BadGatewayException('DocStruct returned invalid JSON'); }
-      const data = this.objectValue(payload, 'data') ?? this.asObject(payload);
+      const dataValue = this.objectValue(payload, 'data');
+      const data = dataValue && typeof dataValue === 'object' && !Array.isArray(dataValue) ? this.asObject(dataValue) : this.asObject(payload);
       return {
         canonical: this.toCanonical(input, data),
         provider: this.name,
-        provider_metadata: { endpoint: '/v1/extract', response_ok: this.objectValue(payload, 'ok') ?? true },
+        provider_metadata: { endpoint: '/v1/extract', provider_type: providerType, response_ok: this.objectValue(payload, 'ok') ?? true },
       };
     } catch (error) {
       if (error instanceof BadGatewayException) throw error;
@@ -82,6 +82,13 @@ export class DocStructExtractorService implements DocumentExtractor {
   private asObject(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
   private objectValue(value: unknown, key: string): unknown { return this.asObject(value)[key]; }
   private stringValue(value: unknown): string | undefined { return value === undefined || value === null ? undefined : String(value).trim() || undefined; }
-  private numberValue(value: unknown): number | undefined { const candidate = typeof value === 'number' ? value : Number(String(value ?? '').replace(/[^0-9,.-]/g, '').replace(',', '.')); return Number.isFinite(candidate) ? candidate : undefined; }
+  private numberValue(value: unknown): number | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    const normalized = String(value).replace(/[^0-9,.-]/g, '').replace(',', '.');
+    if (!normalized) return undefined;
+    const candidate = Number(normalized);
+    return Number.isFinite(candidate) ? candidate : undefined;
+  }
   private taxId(value: unknown): string | undefined { const normalized = this.stringValue(value)?.replace(/\D/g, ''); return normalized || undefined; }
 }
