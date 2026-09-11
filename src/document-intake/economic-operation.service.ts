@@ -32,6 +32,37 @@ export class EconomicOperationService {
     return this.public(rows[0]);
   }
 
+  async list(companyId: string, environment: FiscalEnvironment, status?: string, limit = 100) {
+    const safeLimit = Math.min(500, Math.max(1, Math.trunc(Number(limit) || 100)));
+    const statuses = ['open','partially_settled','settled','divergent','cancelled'];
+    if (status && !statuses.includes(status)) throw new BadRequestException('Invalid operation status');
+    const { rows } = await this.db.query<any>(
+      `SELECT o.*,
+              COALESCE((SELECT SUM(p.amount) FROM payment_records p WHERE p.economic_operation_id=o.id),0)::text AS paid_amount,
+              (SELECT COUNT(*)::int FROM payment_records p WHERE p.economic_operation_id=o.id) AS payment_count,
+              (SELECT COUNT(*)::int FROM document_intakes d WHERE d.economic_operation_id=o.id) AS document_count
+       FROM economic_operations o
+       WHERE o.company_id=$1 AND o.environment=$2 AND ($3::text IS NULL OR o.status=$3)
+       ORDER BY COALESCE(o.occurred_at, o.created_at) DESC LIMIT $4`,
+      [companyId, environment, status ?? null, safeLimit],
+    );
+    return {
+      company_id: companyId,
+      environment,
+      count: rows.length,
+      items: rows.map((row) => ({
+        ...this.public(row),
+        settlement: {
+          paid_amount: this.money(Number(row.paid_amount ?? 0)),
+          outstanding_amount: this.money(Math.max(0, Number(row.gross_amount) - Number(row.paid_amount ?? 0))),
+          delta: this.money(Number(row.paid_amount ?? 0) - Number(row.gross_amount)),
+          payment_count: Number(row.payment_count ?? 0),
+          document_count: Number(row.document_count ?? 0),
+        },
+      })),
+    };
+  }
+
   async linkIntake(operationId: string, intakeId: string, companyId: string, environment: FiscalEnvironment) {
     await this.requireOperation(operationId, companyId, environment);
     const { rows } = await this.db.query<any>(
@@ -114,7 +145,7 @@ export class EconomicOperationService {
       await this.db.query(`UPDATE economic_operations SET status=$2, updated_at=NOW() WHERE id=$1`, [operationId, settlementStatus]);
       operation.status = settlementStatus;
     }
-    return { ...this.public(operation), settlement: { paid_amount: this.money(paid), outstanding_amount: this.money(Math.max(0, gross - paid)), delta, payment_count: payments.rows.length }, documents: documents.rows, payments: payments.rows };
+    return { ...this.public(operation), settlement: { paid_amount: this.money(paid), outstanding_amount: this.money(Math.max(0, gross - paid)), delta, payment_count: payments.rows.length, document_count: documents.rows.length }, documents: documents.rows, payments: payments.rows };
   }
 
   private async requireOperation(id: string, companyId: string, environment: FiscalEnvironment): Promise<any> {
