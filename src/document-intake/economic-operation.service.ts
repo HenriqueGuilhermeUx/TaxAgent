@@ -73,13 +73,13 @@ export class EconomicOperationService {
   async allocatePayment(operationId: string, paymentId: string, companyId: string, environment: FiscalEnvironment, input: PaymentAllocationInput) {
     if (!Number.isFinite(input.amount) || input.amount <= 0) throw new BadRequestException('allocation amount must be positive');
     await this.db.withTransaction(async (client) => {
-      const operationResult = await client.query<any>('SELECT * FROM economic_operations WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE', [operationId, companyId, environment]);
-      const paymentResult = await client.query<any>('SELECT * FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE', [paymentId, companyId, environment]);
+      const operationResult = await client.query('SELECT * FROM economic_operations WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE', [operationId, companyId, environment]);
+      const paymentResult = await client.query('SELECT * FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE', [paymentId, companyId, environment]);
       const operation = operationResult.rows[0]; const payment = paymentResult.rows[0];
       if (!operation) throw new BadRequestException('Economic operation not found');
       if (!payment) throw new BadRequestException('Payment record not found');
       if (operation.currency !== payment.currency) throw new BadRequestException('Payment and economic operation currencies must match');
-      const allocatedResult = await client.query<{ total: string }>(
+      const allocatedResult = await client.query(
         'SELECT COALESCE(SUM(amount),0)::text AS total FROM economic_operation_payment_allocations WHERE payment_id=$1 AND economic_operation_id<>$2',
         [paymentId, operationId],
       );
@@ -98,8 +98,8 @@ export class EconomicOperationService {
 
   async bindConfirmedMatch(intakeId: string, paymentId: string, companyId: string, environment: FiscalEnvironment) {
     const operationId = await this.db.withTransaction(async (client) => {
-      const intakeResult = await client.query<any>(`SELECT id, economic_operation_id, linked_invoice_id, canonical_document FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`, [intakeId, companyId, environment]);
-      const paymentResult = await client.query<any>(`SELECT id, economic_operation_id, direction, amount, currency, occurred_at, counterparty_tax_id, counterparty_name FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`, [paymentId, companyId, environment]);
+      const intakeResult = await client.query(`SELECT id, economic_operation_id, linked_invoice_id, canonical_document FROM document_intakes WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`, [intakeId, companyId, environment]);
+      const paymentResult = await client.query(`SELECT id, economic_operation_id, direction, amount, currency, occurred_at, counterparty_tax_id, counterparty_name FROM payment_records WHERE id=$1 AND company_id=$2 AND environment=$3 FOR UPDATE`, [paymentId, companyId, environment]);
       const intake = intakeResult.rows[0]; const payment = paymentResult.rows[0];
       if (!intake || !payment) throw new BadRequestException('Confirmed reconciliation references missing document or payment');
       if (intake.economic_operation_id && payment.economic_operation_id && intake.economic_operation_id !== payment.economic_operation_id) throw new BadRequestException('Document and payment belong to different economic operations');
@@ -133,7 +133,7 @@ export class EconomicOperationService {
   }
 
   private async syncLegacyPaymentOperationLink(client: any, paymentId: string): Promise<void> {
-    const links = await client.query<{ count: number; operation_id: string | null }>(
+    const links = await client.query(
       `SELECT COUNT(DISTINCT economic_operation_id)::int AS count,
               CASE WHEN COUNT(DISTINCT economic_operation_id)=1 THEN MIN(economic_operation_id) ELSE NULL END AS operation_id
        FROM economic_operation_payment_allocations WHERE payment_id=$1`,
