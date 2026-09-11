@@ -43,7 +43,8 @@ export class DocumentIntakeService {
     if (provider === 'docstruct' && input.source_type !== 'text') {
       throw new BadRequestException('DocStruct public extraction adapter currently supports text input only');
     }
-    const extracted = provider === 'docstruct' ? await this.docstruct.extract(input) : await this.native.extract(input);
+    const rawExtracted = provider === 'docstruct' ? await this.docstruct.extract(input) : await this.native.extract(input);
+    const extracted = this.applySourceProvenance(rawExtracted, input);
     if (input.persist === false) return { persisted: false, provider: extracted.provider, canonical: extracted.canonical };
 
     const intakeId = createId('intake');
@@ -75,7 +76,7 @@ export class DocumentIntakeService {
         sha256: extracted.canonical.raw.sha256,
         content: input.content,
         contentType: input.source_type === 'xml' ? 'application/xml' : 'text/plain; charset=utf-8',
-        metadata: { intake_id: record.id, provider: extracted.provider, canonical: extracted.canonical },
+        metadata: { intake_id: record.id, provider: extracted.provider, canonical: extracted.canonical, provider_metadata: extracted.provider_metadata ?? undefined },
       });
       const updated = await this.db.query<IntakeRecord>(
         `UPDATE document_intakes SET inbox_document_id=$2, status=CASE WHEN status='extracted' THEN 'inbox' ELSE status END, updated_at=NOW()
@@ -162,6 +163,33 @@ export class DocumentIntakeService {
     return { ...this.toPublic(result.record, result.duplicate), ledger_posted: true };
   }
 
+  private applySourceProvenance(extracted: { provider: string; canonical: CanonicalFiscalDocument; provider_metadata?: Record<string, unknown> }, input: DocumentIntakeRequest) {
+    if (!input.source_provenance) return extracted;
+    if (input.source_type !== 'text') throw new BadRequestException('External source provenance is currently accepted only for extracted text');
+    const warning = 'External OCR/text extraction is non-authoritative and requires explicit review before any fiscal or ledger effect.';
+    const canonical: CanonicalFiscalDocument = {
+      ...extracted.canonical,
+      authority: 'unverified_text',
+      warnings: [...new Set([...(extracted.canonical.warnings ?? []), warning])],
+      missing: [...new Set([...(extracted.canonical.missing ?? []), 'verified_fiscal_source'])],
+      lineage: {
+        provider: input.source_provenance.provider,
+        method: input.source_provenance.method,
+        authoritative: false,
+      },
+    };
+    return {
+      provider: input.source_provenance.provider,
+      canonical,
+      provider_metadata: {
+        ...(extracted.provider_metadata ?? {}),
+        extraction_method: input.source_provenance.method,
+        source_provenance: input.source_provenance.metadata ?? {},
+        authoritative: false,
+      },
+    };
+  }
+
   private resolveProvider(input: DocumentIntakeRequest): Exclude<IntakeProvider, 'auto'> {
     const requested = input.provider ?? (process.env.TAXAGENT_DOCUMENT_INTAKE_PROVIDER as IntakeProvider | undefined) ?? 'native';
     if (!['auto', 'native', 'docstruct'].includes(requested)) throw new BadRequestException(`Unsupported document intake provider: ${requested}`);
@@ -193,6 +221,7 @@ export class DocumentIntakeService {
       confidence: Number(record.confidence),
       source_sha256: record.source_sha256,
       canonical: record.canonical_document,
+      provider_metadata: record.provider_metadata ?? undefined,
       inbox_document_id: record.inbox_document_id ?? undefined,
       linked_invoice_id: record.linked_invoice_id ?? undefined,
       duplicate,
