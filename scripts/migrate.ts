@@ -1,12 +1,13 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Pool } from 'pg';
+import { normalizeDatabaseConnectionString } from '../src/database/database.service';
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is required');
 
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({ connectionString: normalizeDatabaseConnectionString(connectionString) });
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
       filename TEXT PRIMARY KEY,
