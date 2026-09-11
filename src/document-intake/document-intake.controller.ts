@@ -8,6 +8,7 @@ import { RequireScope } from '../auth/require-scope.decorator';
 import { DocumentIntakeFileService, IntakeUploadedFile } from './document-intake-file.service';
 import { DocumentIntakeService } from './document-intake.service';
 import { DocumentIntakeApprovalRequest, DocumentIntakeRequest } from './document-intake.types';
+import { EconomicOperationInput, EconomicOperationService } from './economic-operation.service';
 import { PaymentInput, PaymentMatchingService } from './payment-matching.service';
 import { ReconciliationCasesService, ReconciliationCaseStatus } from './reconciliation-cases.service';
 
@@ -18,6 +19,7 @@ export class DocumentIntakeController {
     private readonly files: DocumentIntakeFileService,
     private readonly payments: PaymentMatchingService,
     private readonly reconciliationCases: ReconciliationCasesService,
+    private readonly operations: EconomicOperationService,
   ) {}
 
   @Post('extract') @RequireScope('documents:write')
@@ -31,14 +33,10 @@ export class DocumentIntakeController {
   getFile(@Param('fileId') fileId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.get(fileId, auth.companyId, auth.environment); }
 
   @Post('intake/files/:fileId/ocr') @RequireScope('documents:write')
-  startOcr(@Param('fileId') fileId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
-    return this.files.startOcr(fileId, auth.companyId, auth.environment);
-  }
+  startOcr(@Param('fileId') fileId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.startOcr(fileId, auth.companyId, auth.environment); }
 
   @Post('intake/files/:fileId/ocr/poll') @RequireScope('documents:write')
-  pollOcr(@Param('fileId') fileId: string, @Body() body: { document_type?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
-    return this.files.pollOcr(fileId, auth.companyId, auth.environment, body?.document_type ?? 'auto');
-  }
+  pollOcr(@Param('fileId') fileId: string, @Body() body: { document_type?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.pollOcr(fileId, auth.companyId, auth.environment, body?.document_type ?? 'auto'); }
 
   @Post('intake/files/:fileId/extracted-text') @RequireScope('documents:write')
   submitExtractedText(@Param('fileId') fileId: string, @Body() body: { text?: string; document_type?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.files.submitExtractedText(fileId, body?.text ?? '', auth.companyId, auth.environment, body?.document_type ?? 'auto'); }
@@ -46,34 +44,32 @@ export class DocumentIntakeController {
   @Post('payments') @RequireScope('documents:write')
   registerPayment(@Body() body: PaymentInput, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.registerPayment(auth.companyId, auth.environment, body); }
 
+  @Post('operations') @RequireScope('documents:write')
+  createOperation(@Body() body: EconomicOperationInput, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.create(auth.companyId, auth.environment, body); }
+
+  @Get('operations/:operationId') @RequireScope('documents:read')
+  getOperation(@Param('operationId') operationId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.get(operationId, auth.companyId, auth.environment); }
+
+  @Post('operations/:operationId/intakes/:intakeId') @RequireScope('documents:write')
+  linkOperationIntake(@Param('operationId') operationId: string, @Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.linkIntake(operationId, intakeId, auth.companyId, auth.environment); }
+
+  @Post('operations/:operationId/payments/:paymentId') @RequireScope('documents:write')
+  linkOperationPayment(@Param('operationId') operationId: string, @Param('paymentId') paymentId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.linkPayment(operationId, paymentId, auth.companyId, auth.environment); }
+
   @Get('reconciliation') @RequireScope('documents:read')
   reconciliation(@Query('days') days: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.reconciliationReport(auth.companyId, auth.environment, Number(days ?? 45)); }
 
   @Post('reconciliation/sync') @RequireScope('documents:write')
-  async syncReconciliation(@Query('days') days: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
-    const report = await this.payments.reconciliationReport(auth.companyId, auth.environment, Number(days ?? 45));
-    const sync = await this.reconciliationCases.sync(auth.companyId, auth.environment, report.issues);
-    return { report, sync };
-  }
+  async syncReconciliation(@Query('days') days: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { const report = await this.payments.reconciliationReport(auth.companyId, auth.environment, Number(days ?? 45)); const sync = await this.reconciliationCases.sync(auth.companyId, auth.environment, report.issues); return { report, sync }; }
 
   @Get('reconciliation/cases') @RequireScope('documents:read')
-  listReconciliationCases(@Query('status') status: string | undefined, @Query('severity') severity: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
-    return this.reconciliationCases.list(auth.companyId, auth.environment, status, severity);
-  }
+  listReconciliationCases(@Query('status') status: string | undefined, @Query('severity') severity: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.reconciliationCases.list(auth.companyId, auth.environment, status, severity); }
 
   @Get('reconciliation/cases/:caseId') @RequireScope('documents:read')
-  getReconciliationCase(@Param('caseId') caseId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
-    return this.reconciliationCases.get(caseId, auth.companyId, auth.environment);
-  }
+  getReconciliationCase(@Param('caseId') caseId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.reconciliationCases.get(caseId, auth.companyId, auth.environment); }
 
   @Post('reconciliation/cases/:caseId/status') @RequireScope('documents:write')
-  transitionReconciliationCase(
-    @Param('caseId') caseId: string,
-    @Body() body: { status?: ReconciliationCaseStatus; resolution_code?: string; note?: string },
-    @CurrentTaxAgentAuth() auth: TaxAgentAuthContext,
-  ) {
-    return this.reconciliationCases.transition(caseId, auth.companyId, auth.environment, body?.status as ReconciliationCaseStatus, body?.resolution_code, body?.note);
-  }
+  transitionReconciliationCase(@Param('caseId') caseId: string, @Body() body: { status?: ReconciliationCaseStatus; resolution_code?: string; note?: string }, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.reconciliationCases.transition(caseId, auth.companyId, auth.environment, body?.status as ReconciliationCaseStatus, body?.resolution_code, body?.note); }
 
   @Get('intake/:intakeId') @RequireScope('documents:read')
   get(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.intake.get(intakeId, auth.companyId, auth.environment); }
