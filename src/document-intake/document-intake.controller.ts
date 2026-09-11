@@ -91,5 +91,9 @@ export class DocumentIntakeController {
   }
 
   @Get('intake/:intakeId/payment-status') @RequireScope('documents:read')
-  paymentStatus(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.paymentStatus(intakeId, auth.companyId, auth.environment); }
+  async paymentStatus(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
+    const payment = await this.payments.paymentStatus(intakeId, auth.companyId, auth.environment);
+    const economicOperation = await this.operations.findByIntake(intakeId, auth.companyId, auth.environment);
+    return { ...payment, economic_operation: economicOperation ?? undefined };
+  }
 }
