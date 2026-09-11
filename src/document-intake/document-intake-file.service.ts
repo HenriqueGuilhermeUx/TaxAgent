@@ -4,6 +4,7 @@ import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { EncryptedEnvelope, EnvelopeCryptoService } from '../security/envelope-crypto.service';
+import { AzureDocumentOcrService } from './azure-document-ocr.service';
 import { DocumentIntakeService } from './document-intake.service';
 
 export type IntakeUploadedFile = {
@@ -22,9 +23,15 @@ interface FileRecord {
   size_bytes: number;
   sha256: string;
   encrypted_content: EncryptedEnvelope;
-  status: 'stored' | 'extracted' | 'awaiting_ocr' | 'failed';
+  status: 'stored' | 'extracted' | 'awaiting_ocr' | 'ocr_processing' | 'failed';
   intake_id: string | null;
   error_message: string | null;
+  ocr_provider: string | null;
+  ocr_job_id: string | null;
+  ocr_operation_url: string | null;
+  ocr_metadata: Record<string, unknown> | null;
+  ocr_started_at: Date | null;
+  ocr_completed_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -35,6 +42,7 @@ export class DocumentIntakeFileService {
     private readonly db: DatabaseService,
     private readonly crypto: EnvelopeCryptoService,
     private readonly intake: DocumentIntakeService,
+    private readonly ocr: AzureDocumentOcrService,
   ) {}
 
   async upload(file: IntakeUploadedFile | undefined, companyId: string, environment: FiscalEnvironment, documentType = 'auto') {
@@ -76,38 +84,122 @@ export class DocumentIntakeFileService {
         );
         if (!('intake_id' in extracted)) throw new Error('Persisted document extraction did not return intake_id');
         const updated = await this.db.query<FileRecord>(
-          `UPDATE document_intake_files SET status='extracted', intake_id=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
+          `UPDATE document_intake_files SET status='extracted', intake_id=$2, error_message=NULL, updated_at=NOW() WHERE id=$1 RETURNING *`,
           [record.id, extracted.intake_id],
         );
         record = updated.rows[0] ?? record;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Document extraction failed';
-        const updated = await this.db.query<FileRecord>(
-          `UPDATE document_intake_files SET status='failed', error_message=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
-          [record.id, message.slice(0, 1000)],
-        );
-        record = updated.rows[0] ?? record;
+        record = await this.markFailed(record.id, error);
       }
     }
     return this.toPublic(record, duplicate);
   }
 
   async get(fileId: string, companyId: string, environment: FiscalEnvironment) {
-    const { rows } = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE id=$1', [fileId]);
-    const record = rows[0];
-    if (!record || record.company_id !== companyId || record.environment !== environment) throw new BadRequestException('Document file not found for this company/environment');
-    return this.toPublic(record, false);
+    return this.toPublic(await this.requireRecord(fileId, companyId, environment), false);
+  }
+
+  async startOcr(fileId: string, companyId: string, environment: FiscalEnvironment) {
+    let record = await this.requireRecord(fileId, companyId, environment);
+    if (record.intake_id) return this.toPublic(record, true);
+    if (this.canExtractDirectly(record.content_type, record.filename)) throw new BadRequestException('XML/TXT files do not require OCR');
+    if (record.status === 'ocr_processing' && record.ocr_operation_url) return this.toPublic(record, true);
+
+    try {
+      const content = this.crypto.open(record.encrypted_content);
+      const started = await this.ocr.start(content);
+      const { rows } = await this.db.query<FileRecord>(
+        `UPDATE document_intake_files
+         SET status='ocr_processing', ocr_provider=$2, ocr_job_id=$3, ocr_operation_url=$4,
+             ocr_metadata=$5::jsonb, ocr_started_at=NOW(), ocr_completed_at=NULL, error_message=NULL, updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [record.id, started.provider, started.job_id, started.operation_url, JSON.stringify({ api_version: started.api_version, model_id: started.model_id })],
+      );
+      record = rows[0] ?? record;
+      return this.toPublic(record, false);
+    } catch (error) {
+      record = await this.markFailed(record.id, error);
+      throw error;
+    }
+  }
+
+  async pollOcr(fileId: string, companyId: string, environment: FiscalEnvironment, documentType = 'auto') {
+    let record = await this.requireRecord(fileId, companyId, environment);
+    if (record.intake_id) return this.toPublic(record, true);
+    if (record.status !== 'ocr_processing' || !record.ocr_operation_url) throw new BadRequestException('OCR has not been started for this document file');
+
+    try {
+      const result = await this.ocr.poll(record.ocr_operation_url);
+      if (result.status === 'running') {
+        const { rows } = await this.db.query<FileRecord>(
+          `UPDATE document_intake_files SET ocr_metadata=$2::jsonb, updated_at=NOW() WHERE id=$1 RETURNING *`,
+          [record.id, JSON.stringify({ ...(record.ocr_metadata ?? {}), ...(result.metadata ?? {}), status: 'running' })],
+        );
+        return this.toPublic(rows[0] ?? record, false);
+      }
+      if (result.status === 'failed' || !result.text) {
+        const { rows } = await this.db.query<FileRecord>(
+          `UPDATE document_intake_files SET status='failed', error_message=$2, ocr_metadata=$3::jsonb, ocr_completed_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`,
+          [record.id, String(result.error ?? 'OCR failed').slice(0, 1000), JSON.stringify({ ...(record.ocr_metadata ?? {}), ...(result.metadata ?? {}), status: 'failed' })],
+        );
+        return this.toPublic(rows[0] ?? record, false);
+      }
+
+      const extracted = await this.intake.extract(
+        {
+          source_type: 'text',
+          content: result.text,
+          document_type: documentType as any,
+          provider: 'native',
+          persist: true,
+          source_provenance: {
+            provider: 'azure_document_intelligence',
+            method: 'prebuilt-read',
+            metadata: {
+              source_file_id: record.id,
+              source_file_sha256: record.sha256,
+              source_content_type: record.content_type,
+              ocr_job_id: record.ocr_job_id,
+              ...(result.metadata ?? {}),
+            },
+          },
+        },
+        companyId,
+        environment,
+      );
+      if (!('intake_id' in extracted)) throw new Error('Persisted OCR extraction did not return intake_id');
+      const { rows } = await this.db.query<FileRecord>(
+        `UPDATE document_intake_files
+         SET status='extracted', intake_id=$2, error_message=NULL, ocr_metadata=$3::jsonb, ocr_completed_at=NOW(), updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [record.id, extracted.intake_id, JSON.stringify({ ...(record.ocr_metadata ?? {}), ...(result.metadata ?? {}), status: 'succeeded' })],
+      );
+      record = rows[0] ?? record;
+      return this.toPublic(record, false);
+    } catch (error) {
+      record = await this.markFailed(record.id, error, true);
+      throw error;
+    }
   }
 
   async submitExtractedText(fileId: string, text: string, companyId: string, environment: FiscalEnvironment, documentType = 'auto') {
     if (!text?.trim()) throw new BadRequestException('Extracted text is required');
-    const { rows } = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE id=$1', [fileId]);
-    const record = rows[0];
-    if (!record || record.company_id !== companyId || record.environment !== environment) throw new BadRequestException('Document file not found for this company/environment');
+    const record = await this.requireRecord(fileId, companyId, environment);
     if (record.intake_id) return this.toPublic(record, true);
 
     const extracted = await this.intake.extract(
-      { source_type: 'text', content: text, document_type: documentType as any, provider: 'auto', persist: true },
+      {
+        source_type: 'text',
+        content: text,
+        document_type: documentType as any,
+        provider: 'native',
+        persist: true,
+        source_provenance: {
+          provider: 'manual_extracted_text',
+          method: 'operator-supplied',
+          metadata: { source_file_id: record.id, source_file_sha256: record.sha256, source_content_type: record.content_type },
+        },
+      },
       companyId,
       environment,
     );
@@ -117,6 +209,23 @@ export class DocumentIntakeFileService {
       [record.id, extracted.intake_id],
     );
     return this.toPublic(updated.rows[0] ?? record, false);
+  }
+
+  private async requireRecord(fileId: string, companyId: string, environment: FiscalEnvironment): Promise<FileRecord> {
+    const { rows } = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE id=$1', [fileId]);
+    const record = rows[0];
+    if (!record || record.company_id !== companyId || record.environment !== environment) throw new BadRequestException('Document file not found for this company/environment');
+    return record;
+  }
+
+  private async markFailed(fileId: string, error: unknown, ocrCompleted = false): Promise<FileRecord> {
+    const message = error instanceof Error ? error.message : 'Document extraction failed';
+    const { rows } = await this.db.query<FileRecord>(
+      `UPDATE document_intake_files SET status='failed', error_message=$2,
+       ocr_completed_at=CASE WHEN $3::boolean THEN NOW() ELSE ocr_completed_at END, updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [fileId, message.slice(0, 1000), ocrCompleted],
+    );
+    return rows[0];
   }
 
   private isAllowed(contentType: string, filename: string): boolean {
@@ -132,6 +241,11 @@ export class DocumentIntakeFileService {
   }
 
   private toPublic(record: FileRecord, duplicate: boolean) {
+    const nextAction = record.status === 'awaiting_ocr'
+      ? (this.ocr.enabled() ? 'start OCR with POST /v1/documents/intake/files/:fileId/ocr' : 'submit extracted text to /v1/documents/intake/files/:fileId/extracted-text')
+      : record.status === 'ocr_processing'
+        ? 'poll OCR with POST /v1/documents/intake/files/:fileId/ocr/poll'
+        : undefined;
     return {
       file_id: record.id,
       company_id: record.company_id,
@@ -142,8 +256,15 @@ export class DocumentIntakeFileService {
       sha256: record.sha256,
       status: record.status,
       intake_id: record.intake_id ?? undefined,
-      extraction_required: record.status === 'awaiting_ocr',
-      next_action: record.status === 'awaiting_ocr' ? 'submit extracted text to /v1/documents/intake/files/:fileId/extracted-text' : undefined,
+      extraction_required: record.status === 'awaiting_ocr' || record.status === 'ocr_processing',
+      ocr: record.ocr_provider ? {
+        provider: record.ocr_provider,
+        job_id: record.ocr_job_id ?? undefined,
+        metadata: record.ocr_metadata ?? undefined,
+        started_at: record.ocr_started_at ?? undefined,
+        completed_at: record.ocr_completed_at ?? undefined,
+      } : undefined,
+      next_action: nextAction,
       error_message: record.error_message ?? undefined,
       duplicate,
       created_at: record.created_at,
