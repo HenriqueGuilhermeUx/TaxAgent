@@ -48,12 +48,13 @@ export class TaxPositionService {
       payment_id: string;
       match_id: string;
       invoice_id: string | null;
+      economic_operation_id: string | null;
       effective_at: Date;
       amount: string;
       currency: string;
       payload: any;
     }>(
-      `SELECT id, evidence_type, intake_id, payment_id, match_id, invoice_id, effective_at, amount, currency, payload
+      `SELECT id, evidence_type, intake_id, payment_id, match_id, invoice_id, economic_operation_id, effective_at, amount, currency, payload
        FROM tax_position_financial_evidence
        WHERE company_id=$1 AND effective_at >= $2::date AND effective_at < ($2::date + INTERVAL '1 month')
        ORDER BY effective_at ASC, id ASC`,
@@ -70,11 +71,7 @@ export class TaxPositionService {
     }
     for (const target of [position.IBS, position.CBS]) target.balance = this.money(target.debits - target.credits + target.adjustments);
 
-    const financialEvidence = evidence.rows.map((row) => ({
-      ...row,
-      amount: Number(row.amount),
-      tax_effect_applied: false,
-    }));
+    const financialEvidence = evidence.rows.map((row) => ({ ...row, amount: Number(row.amount), tax_effect_applied: false }));
     return {
       company_id: companyId,
       period,
