@@ -7,11 +7,12 @@ import { DocumentIntakeController } from './document-intake.controller';
 import { DocumentIntakeFileService } from './document-intake-file.service';
 import { DocumentIntakeService } from './document-intake.service';
 import { NativeDocumentExtractorService } from './native-document-extractor.service';
+import { PaymentMatchingService } from './payment-matching.service';
 
 @Module({
   imports: [AuthModule, FiscalInboxModule, WebhooksModule],
   controllers: [DocumentIntakeController],
-  providers: [DocumentIntakeService, DocumentIntakeFileService, NativeDocumentExtractorService, DocStructExtractorService],
-  exports: [DocumentIntakeService, DocumentIntakeFileService],
+  providers: [DocumentIntakeService, DocumentIntakeFileService, NativeDocumentExtractorService, DocStructExtractorService, PaymentMatchingService],
+  exports: [DocumentIntakeService, DocumentIntakeFileService, PaymentMatchingService],
 })
 export class DocumentIntakeModule {}
