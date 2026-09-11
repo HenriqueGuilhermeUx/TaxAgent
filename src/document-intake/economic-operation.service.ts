@@ -79,16 +79,19 @@ export class EconomicOperationService {
       if (!operation) throw new BadRequestException('Economic operation not found');
       if (!payment) throw new BadRequestException('Payment record not found');
       if (operation.currency !== payment.currency) throw new BadRequestException('Payment and economic operation currencies must match');
-      const allocatedResult = await client.query<{ total: string }>('SELECT COALESCE(SUM(amount),0)::text AS total FROM economic_operation_payment_allocations WHERE payment_id=$1', [paymentId]);
-      const alreadyAllocated = Number(allocatedResult.rows[0]?.total ?? 0);
-      if (alreadyAllocated + input.amount > Number(payment.amount) + 0.01) throw new BadRequestException('Allocation exceeds available payment amount');
+      const allocatedResult = await client.query<{ total: string }>(
+        'SELECT COALESCE(SUM(amount),0)::text AS total FROM economic_operation_payment_allocations WHERE payment_id=$1 AND economic_operation_id<>$2',
+        [paymentId, operationId],
+      );
+      const allocatedElsewhere = Number(allocatedResult.rows[0]?.total ?? 0);
+      if (allocatedElsewhere + input.amount > Number(payment.amount) + 0.01) throw new BadRequestException('Allocation exceeds available payment amount');
       await client.query(
         `INSERT INTO economic_operation_payment_allocations(id, company_id, environment, economic_operation_id, payment_id, amount, metadata)
          VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)
          ON CONFLICT(economic_operation_id, payment_id) DO UPDATE SET amount=EXCLUDED.amount, metadata=EXCLUDED.metadata, updated_at=NOW()`,
         [createId('alloc'), companyId, environment, operationId, paymentId, input.amount, JSON.stringify({ note: input.note ?? null, tax_effect_applied: false })],
       );
-      await client.query('UPDATE payment_records SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1', [paymentId, operationId]);
+      await this.syncLegacyPaymentOperationLink(client, paymentId);
     });
     return this.get(operationId, companyId, environment);
   }
@@ -109,8 +112,8 @@ export class EconomicOperationService {
       const docAmount = Number(intake.canonical_document?.total?.amount ?? payment.amount);
       const allocationAmount = Math.min(Number(payment.amount), Number.isFinite(docAmount) && docAmount > 0 ? docAmount : Number(payment.amount));
       await client.query(`UPDATE document_intakes SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1`, [intakeId, id]);
-      await client.query(`UPDATE payment_records SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1`, [paymentId, id]);
       await client.query(`INSERT INTO economic_operation_payment_allocations(id, company_id, environment, economic_operation_id, payment_id, amount, metadata) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(economic_operation_id, payment_id) DO NOTHING`, [createId('alloc'), companyId, environment, id, paymentId, allocationAmount, JSON.stringify({ source: 'confirmed_payment_match', intake_id: intakeId, tax_effect_applied: false })]);
+      await this.syncLegacyPaymentOperationLink(client, paymentId);
       await client.query(`UPDATE tax_position_financial_evidence SET economic_operation_id=$3 WHERE intake_id=$1 AND payment_id=$2`, [intakeId, paymentId, id]);
       if (intake.linked_invoice_id) await client.query(`INSERT INTO ledger_entries(invoice_id, event_type, payload) VALUES($1,'economic-operation.linked',$2::jsonb)`, [intake.linked_invoice_id, JSON.stringify({ economic_operation_id: id, intake_id: intakeId, payment_id: paymentId, allocated_amount: allocationAmount, source: 'confirmed_payment_match', tax_effect_applied: false })]);
       return id as string;
@@ -127,6 +130,17 @@ export class EconomicOperationService {
     const paid = payments.rows.reduce((sum, row) => sum + Number(row.allocated_amount), 0); const gross = Number(operation.gross_amount); const settlement = this.settlement(gross, paid, payments.rows.length, documents.rows.length);
     if (operation.status !== 'cancelled' && operation.status !== settlement.status) { await this.db.query(`UPDATE economic_operations SET status=$2, updated_at=NOW() WHERE id=$1`, [operationId, settlement.status]); operation.status = settlement.status; }
     return { ...this.public(operation), settlement: { paid_amount: settlement.paid_amount, outstanding_amount: settlement.outstanding_amount, delta: settlement.delta, payment_count: settlement.payment_count, document_count: settlement.document_count }, documents: documents.rows, payments: payments.rows.map((row) => ({ ...row, payment_amount: Number(row.payment_amount), allocated_amount: Number(row.allocated_amount) })) };
+  }
+
+  private async syncLegacyPaymentOperationLink(client: any, paymentId: string): Promise<void> {
+    const links = await client.query<{ count: number; operation_id: string | null }>(
+      `SELECT COUNT(DISTINCT economic_operation_id)::int AS count,
+              CASE WHEN COUNT(DISTINCT economic_operation_id)=1 THEN MIN(economic_operation_id) ELSE NULL END AS operation_id
+       FROM economic_operation_payment_allocations WHERE payment_id=$1`,
+      [paymentId],
+    );
+    const operationId = Number(links.rows[0]?.count ?? 0) === 1 ? links.rows[0]?.operation_id ?? null : null;
+    await client.query('UPDATE payment_records SET economic_operation_id=$2, updated_at=NOW() WHERE id=$1', [paymentId, operationId]);
   }
 
   private settlement(gross: number, paid: number, paymentCount: number, documentCount: number) { const delta = this.money(paid - gross); const status = paid <= 0 ? 'open' : Math.abs(delta) <= 0.01 ? 'settled' : paid < gross ? 'partially_settled' : 'divergent'; return { status, paid_amount: this.money(paid), outstanding_amount: this.money(Math.max(0, gross - paid)), delta, payment_count: paymentCount, document_count: documentCount }; }
