@@ -22,7 +22,7 @@ Objetivo: encerrar o ciclo de construção do motor v0.1 e entrar em homologaç�
 - [x] Economic Operations
 - [x] Payment Allocations
 - [ ] rodada final de testes de integração para multi-payment/multi-document allocation
-- [ ] revisar migrations 001..023 em banco limpo e em execução idempotente
+- [x] revisar migrations 001..023 em banco limpo e em execução idempotente
 - [ ] revisar queries SQL críticas que typecheck não valida
 
 ## 2. Segurança
@@ -32,7 +32,7 @@ Objetivo: encerrar o ciclo de construção do motor v0.1 e entrar em homologaç�
 - [x] host/path restrictions para uso do A1
 - [x] secrets bloqueados de Git/Docker
 - [x] audit CI em severidade high
-- [ ] revisar logs para ausência de PFX, senhas, API keys e conteúdo sensível
+- [x] revisar logs para ausência de PFX, senhas, API keys e conteúdo sensível
 - [ ] rotacionar qualquer segredo de ambiente de teste antes de piloto
 - [ ] confirmar política de retenção/eliminação de arquivos brutos e OCR
 
