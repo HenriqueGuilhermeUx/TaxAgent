@@ -81,7 +81,11 @@ export class DocumentIntakeController {
   suggestPaymentMatches(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.suggest(intakeId, auth.companyId, auth.environment); }
 
   @Post('intake/:intakeId/payment-matches/:paymentId/confirm') @RequireScope('documents:write')
-  confirmPaymentMatch(@Param('intakeId') intakeId: string, @Param('paymentId') paymentId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.confirm(intakeId, paymentId, auth.companyId, auth.environment); }
+  async confirmPaymentMatch(@Param('intakeId') intakeId: string, @Param('paymentId') paymentId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
+    const reconciliation = await this.payments.confirm(intakeId, paymentId, auth.companyId, auth.environment);
+    const economicOperation = await this.operations.bindConfirmedMatch(intakeId, paymentId, auth.companyId, auth.environment);
+    return { ...reconciliation, economic_operation: economicOperation };
+  }
 
   @Get('intake/:intakeId/payment-status') @RequireScope('documents:read')
   paymentStatus(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.payments.paymentStatus(intakeId, auth.companyId, auth.environment); }
