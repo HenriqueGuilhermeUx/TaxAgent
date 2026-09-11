@@ -4,17 +4,14 @@ import { EconomicOperationService } from '../src/document-intake/economic-operat
 
 test('EconomicOperation rejects negative gross amount before persistence', async () => {
   const db: any = { query: async () => { throw new Error('must not persist'); } };
-  await assert.rejects(
-    new EconomicOperationService(db).create('co_1', 'test', { operation_type: 'purchase', direction: 'outbound', gross_amount: -1 }),
-    /gross_amount must be zero or positive/,
-  );
+  await assert.rejects(new EconomicOperationService(db).create('co_1', 'test', { operation_type: 'purchase', direction: 'outbound', gross_amount: -1 }), /gross_amount must be zero or positive/);
 });
 
-test('EconomicOperation get computes partially settled status', async () => {
+test('EconomicOperation get computes partially settled status from allocations', async () => {
   const responses = [
     { rows: [{ id: 'op_1', company_id: 'co_1', environment: 'test', status: 'open', gross_amount: '100.00' }] },
     { rows: [{ id: 'intake_1' }] },
-    { rows: [{ id: 'pay_1', amount: '40.00' }] },
+    { rows: [{ id: 'pay_1', payment_amount: '80.00', allocated_amount: '40.00' }] },
     { rows: [] },
   ];
   const db: any = { query: async () => responses.shift() ?? { rows: [] } };
@@ -23,19 +20,37 @@ test('EconomicOperation get computes partially settled status', async () => {
   assert.equal(result.settlement.paid_amount, 40);
   assert.equal(result.settlement.outstanding_amount, 60);
   assert.equal(result.settlement.document_count, 1);
+  assert.equal(result.payments[0].payment_amount, 80);
+  assert.equal(result.payments[0].allocated_amount, 40);
 });
 
 test('EconomicOperation binding refuses two different pre-linked operations', async () => {
-  const client: any = {
-    query: async (sql: string) => {
-      if (sql.includes('FROM document_intakes')) return { rows: [{ id: 'intake_1', economic_operation_id: 'op_a', canonical_document: {} }] };
-      if (sql.includes('FROM payment_records')) return { rows: [{ id: 'pay_1', economic_operation_id: 'op_b', amount: '100', direction: 'outbound' }] };
-      return { rows: [] };
-    },
-  };
+  const client: any = { query: async (sql: string) => {
+    if (sql.includes('FROM document_intakes')) return { rows: [{ id: 'intake_1', economic_operation_id: 'op_a', canonical_document: {} }] };
+    if (sql.includes('FROM payment_records')) return { rows: [{ id: 'pay_1', economic_operation_id: 'op_b', amount: '100', direction: 'outbound' }] };
+    return { rows: [] };
+  } };
   const db: any = { withTransaction: async (fn: any) => fn(client) };
-  await assert.rejects(
-    new EconomicOperationService(db).bindConfirmedMatch('intake_1', 'pay_1', 'co_1', 'test'),
-    /different economic operations/,
-  );
+  await assert.rejects(new EconomicOperationService(db).bindConfirmedMatch('intake_1', 'pay_1', 'co_1', 'test'), /different economic operations/);
+});
+
+test('EconomicOperation allocation rejects amount above unallocated payment balance', async () => {
+  const client: any = { query: async (sql: string) => {
+    if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_1', currency: 'BRL' }] };
+    if (sql.startsWith('SELECT * FROM payment_records')) return { rows: [{ id: 'pay_1', currency: 'BRL', amount: '100.00' }] };
+    if (sql.includes('SUM(amount)')) return { rows: [{ total: '70.00' }] };
+    return { rows: [] };
+  } };
+  const db: any = { withTransaction: async (fn: any) => fn(client) };
+  await assert.rejects(new EconomicOperationService(db).allocatePayment('op_1', 'pay_1', 'co_1', 'test', { amount: 40 }), /exceeds available payment amount/);
+});
+
+test('EconomicOperation allocation rejects currency mismatch', async () => {
+  const client: any = { query: async (sql: string) => {
+    if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_1', currency: 'BRL' }] };
+    if (sql.startsWith('SELECT * FROM payment_records')) return { rows: [{ id: 'pay_1', currency: 'USD', amount: '100.00' }] };
+    return { rows: [] };
+  } };
+  const db: any = { withTransaction: async (fn: any) => fn(client) };
+  await assert.rejects(new EconomicOperationService(db).allocatePayment('op_1', 'pay_1', 'co_1', 'test', { amount: 50 }), /currencies must match/);
 });
