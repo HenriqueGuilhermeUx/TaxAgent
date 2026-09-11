@@ -80,4 +80,10 @@ export class DocumentIntakeController {
   confirmPaymentMatch(@Param('intakeId') intakeId: string, @Param('paymentId') paymentId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
     return this.payments.confirm(intakeId, paymentId, auth.companyId, auth.environment);
   }
+
+  @Get('intake/:intakeId/payment-status')
+  @RequireScope('documents:read')
+  paymentStatus(@Param('intakeId') intakeId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) {
+    return this.payments.paymentStatus(intakeId, auth.companyId, auth.environment);
+  }
 }
