@@ -44,8 +44,7 @@ export class DocumentIntakeFileService {
 
     const filename = String(file.originalname ?? 'document').slice(0, 255);
     const contentType = String(file.mimetype ?? 'application/octet-stream').toLowerCase();
-    const allowed = this.isAllowed(contentType, filename);
-    if (!allowed) throw new BadRequestException('Supported document types: PDF, PNG, JPEG, XML and plain text');
+    if (!this.isAllowed(contentType, filename)) throw new BadRequestException('Supported document types: PDF, PNG, JPEG, XML and plain text');
 
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const id = createId('ifile');
@@ -54,18 +53,14 @@ export class DocumentIntakeFileService {
     const { rows } = await this.db.query<FileRecord>(
       `INSERT INTO document_intake_files(id, company_id, environment, filename, content_type, size_bytes, sha256, encrypted_content, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
-       ON CONFLICT(company_id, environment, sha256) DO NOTHING
-       RETURNING *`,
+       ON CONFLICT(company_id, environment, sha256) DO NOTHING RETURNING *`,
       [id, companyId, environment, filename, contentType, file.buffer.length, sha256, JSON.stringify(sealed), initialStatus],
     );
     let record = rows[0];
     let duplicate = false;
     if (!record) {
       duplicate = true;
-      const existing = await this.db.query<FileRecord>(
-        'SELECT * FROM document_intake_files WHERE company_id=$1 AND environment=$2 AND sha256=$3',
-        [companyId, environment, sha256],
-      );
+      const existing = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE company_id=$1 AND environment=$2 AND sha256=$3', [companyId, environment, sha256]);
       record = existing.rows[0];
     }
     if (!record) throw new Error('Document file persistence failed');
@@ -75,10 +70,11 @@ export class DocumentIntakeFileService {
         const content = this.crypto.open(record.encrypted_content).toString('utf8');
         const sourceType = this.isXml(record.content_type, record.filename) ? 'xml' : 'text';
         const extracted = await this.intake.extract(
-          { source_type: sourceType, content, document_type: documentType as any, provider: 'auto' },
+          { source_type: sourceType, content, document_type: documentType as any, provider: 'auto', persist: true },
           companyId,
           environment,
         );
+        if (!('intake_id' in extracted)) throw new Error('Persisted document extraction did not return intake_id');
         const updated = await this.db.query<FileRecord>(
           `UPDATE document_intake_files SET status='extracted', intake_id=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
           [record.id, extracted.intake_id],
@@ -93,16 +89,13 @@ export class DocumentIntakeFileService {
         record = updated.rows[0] ?? record;
       }
     }
-
     return this.toPublic(record, duplicate);
   }
 
   async get(fileId: string, companyId: string, environment: FiscalEnvironment) {
     const { rows } = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE id=$1', [fileId]);
     const record = rows[0];
-    if (!record || record.company_id !== companyId || record.environment !== environment) {
-      throw new BadRequestException('Document file not found for this company/environment');
-    }
+    if (!record || record.company_id !== companyId || record.environment !== environment) throw new BadRequestException('Document file not found for this company/environment');
     return this.toPublic(record, false);
   }
 
@@ -110,16 +103,15 @@ export class DocumentIntakeFileService {
     if (!text?.trim()) throw new BadRequestException('Extracted text is required');
     const { rows } = await this.db.query<FileRecord>('SELECT * FROM document_intake_files WHERE id=$1', [fileId]);
     const record = rows[0];
-    if (!record || record.company_id !== companyId || record.environment !== environment) {
-      throw new BadRequestException('Document file not found for this company/environment');
-    }
+    if (!record || record.company_id !== companyId || record.environment !== environment) throw new BadRequestException('Document file not found for this company/environment');
     if (record.intake_id) return this.toPublic(record, true);
 
     const extracted = await this.intake.extract(
-      { source_type: 'text', content: text, document_type: documentType as any, provider: 'auto' },
+      { source_type: 'text', content: text, document_type: documentType as any, provider: 'auto', persist: true },
       companyId,
       environment,
     );
+    if (!('intake_id' in extracted)) throw new Error('Persisted document extraction did not return intake_id');
     const updated = await this.db.query<FileRecord>(
       `UPDATE document_intake_files SET status='extracted', intake_id=$2, error_message=NULL, updated_at=NOW() WHERE id=$1 RETURNING *`,
       [record.id, extracted.intake_id],
@@ -128,17 +120,11 @@ export class DocumentIntakeFileService {
   }
 
   private isAllowed(contentType: string, filename: string): boolean {
-    return this.canExtractDirectly(contentType, filename)
-      || contentType === 'application/pdf'
-      || contentType === 'image/png'
-      || contentType === 'image/jpeg'
-      || /\.(pdf|png|jpe?g)$/i.test(filename);
+    return this.canExtractDirectly(contentType, filename) || contentType === 'application/pdf' || contentType === 'image/png' || contentType === 'image/jpeg' || /\.(pdf|png|jpe?g)$/i.test(filename);
   }
 
   private canExtractDirectly(contentType: string, filename: string): boolean {
-    return this.isXml(contentType, filename)
-      || contentType.startsWith('text/plain')
-      || /\.txt$/i.test(filename);
+    return this.isXml(contentType, filename) || contentType.startsWith('text/plain') || /\.txt$/i.test(filename);
   }
 
   private isXml(contentType: string, filename: string): boolean {
