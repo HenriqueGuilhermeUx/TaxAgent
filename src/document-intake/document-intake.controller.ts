@@ -47,6 +47,9 @@ export class DocumentIntakeController {
   @Post('operations') @RequireScope('documents:write')
   createOperation(@Body() body: EconomicOperationInput, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.create(auth.companyId, auth.environment, body); }
 
+  @Get('operations') @RequireScope('documents:read')
+  listOperations(@Query('status') status: string | undefined, @Query('limit') limit: string | undefined, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.list(auth.companyId, auth.environment, status, Number(limit ?? 100)); }
+
   @Get('operations/:operationId') @RequireScope('documents:read')
   getOperation(@Param('operationId') operationId: string, @CurrentTaxAgentAuth() auth: TaxAgentAuthContext) { return this.operations.get(operationId, auth.companyId, auth.environment); }
 
