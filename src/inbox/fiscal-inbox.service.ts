@@ -29,6 +29,43 @@ export class FiscalInboxService {
     return { job_id: id, status: 'queued', company_id: companyId, environment };
   }
 
+  async ingestExternal(companyId: string, environment: FiscalEnvironment, input: {
+    sourceReference: string;
+    documentType: string;
+    generatedAt?: string;
+    sha256: string;
+    content: string;
+    contentType: string;
+    metadata?: unknown;
+  }) {
+    await this.tenancy.getCompany(companyId);
+    const id = createId('inbox');
+    const { rows } = await this.db.query<{ id: string; nsu: string }>(
+      `INSERT INTO inbox_documents(id, company_id, environment, nsu, document_type, generated_at, sha256, content, content_type, metadata, source, source_reference)
+       VALUES ($1,$2,$3,-nextval('external_inbox_nsu_seq'),$4,$5,$6,$7,$8,$9::jsonb,'document-intake',$10)
+       ON CONFLICT (company_id, environment, source, source_reference) WHERE source_reference IS NOT NULL DO NOTHING
+       RETURNING id, nsu::text`,
+      [id, companyId, environment, input.documentType, input.generatedAt ?? null, input.sha256, Buffer.from(input.content, 'utf8'), input.contentType, JSON.stringify(input.metadata ?? null), input.sourceReference],
+    );
+    let record = rows[0];
+    if (!record) {
+      const existing = await this.db.query<{ id: string; nsu: string }>(
+        `SELECT id, nsu::text FROM inbox_documents WHERE company_id=$1 AND environment=$2 AND source='document-intake' AND source_reference=$3`,
+        [companyId, environment, input.sourceReference],
+      );
+      record = existing.rows[0];
+      return { ...record, inserted: false };
+    }
+    await this.webhooks.emit(companyId, 'inbox.document.received', {
+      document_id: record.id,
+      nsu: record.nsu,
+      document_type: input.documentType,
+      source: 'document-intake',
+      source_reference: input.sourceReference,
+    });
+    return { ...record, inserted: true };
+  }
+
   async syncOneBatch(companyId: string, environment: FiscalEnvironment, cnpjConsulta?: string) {
     await this.tenancy.getCompany(companyId);
     const cursor = await this.getCursor(companyId, environment);
@@ -85,8 +122,8 @@ export class FiscalInboxService {
   async list(companyId: string, environment: FiscalEnvironment, limit = 50) {
     const safeLimit = Math.min(200, Math.max(1, limit));
     const { rows } = await this.db.query(
-      `SELECT id, nsu::text, access_key, document_type, event_type, generated_at, sha256, content_type, octet_length(content) AS bytes, received_at
-       FROM inbox_documents WHERE company_id=$1 AND environment=$2 ORDER BY nsu DESC LIMIT $3`,
+      `SELECT id, nsu::text, access_key, document_type, event_type, generated_at, sha256, content_type, source, source_reference, octet_length(content) AS bytes, received_at
+       FROM inbox_documents WHERE company_id=$1 AND environment=$2 ORDER BY received_at DESC LIMIT $3`,
       [companyId, environment, safeLimit],
     );
     return rows;
