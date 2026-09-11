@@ -45,6 +45,53 @@ test('EconomicOperation allocation rejects amount above unallocated payment bala
   await assert.rejects(new EconomicOperationService(db).allocatePayment('op_1', 'pay_1', 'co_1', 'test', { amount: 40 }), /exceeds available payment amount/);
 });
 
+test('EconomicOperation allocation replacement excludes its current operation from used balance', async () => {
+  const seen: string[] = [];
+  const client: any = { query: async (sql: string) => {
+    seen.push(sql);
+    if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_1', currency: 'BRL' }] };
+    if (sql.startsWith('SELECT * FROM payment_records')) return { rows: [{ id: 'pay_1', currency: 'BRL', amount: '100.00' }] };
+    if (sql.includes('SUM(amount)')) return { rows: [{ total: '40.00' }] };
+    if (sql.includes('COUNT(DISTINCT economic_operation_id)')) return { rows: [{ count: 1, operation_id: 'op_1' }] };
+    return { rows: [] };
+  } };
+  const db: any = {
+    withTransaction: async (fn: any) => fn(client),
+    query: async (sql: string) => {
+      if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_1', status: 'open', gross_amount: '100.00' }] };
+      if (sql.includes('FROM document_intakes')) return { rows: [] };
+      if (sql.includes('FROM economic_operation_payment_allocations')) return { rows: [{ payment_amount: '100.00', allocated_amount: '50.00' }] };
+      return { rows: [] };
+    },
+  };
+  const result = await new EconomicOperationService(db).allocatePayment('op_1', 'pay_1', 'co_1', 'test', { amount: 50 });
+  assert.ok(seen.some((sql) => sql.includes('economic_operation_id<>$2')));
+  assert.equal(result.settlement.paid_amount, 50);
+});
+
+test('EconomicOperation split payment clears ambiguous legacy operation link', async () => {
+  const updates: Array<any[]> = [];
+  const client: any = { query: async (sql: string, params?: any[]) => {
+    if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_b', currency: 'BRL' }] };
+    if (sql.startsWith('SELECT * FROM payment_records')) return { rows: [{ id: 'pay_1', currency: 'BRL', amount: '100.00' }] };
+    if (sql.includes('SUM(amount)')) return { rows: [{ total: '60.00' }] };
+    if (sql.includes('COUNT(DISTINCT economic_operation_id)')) return { rows: [{ count: 2, operation_id: null }] };
+    if (sql.startsWith('UPDATE payment_records SET economic_operation_id')) updates.push(params ?? []);
+    return { rows: [] };
+  } };
+  const db: any = {
+    withTransaction: async (fn: any) => fn(client),
+    query: async (sql: string) => {
+      if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_b', status: 'open', gross_amount: '40.00' }] };
+      if (sql.includes('FROM document_intakes')) return { rows: [] };
+      if (sql.includes('FROM economic_operation_payment_allocations')) return { rows: [{ payment_amount: '100.00', allocated_amount: '40.00' }] };
+      return { rows: [] };
+    },
+  };
+  await new EconomicOperationService(db).allocatePayment('op_b', 'pay_1', 'co_1', 'test', { amount: 40 });
+  assert.deepEqual(updates.at(-1), ['pay_1', null]);
+});
+
 test('EconomicOperation allocation rejects currency mismatch', async () => {
   const client: any = { query: async (sql: string) => {
     if (sql.startsWith('SELECT * FROM economic_operations')) return { rows: [{ id: 'op_1', currency: 'BRL' }] };
