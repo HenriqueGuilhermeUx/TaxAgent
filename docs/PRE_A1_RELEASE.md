@@ -63,15 +63,17 @@ E o Swagger em:
 
 `GET /docs`
 
-Sequência segura:
+Sequência segura pela própria Console:
 
 1. criar ou retomar uma Company TEST;
 2. usar uma API key TEST;
 3. resolver uma Tax Decision;
-4. preencher o payload de DPS;
-5. executar `POST /v1/operations/no-a1/validate` pelo Swagger;
+4. preencher os dados da DPS;
+5. clicar **Validar pré-A1 · Tax Decision → DPS → XSD**;
 6. exigir `valid=true`, `ready_without_certificate=true`, `transmitted=false` e `certificate_used=false`;
 7. preservar o resultado como evidência técnica da rodada.
+
+O Swagger continua disponível para inspeção direta do mesmo endpoint, mas não é necessário para o fluxo normal browser-only.
 
 Nunca colocar bootstrap token, API key, PFX/P12, senha do certificado ou master key em chat, issue, commit ou log.
 
@@ -114,6 +116,7 @@ Enquanto o A1 não existir:
 - allocations com replacement correto e split de pagamento sem ponteiro legado ambíguo;
 - XSD oficial pinado e validado no CI;
 - testes de no-A1 impedindo assinatura/transmissão e bloqueando `production`;
+- ação no-A1 exposta na Console e coberta por teste de UI;
 - Docker final executado no CI.
 
 ## Quando o A1 chegar
