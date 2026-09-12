@@ -29,7 +29,7 @@ const PREPARED_CONTROLS = `${ISS_RATE_CONTROL}
       <div><label>Prepared DPS · Idempotency-Key</label><input id="prepareKey" autocomplete="off" placeholder="prep-..." /></div>
       <div><label>Prepared DPS ID</label><input id="preparedDpsId" autocomplete="off" placeholder="pdps_..." /></div>`;
 const DPS_ACTIONS_OLD = '<div class="actions"><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>';
-const DPS_ACTIONS_NEW = '<div class="actions"><button class="secondary" onclick="prebuildDps()">Preview sem persistir · Build → XSD</button><button class="secondary" onclick="preparePersistentDps()">Congelar Prepared DPS · sequência real + XSD</button><button class="secondary" onclick="loadPreparedDps()">Consultar Prepared DPS</button><button onclick="signPreparedDps()">Assinar Prepared DPS com A1</button><button onclick="dryRunDps()">Dry-run legado · reconstruir + A1</button></div>';
+const DPS_ACTIONS_NEW = '<div class="actions"><button class="secondary" onclick="validateNoA1()">Validar pré-A1 · Tax Decision → DPS → XSD</button><button class="secondary" onclick="prebuildDps()">Preview sem persistir · Build → XSD</button><button class="secondary" onclick="preparePersistentDps()">Congelar Prepared DPS · sequência real + XSD</button><button class="secondary" onclick="loadPreparedDps()">Consultar Prepared DPS</button><button onclick="signPreparedDps()">Assinar Prepared DPS com A1</button><button onclick="dryRunDps()">Dry-run legado · reconstruir + A1</button></div>';
 const DRYRUN_FUNCTION_ANCHOR = '  window.dryRunDps=async function(){';
 const PREBUILD_FUNCTION = `  function restorePreparedPayload(result){
     const p=result&&result.resume_payload;if(!p)return;
@@ -39,6 +39,8 @@ const PREBUILD_FUNCTION = `  function restorePreparedPayload(result){
     if(p.service){$('serviceDescription').value=p.service.description||'';$('invoiceAmount').value=String(p.service.amount??'');$('serviceLocation').value=p.service.service_location_city_code||'';$('issTaxation').value=p.service.iss_taxation||'1';$('issWithholding').value=p.service.iss_withholding||'1';$('issRate').value=p.service.iss_rate===undefined?'':String(p.service.iss_rate);}
     $('preparedDpsId').value=state.preparedDpsId;syncStatus();
   }
+
+  window.validateNoA1=async function(){try{const body=buildInvoiceBody();delete body.prepared_dps_id;state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Validando Tax Decision, readiness pré-certificado, DPS e XSD oficial sem usar A1...');const result=await request('/v1/operations/no-a1/validate',{method:'POST',body});show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
 
   window.prebuildDps=async function(){try{const body=buildInvoiceBody();delete body.prepared_dps_id;state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Montando preview e validando XSD sem certificado...');const result=await request('/v1/operations/dps/prebuild',{method:'POST',body});show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
 
