@@ -83,6 +83,7 @@ test('no-A1 track reports pre-certificate blockers even if unsigned DPS can be b
       return {
         valid: true,
         signed: false,
+        transmitted: false,
         dps_id: 'DPS123',
         schema: 'nfse-prodrest-v1',
         unsigned_xml_sha256: 'abc123',
@@ -98,6 +99,22 @@ test('no-A1 track reports pre-certificate blockers even if unsigned DPS can be b
   assert.equal(result.ready_without_certificate, false);
   assert.deepEqual(result.failed_before_certificate, ['official_schema']);
   assert.match(result.next_stage, /Resolve the failed pre-certificate gates/);
+});
+
+test('no-A1 validity requires readiness boolean even when blocker list is unexpectedly empty', async () => {
+  const readiness = { report: async () => ({ readyWithoutCertificate: false, failedBlockingGatesBeforeCertificate: [], remainingCertificateGates: [] }) } as any;
+  const dpsPreflight = { prebuild: async () => ({ valid: true, signed: false, transmitted: false }) } as any;
+  const result = await new NoA1HomologationService(readiness, dpsPreflight).validate(dto);
+  assert.equal(result.valid, false);
+  assert.equal(result.ready_without_certificate, false);
+});
+
+test('no-A1 validity refuses any prebuild that reports signature or transmission side effects', async () => {
+  const readiness = { report: async () => ({ readyWithoutCertificate: true, failedBlockingGatesBeforeCertificate: [], remainingCertificateGates: [] }) } as any;
+  const signedPreflight = { prebuild: async () => ({ valid: true, signed: true, transmitted: false }) } as any;
+  const transmittedPreflight = { prebuild: async () => ({ valid: true, signed: false, transmitted: true }) } as any;
+  assert.equal((await new NoA1HomologationService(readiness, signedPreflight).validate(dto)).valid, false);
+  assert.equal((await new NoA1HomologationService(readiness, transmittedPreflight).validate(dto)).valid, false);
 });
 
 test('no-A1 track is hard-blocked outside test environment', async () => {
