@@ -28,6 +28,38 @@ test('PaymentMatching does not suggest weak candidates', async () => {
   assert.deepEqual(await new PaymentMatchingService(db).suggest('intake_1', 'co_1', 'test'), { intake_id: 'intake_1', matched: false, suggestions: [] });
 });
 
+test('PaymentMatching duplicate confirmation reports financial evidence only when it exists', async () => {
+  const existingMatch = { id: 'match_1', intake_id: 'intake_1', payment_id: 'pay_1', score: '1', status: 'confirmed', reasons: ['exact_amount'], confirmed_at: new Date() };
+  const responses = [
+    { rows: [{ id: 'intake_1', linked_invoice_id: 'inv_1' }] },
+    { rows: [existingMatch] },
+    { rows: [] },
+  ];
+  const client: any = { query: async () => responses.shift() ?? { rows: [] } };
+  const db: any = { withTransaction: async (fn: any) => fn(client) };
+  const result = await new PaymentMatchingService(db).confirm('intake_1', 'pay_1', 'co_1', 'test');
+  assert.equal(result.duplicate, true);
+  assert.equal(result.ledger_recorded, true);
+  assert.equal(result.financial_evidence_recorded, false);
+  assert.equal(result.financial_evidence_id, undefined);
+});
+
+test('PaymentMatching duplicate confirmation returns existing evidence id in same environment', async () => {
+  const existingMatch = { id: 'match_1', intake_id: 'intake_1', payment_id: 'pay_1', score: '1', status: 'confirmed', reasons: ['exact_amount'], confirmed_at: new Date() };
+  const calls: string[] = [];
+  const responses = [
+    { rows: [{ id: 'intake_1', linked_invoice_id: null }] },
+    { rows: [existingMatch] },
+    { rows: [{ id: 'tpe_1' }] },
+  ];
+  const client: any = { query: async (sql: string) => { calls.push(sql); return responses.shift() ?? { rows: [] }; } };
+  const db: any = { withTransaction: async (fn: any) => fn(client) };
+  const result = await new PaymentMatchingService(db).confirm('intake_1', 'pay_1', 'co_1', 'test');
+  assert.equal(result.financial_evidence_recorded, true);
+  assert.equal(result.financial_evidence_id, 'tpe_1');
+  assert.ok(calls.some((sql) => sql.includes('company_id=$2') && sql.includes('environment=$3')));
+});
+
 test('Reconciliation report separates missing payment and missing document without tax effects', async () => {
   const db = dbWithResponses([
     { rows: [{ id: 'intake_1', canonical_document: { document_number: 'NF-1', total: { amount: 250, currency: 'BRL' } }, has_confirmed_payment: false, best_score: '0' }] },
