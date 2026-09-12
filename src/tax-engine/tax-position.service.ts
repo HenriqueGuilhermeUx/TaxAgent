@@ -1,16 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
+import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 
 interface DecisionRow { id: string; company_id: string | null; effective_at: string | Date; status: string; output: any; sources: any }
-interface InvoiceRow { id: string; company_id: string; tax_decision_id: string | null; status: string }
+interface InvoiceRow { id: string; company_id: string; environment: FiscalEnvironment; tax_decision_id: string | null; status: string }
 
 @Injectable()
 export class TaxPositionService {
   constructor(private readonly db: DatabaseService) {}
 
   async recordAuthorizedInvoice(invoiceId: string): Promise<void> {
-    const { rows } = await this.db.query<InvoiceRow>('SELECT id, company_id, tax_decision_id, status FROM invoices WHERE id=$1', [invoiceId]);
+    const { rows } = await this.db.query<InvoiceRow>('SELECT id, company_id, environment, tax_decision_id, status FROM invoices WHERE id=$1', [invoiceId]);
     const invoice = rows[0];
     if (!invoice || invoice.status !== 'authorized' || !invoice.tax_decision_id) return;
     const decision = await this.getDecision(invoice.tax_decision_id, invoice.company_id);
@@ -23,23 +24,24 @@ export class TaxPositionService {
       const rate = Number(calculation.rates[key]);
       if (!Number.isFinite(amount) || !Number.isFinite(rate)) continue;
       await this.db.query(
-        `INSERT INTO tax_ledger_entries(id, company_id, invoice_id, tax_decision_id, effective_at, tax_type, entry_type, base_amount, rate, amount, reference_only, metadata)
-         VALUES ($1,$2,$3,$4,$5,$6,'debit',$7,$8,$9,TRUE,$10::jsonb)
+        `INSERT INTO tax_ledger_entries(id, company_id, environment, invoice_id, tax_decision_id, effective_at, tax_type, entry_type, base_amount, rate, amount, reference_only, metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'debit',$8,$9,$10,TRUE,$11::jsonb)
          ON CONFLICT(invoice_id, tax_type, entry_type) WHERE invoice_id IS NOT NULL DO NOTHING`,
-        [createId('taxle'), invoice.company_id, invoice.id, decision.id, this.dateOnly(decision.effective_at), taxType, calculation.base, rate, amount, JSON.stringify({ kind: calculation.kind, sources: decision.sources })],
+        [createId('taxle'), invoice.company_id, invoice.environment, invoice.id, decision.id, this.dateOnly(decision.effective_at), taxType, calculation.base, rate, amount, JSON.stringify({ kind: calculation.kind, sources: decision.sources })],
       );
     }
   }
 
-  async getPosition(companyId: string, period: string) {
+  async getPosition(companyId: string, period: string, environment: FiscalEnvironment) {
     if (!/^\d{4}-\d{2}$/.test(period)) throw new BadRequestException('period must be YYYY-MM');
+    if (!['test', 'production'].includes(environment)) throw new BadRequestException('environment must be test or production');
     const start = `${period}-01`;
     const { rows } = await this.db.query<{ tax_type: 'IBS' | 'CBS'; entry_type: string; amount: string; reference_only: boolean }>(
       `SELECT tax_type, entry_type, COALESCE(SUM(amount),0)::text AS amount, BOOL_AND(reference_only) AS reference_only
        FROM tax_ledger_entries
-       WHERE company_id=$1 AND effective_at >= $2::date AND effective_at < ($2::date + INTERVAL '1 month')
+       WHERE company_id=$1 AND environment=$2 AND effective_at >= $3::date AND effective_at < ($3::date + INTERVAL '1 month')
        GROUP BY tax_type, entry_type ORDER BY tax_type, entry_type`,
-      [companyId, start],
+      [companyId, environment, start],
     );
     const evidence = await this.db.query<{
       id: string;
@@ -56,9 +58,9 @@ export class TaxPositionService {
     }>(
       `SELECT id, evidence_type, intake_id, payment_id, match_id, invoice_id, economic_operation_id, effective_at, amount, currency, payload
        FROM tax_position_financial_evidence
-       WHERE company_id=$1 AND effective_at >= $2::date AND effective_at < ($2::date + INTERVAL '1 month')
+       WHERE company_id=$1 AND environment=$2 AND effective_at >= $3::date AND effective_at < ($3::date + INTERVAL '1 month')
        ORDER BY effective_at ASC, id ASC`,
-      [companyId, start],
+      [companyId, environment, start],
     );
 
     const position = { IBS: { debits: 0, credits: 0, adjustments: 0, balance: 0 }, CBS: { debits: 0, credits: 0, adjustments: 0, balance: 0 } };
@@ -74,6 +76,7 @@ export class TaxPositionService {
     const financialEvidence = evidence.rows.map((row) => ({ ...row, amount: Number(row.amount), tax_effect_applied: false }));
     return {
       company_id: companyId,
+      environment,
       period,
       mode: 'taxagent-reference-position',
       authoritative_assessment: false,
