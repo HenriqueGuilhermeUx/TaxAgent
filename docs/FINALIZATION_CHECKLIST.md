@@ -44,10 +44,13 @@ Nota de escopo v0.1: verdadeiro matching N:N entre múltiplos documentos e múlt
 ## 3. Estado pré-A1
 
 - [x] endpoint `POST /v1/operations/no-a1/validate`
+- [x] ação no-A1 exposta diretamente na Console browser-only
 - [x] readiness pré-certificado separado dos gates de certificado
+- [x] `dps_builder_verified` corretamente tratado como gate pós-A1/pré-live, não como bloqueio do estado pré-certificado
 - [x] Tax Decision persistida obrigatória para classificação fiscal final
 - [x] DPS unsigned buildável e validável contra XSD oficial sem certificado
 - [x] `transmitted=false`, `transmission_possible=false`, `certificate_used=false` invariantes do track no-A1
+- [x] `valid=true` exige simultaneamente readiness pré-certificado, XSD válido e ausência de efeitos de assinatura/transmissão
 - [x] produção hard-blocked no track no-A1
 - [x] documentação `docs/PRE_A1_RELEASE.md`
 - [ ] executar uma rodada operacional com Company TEST e obter `ready_without_certificate=true` — depende apenas do cadastro/inputs da Company, não de A1
@@ -105,6 +108,7 @@ Não declarar o TaxAgent homologado até concluir todos os itens abaixo com empr
 
 - [x] Swagger
 - [x] browser homologation console
+- [x] validação pré-A1 browser-only
 - [x] documentação browser-only
 - [x] documentação específica de estado pré-A1
 - [x] contrato e testes do endpoint no-A1
