@@ -19,12 +19,12 @@ test('preflight can be ready before live switches are enabled', () => {
   assert.equal(summary.readyWithoutCertificate, true);
 });
 
-test('a missing certificate blocks live readiness but not pre-certificate readiness', () => {
+test('a missing certificate and draft builder block live readiness but not pre-certificate readiness', () => {
   const summary = summarizeReadiness([
     gate('certificate_a1', 'fail'),
     gate('certificate_company_binding', 'fail'),
     gate('official_schema', 'pass'),
-    gate('dps_builder_verified', 'pass'),
+    gate('dps_builder_verified', 'fail'),
     gate('nfse_endpoint', 'pass'),
     gate('nfse_mode_live', 'fail'),
     gate('live_enabled', 'fail'),
@@ -34,14 +34,15 @@ test('a missing certificate blocks live readiness but not pre-certificate readin
   assert.equal(summary.readyWithoutCertificate, true);
   assert.deepEqual(summary.remainingCertificateGates, ['certificate_a1', 'certificate_company_binding']);
   assert.deepEqual(summary.failedBlockingGatesBeforeCertificate, []);
+  assert.ok(summary.failedBlockingGates.includes('dps_builder_verified'));
 });
 
-test('pre-certificate readiness still fails when a non-certificate safety gate fails', () => {
+test('pre-certificate readiness still fails when a true pre-certificate safety gate fails', () => {
   const summary = summarizeReadiness([
     gate('certificate_a1', 'fail'),
     gate('certificate_company_binding', 'fail'),
     gate('official_schema', 'fail'),
-    gate('dps_builder_verified', 'pass'),
+    gate('dps_builder_verified', 'fail'),
     gate('nfse_endpoint', 'pass'),
     gate('nfse_mode_live', 'fail'),
     gate('live_enabled', 'fail'),
@@ -53,9 +54,10 @@ test('pre-certificate readiness still fails when a non-certificate safety gate f
 test('a missing certificate remains visible in the complete blocking-gate list', () => {
   const summary = summarizeReadiness([
     gate('certificate_a1', 'fail'),
+    gate('dps_builder_verified', 'fail'),
     gate('nfse_mode_live', 'fail'),
     gate('live_enabled', 'fail'),
   ]);
   assert.equal(summary.readyToEnableLive, false);
-  assert.deepEqual(summary.failedBlockingGates, ['certificate_a1', 'nfse_mode_live', 'live_enabled']);
+  assert.deepEqual(summary.failedBlockingGates, ['certificate_a1', 'dps_builder_verified', 'nfse_mode_live', 'live_enabled']);
 });
