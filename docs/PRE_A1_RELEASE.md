@@ -51,7 +51,7 @@ Uma execução pronta para receber o A1 deve retornar, entre outros campos:
 }
 ```
 
-`ready_without_certificate=true` significa somente que todos os gates bloqueantes anteriores ao certificado passaram.
+`ready_without_certificate=true` significa somente que todos os gates bloqueantes anteriores ao certificado passaram. O gate `dps_builder_verified` é deliberadamente pós-A1/pré-live: ele não pode impedir o estado pré-certificado, mas continua obrigatório antes de habilitar transmissão real.
 
 ## Fluxo browser-only enquanto não há A1
 
@@ -115,9 +115,12 @@ Enquanto o A1 não existir:
 - Tax Position separada por `company_id + environment`;
 - allocations com replacement correto e split de pagamento sem ponteiro legado ambíguo;
 - XSD oficial pinado e validado no CI;
+- readiness pré-A1 separado dos gates pós-certificado;
 - testes de no-A1 impedindo assinatura/transmissão e bloqueando `production`;
+- `valid=true` no track no-A1 exige readiness pré-certificado + DPS/XSD válido + ausência de assinatura/transmissão;
 - ação no-A1 exposta na Console e coberta por teste de UI;
-- Docker final executado no CI.
+- Docker final executado no CI;
+- CI #277 concluído com sucesso no fechamento técnico pré-A1.
 
 ## Quando o A1 chegar
 
