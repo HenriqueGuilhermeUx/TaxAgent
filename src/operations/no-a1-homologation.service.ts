@@ -24,16 +24,18 @@ export class NoA1HomologationService {
     const remainingCertificateGates = Array.isArray(readiness.remainingCertificateGates)
       ? readiness.remainingCertificateGates
       : [];
+    const noCertificateSideEffects = prebuild.signed === false && prebuild.transmitted === false;
+    const readyWithoutCertificate = readiness.readyWithoutCertificate === true;
 
     return {
-      valid: failedBeforeCertificate.length === 0 && prebuild.valid === true,
+      valid: readyWithoutCertificate && failedBeforeCertificate.length === 0 && prebuild.valid === true && noCertificateSideEffects,
       track: 'no-a1',
       environment: 'test',
       transmitted: false,
       transmission_possible: false,
       certificate_used: false,
       certificate_required_for_next_stage: true,
-      ready_without_certificate: readiness.readyWithoutCertificate === true,
+      ready_without_certificate: readyWithoutCertificate,
       failed_before_certificate: failedBeforeCertificate,
       remaining_certificate_gates: remainingCertificateGates,
       dps: {
@@ -45,7 +47,7 @@ export class NoA1HomologationService {
         tax_decision_id: prebuild.tax_decision_id,
         fiscal_summary: prebuild.fiscal_summary,
       },
-      next_stage: failedBeforeCertificate.length === 0
+      next_stage: readyWithoutCertificate && failedBeforeCertificate.length === 0
         ? 'Provide an A1 bound to the Company CNPJ, sign the exact DPS and run the full non-transmitting dry-run.'
         : 'Resolve the failed pre-certificate gates before providing an A1.',
       checked_at: new Date().toISOString(),
