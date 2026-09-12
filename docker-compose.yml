@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: taxagent
+      POSTGRES_PASSWORD: taxagent
+      POSTGRES_DB: taxagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - taxagent_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxagent -d taxagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  taxagent_pg:

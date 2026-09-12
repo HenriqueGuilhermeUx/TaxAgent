@@ -1,0 +1,127 @@
+{
+  "version": "2026-09-10",
+  "description": "TaxAgent deterministic fiscal golden cases. Each case locks expected classification, municipal treatment and explicit missing-data behavior. These are regression fixtures, not legal advice and not a substitute for source review before enabling new live scenarios.",
+  "cases": [
+    {
+      "id": "consulting-mogi-no-withholding",
+      "profile": "business_consulting",
+      "input": {
+        "issuerCityCode": "3530607",
+        "destinationCityCode": "3550308",
+        "issWithholding": "1"
+      },
+      "expected": {
+        "classification": {
+          "national_service_code": "170101",
+          "cIndOp": "100301",
+          "cst": "000",
+          "cClassTrib": "000001",
+          "tax_treatment": "standard"
+        },
+        "municipal_tax": {
+          "iss_item": "17.01",
+          "incidence_city_code": "3530607",
+          "iss_taxation": "1",
+          "iss_withholding": "1",
+          "iss_rate": 4
+        },
+        "missing": []
+      }
+    },
+    {
+      "id": "consulting-mogi-withheld-by-customer",
+      "profile": "business_consulting",
+      "input": {
+        "issuerCityCode": "3530607",
+        "destinationCityCode": "3550308",
+        "issWithholding": "2"
+      },
+      "expected": {
+        "classification": {
+          "national_service_code": "170101",
+          "cIndOp": "100301",
+          "cst": "000",
+          "cClassTrib": "000001",
+          "tax_treatment": "standard"
+        },
+        "municipal_tax": {
+          "iss_item": "17.01",
+          "incidence_city_code": "3530607",
+          "iss_taxation": "1",
+          "iss_withholding": "2",
+          "iss_rate": 4
+        },
+        "missing": []
+      }
+    },
+    {
+      "id": "consulting-mogi-requires-withholding-decision",
+      "profile": "business_consulting",
+      "input": {
+        "issuerCityCode": "3530607",
+        "destinationCityCode": "3550308"
+      },
+      "expected": {
+        "classification": {
+          "national_service_code": "170101",
+          "cIndOp": "100301",
+          "cst": "000",
+          "cClassTrib": "000001",
+          "tax_treatment": "standard"
+        },
+        "municipal_tax": {
+          "iss_item": "17.01",
+          "incidence_city_code": "3530607",
+          "iss_taxation": "1",
+          "iss_rate": 4
+        },
+        "missing": ["iss_withholding"]
+      }
+    },
+    {
+      "id": "consulting-mogi-requires-destination",
+      "profile": "business_consulting",
+      "input": {
+        "issuerCityCode": "3530607",
+        "issWithholding": "1"
+      },
+      "expected": {
+        "classification": {
+          "national_service_code": "170101",
+          "cIndOp": "100301",
+          "cst": "000",
+          "cClassTrib": "000001",
+          "tax_treatment": "standard"
+        },
+        "municipal_tax": {
+          "iss_item": "17.01",
+          "incidence_city_code": "3530607",
+          "iss_taxation": "1",
+          "iss_withholding": "1",
+          "iss_rate": 4
+        },
+        "missing": ["destination_city_code"]
+      }
+    },
+    {
+      "id": "consulting-unvetted-municipality-stays-blocked",
+      "profile": "business_consulting",
+      "input": {
+        "issuerCityCode": "3550308",
+        "destinationCityCode": "3304557",
+        "issWithholding": "1"
+      },
+      "expected": {
+        "classification": {
+          "national_service_code": "170101",
+          "cIndOp": "100301",
+          "cst": "000",
+          "cClassTrib": "000001",
+          "tax_treatment": "standard"
+        },
+        "municipal_tax": null,
+        "missing": ["municipal_iss_rule"]
+      }
+    }
+  ]
+}
