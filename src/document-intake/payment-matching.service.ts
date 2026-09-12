@@ -89,7 +89,19 @@ export class PaymentMatchingService {
       const existing = await client.query<MatchRow>(`SELECT * FROM document_payment_matches WHERE intake_id=$1 AND company_id=$2 AND environment=$3 AND status='confirmed' FOR UPDATE`, [intakeId, companyId, environment]);
       if (existing.rows[0]) {
         if (existing.rows[0].payment_id !== paymentId) throw new BadRequestException('Document intake already has another confirmed payment');
-        return { match: existing.rows[0], duplicate: true, ledger_recorded: Boolean(intake.linked_invoice_id), financial_evidence_recorded: true };
+        const evidence = await client.query<{ id: string }>(
+          `SELECT id FROM tax_position_financial_evidence
+           WHERE match_id=$1 AND company_id=$2 AND environment=$3 AND evidence_type='payment_confirmation'
+           LIMIT 1`,
+          [existing.rows[0].id, companyId, environment],
+        );
+        return {
+          match: existing.rows[0],
+          duplicate: true,
+          ledger_recorded: Boolean(intake.linked_invoice_id),
+          financial_evidence_recorded: Boolean(evidence.rows[0]),
+          financial_evidence_id: evidence.rows[0]?.id,
+        };
       }
       const candidate = await client.query<MatchRow>(`SELECT * FROM document_payment_matches WHERE intake_id=$1 AND payment_id=$2 AND company_id=$3 AND environment=$4 AND status='suggested' FOR UPDATE`, [intakeId, paymentId, companyId, environment]);
       if (!candidate.rows[0]) throw new BadRequestException('Suggested payment match not found');
@@ -98,9 +110,11 @@ export class PaymentMatchingService {
       if (!payment) throw new BadRequestException('Payment record not found');
       const confirmed = await client.query<MatchRow>(`UPDATE document_payment_matches SET status='confirmed', confirmed_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`, [candidate.rows[0].id]);
       await client.query(`UPDATE document_payment_matches SET status='rejected', updated_at=NOW() WHERE intake_id=$1 AND payment_id<>$2 AND company_id=$3 AND environment=$4 AND status='suggested'`, [intakeId, paymentId, companyId, environment]);
-      await client.query(
+      const evidence = await client.query<{ id: string }>(
         `INSERT INTO tax_position_financial_evidence(id, company_id, environment, evidence_type, intake_id, payment_id, match_id, invoice_id, effective_at, amount, currency, payload)
-         VALUES($1,$2,$3,'payment_confirmation',$4,$5,$6,$7,$8,$9,$10,$11::jsonb) ON CONFLICT(match_id) DO NOTHING`,
+         VALUES($1,$2,$3,'payment_confirmation',$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+         ON CONFLICT(match_id) DO UPDATE SET match_id=EXCLUDED.match_id
+         RETURNING id`,
         [createId('tpe'), companyId, environment, intakeId, paymentId, confirmed.rows[0].id, intake.linked_invoice_id ?? null, payment.occurred_at, Number(payment.amount), payment.currency ?? 'BRL', JSON.stringify({ score: Number(confirmed.rows[0].score), reasons: confirmed.rows[0].reasons, reconciliation: 'human-confirmed', tax_effect_applied: false })],
       );
       let ledgerRecorded = false;
@@ -108,7 +122,13 @@ export class PaymentMatchingService {
         await client.query(`INSERT INTO ledger_entries(invoice_id, event_type, payload) VALUES($1,'payment.match.confirmed',$2::jsonb)`, [intake.linked_invoice_id, JSON.stringify({ intake_id: intakeId, payment_id: paymentId, match_id: confirmed.rows[0].id, score: Number(confirmed.rows[0].score), reasons: confirmed.rows[0].reasons, payment, reconciliation: 'human-confirmed', tax_effect_applied: false })]);
         ledgerRecorded = true;
       }
-      return { match: confirmed.rows[0], duplicate: false, ledger_recorded: ledgerRecorded, financial_evidence_recorded: true };
+      return {
+        match: confirmed.rows[0],
+        duplicate: false,
+        ledger_recorded: ledgerRecorded,
+        financial_evidence_recorded: Boolean(evidence.rows[0]),
+        financial_evidence_id: evidence.rows[0]?.id,
+      };
     });
   }
 
@@ -117,7 +137,7 @@ export class PaymentMatchingService {
     if (!intakeResult.rows[0]) throw new BadRequestException('Document intake not found');
     const { rows } = await this.db.query<any>(
       `SELECT m.id AS match_id, m.score, m.reasons, m.confirmed_at, p.id AS payment_id, p.external_id, p.direction, p.amount, p.currency, p.occurred_at, p.counterparty_tax_id, p.counterparty_name, p.reference, e.id AS evidence_id
-       FROM document_payment_matches m JOIN payment_records p ON p.id=m.payment_id LEFT JOIN tax_position_financial_evidence e ON e.match_id=m.id
+       FROM document_payment_matches m JOIN payment_records p ON p.id=m.payment_id LEFT JOIN tax_position_financial_evidence e ON e.match_id=m.id AND e.company_id=m.company_id AND e.environment=m.environment
        WHERE m.intake_id=$1 AND m.company_id=$2 AND m.environment=$3 AND m.status='confirmed' LIMIT 1`, [intakeId, companyId, environment]);
     const confirmed = rows[0];
     return { intake_id: intakeId, invoice_id: intakeResult.rows[0].linked_invoice_id ?? undefined, paid: Boolean(confirmed), reconciliation_status: confirmed ? 'confirmed' : 'unconfirmed', financial_evidence_id: confirmed?.evidence_id ?? undefined,
@@ -132,14 +152,14 @@ export class PaymentMatchingService {
     const [documents, payments] = await Promise.all([
       this.db.query<any>(
         `SELECT d.id, d.canonical_document, d.created_at,
-                EXISTS(SELECT 1 FROM document_payment_matches m WHERE m.intake_id=d.id AND m.status='confirmed') AS has_confirmed_payment,
-                COALESCE((SELECT MAX(m.score) FROM document_payment_matches m WHERE m.intake_id=d.id AND m.status='suggested'),0) AS best_score
+                EXISTS(SELECT 1 FROM document_payment_matches m WHERE m.intake_id=d.id AND m.company_id=d.company_id AND m.environment=d.environment AND m.status='confirmed') AS has_confirmed_payment,
+                COALESCE((SELECT MAX(m.score) FROM document_payment_matches m WHERE m.intake_id=d.id AND m.company_id=d.company_id AND m.environment=d.environment AND m.status='suggested'),0) AS best_score
          FROM document_intakes d WHERE d.company_id=$1 AND d.environment=$2 AND d.created_at >= NOW() - ($3::int * INTERVAL '1 day') ORDER BY d.created_at DESC`,
         [companyId, environment, windowDays],
       ),
       this.db.query<any>(
-        `SELECT p.*, EXISTS(SELECT 1 FROM document_payment_matches m WHERE m.payment_id=p.id AND m.status='confirmed') AS has_confirmed_document,
-                (SELECT COUNT(*)::int FROM document_payment_matches m WHERE m.payment_id=p.id AND m.status='suggested') AS suggestion_count
+        `SELECT p.*, EXISTS(SELECT 1 FROM document_payment_matches m WHERE m.payment_id=p.id AND m.company_id=p.company_id AND m.environment=p.environment AND m.status='confirmed') AS has_confirmed_document,
+                (SELECT COUNT(*)::int FROM document_payment_matches m WHERE m.payment_id=p.id AND m.company_id=p.company_id AND m.environment=p.environment AND m.status='suggested') AS suggestion_count
          FROM payment_records p WHERE p.company_id=$1 AND p.environment=$2 AND p.occurred_at >= NOW() - ($3::int * INTERVAL '1 day') ORDER BY p.occurred_at DESC`,
         [companyId, environment, windowDays],
       ),
