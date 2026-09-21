@@ -58,3 +58,32 @@ test('business consulting profile does not invent municipal ISS outside a vetted
   assert.equal(result.municipal_tax, undefined);
   assert.ok(result.missing.includes('municipal_iss_rule'));
 });
+
+
+test('business consulting profile resolves vetted Santos ISS 17.01 at 3 percent', () => {
+  const result = resolveServiceProfile({
+    profile: 'business_consulting',
+    issuerCityCode: '3548500',
+    destinationCityCode: '3548500',
+    issWithholding: '1',
+  });
+
+  assert.equal(result.municipal_tax?.iss_item, '17.01');
+  assert.equal(result.municipal_tax?.incidence_city_code, '3548500');
+  assert.equal(result.municipal_tax?.iss_taxation, '1');
+  assert.equal(result.municipal_tax?.iss_withholding, '1');
+  assert.equal(result.municipal_tax?.iss_rate, 3);
+  assert.deepEqual(result.missing, []);
+  assert.ok(result.sources.some((source) => source.dataset === 'santos-iss-service-rate'));
+});
+
+test('business consulting profile refuses to infer Santos ISS withholding', () => {
+  const result = resolveServiceProfile({
+    profile: 'business_consulting',
+    issuerCityCode: '3548500',
+    destinationCityCode: '3548500',
+  });
+
+  assert.ok(result.missing.includes('iss_withholding'));
+  assert.equal(result.municipal_tax?.iss_withholding, undefined);
+});
