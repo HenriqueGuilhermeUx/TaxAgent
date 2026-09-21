@@ -8,9 +8,9 @@ export interface ConventionCheck { supported: boolean; payload: unknown; status:
 export class MunicipalParametersClient {
   async getConvention(environment: FiscalEnvironment, cityCode: string): Promise<ConventionCheck> {
     const base = environment === 'production'
-      ? (process.env.NFSE_PRODUCTION_PARAMETERS_BASE_URL ?? 'https://adn.nfse.gov.br/parametrizacao')
-      : (process.env.NFSE_TEST_PARAMETERS_BASE_URL ?? 'https://adn.producaorestrita.nfse.gov.br/parametrizacao');
-    const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/{cityCode}/convenio';
+      ? (process.env.NFSE_PRODUCTION_PARAMETERS_BASE_URL ?? 'https://adn.nfse.gov.br')
+      : (process.env.NFSE_TEST_PARAMETERS_BASE_URL ?? 'https://adn.producaorestrita.nfse.gov.br');
+    const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/parametrizacao/{cityCode}/convenio';
     const path = template.replace('{cityCode}', encodeURIComponent(cityCode));
     const url = new URL(path, base.endsWith('/') ? base : `${base}/`);
     let response: Response;
