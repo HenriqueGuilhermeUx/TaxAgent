@@ -42,6 +42,7 @@ const NFSE_SERVICE_LIST_URL = 'https://www.gov.br/nfse/pt-br/mei-e-demais-empres
 const NFSE_CURRENT_DOCS_URL = 'https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual';
 const MOGI_CCM_REFERENCE_URL = 'https://www.mogidascruzes.sp.gov.br/servico/impostos-e-taxas/cadastro-ccm-consulta-ao-cnae-item-da-lei';
 const MOGI_ISS_RATE_TABLE_URL = 'https://www.mogidascruzes.sp.gov.br/public/site/doc/201804040846525ac4bb2c9a512.pdf';
+const SANTOS_ACTIVITY_REFERENCE_URL = 'https://www.santos.sp.gov.br/?q=node%2F32262';
 const LC116_URL = 'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp116.htm';
 
 export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServiceProfile {
@@ -97,6 +98,42 @@ export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServi
         municipality_code: '3530607',
         iss_item: '17.01',
         iss_rate: 4,
+      },
+      {
+        dataset: 'lc116-iss-incidence',
+        record_key: 'art3:17.01',
+        authority: 'official-law',
+        url: LC116_URL,
+        note: 'TaxAgent vetted rule: item 17.01 is not among the art. 3 exceptions, so the general provider-establishment rule applies.',
+      },
+    );
+  } else if (input.issuerCityCode === '3548500') {
+    if (!input.issWithholding) missing.push('iss_withholding');
+    municipalTax = {
+      iss_item: '17.01',
+      incidence_city_code: '3548500',
+      iss_taxation: '1',
+      iss_withholding: input.issWithholding,
+      iss_rate: 3,
+      source: {
+        authority: 'official-municipal-domain',
+        municipality_code: '3548500',
+        url: SANTOS_ACTIVITY_REFERENCE_URL,
+        rate_table_url: SANTOS_ACTIVITY_REFERENCE_URL,
+        legal_basis: ['Lei Municipal 3.750/1971 art. 50 §4º', 'LC Federal 116/2003 art. 3'],
+        rule: 'item-17.01',
+      },
+    };
+    sources.push(
+      {
+        dataset: 'santos-iss-service-rate',
+        record_key: '3548500:17.01',
+        authority: 'official-municipal-domain',
+        url: SANTOS_ACTIVITY_REFERENCE_URL,
+        municipality_code: '3548500',
+        iss_item: '17.01',
+        iss_rate: 3,
+        note: 'Official Santos activity tables identify item 17.01 activities at 3% ISS, except taxpayers subject to their own Simples Nacional rates.',
       },
       {
         dataset: 'lc116-iss-incidence',
