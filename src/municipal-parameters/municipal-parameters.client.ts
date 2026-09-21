@@ -17,7 +17,9 @@ export class MunicipalParametersClient {
     try {
       response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.12' }, signal: AbortSignal.timeout(15_000), redirect: 'error' });
     } catch (error) {
-      throw new FiscalEngineError('NFSE_PARAMETERS_NETWORK', error instanceof Error ? error.message : 'Municipal parameters network error', true);
+      const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
+      const detail = error instanceof Error ? error.message : 'Municipal parameters network error';
+      throw new FiscalEngineError('NFSE_PARAMETERS_NETWORK', cause ? `${detail}: ${cause}` : detail, true);
     }
     const raw = await response.text();
     let payload: unknown = raw;
