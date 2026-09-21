@@ -41,7 +41,7 @@ export class NfseNationalClient {
   probeMutualTls(environment: FiscalEnvironment, certificate: CertificateMaterial): Promise<{ host: string; protocol: string | null; cipher: string | null; authorized: boolean }> {
     const base = new URL(this.normalizedBase(environment));
     return new Promise((resolve, reject) => {
-      const socket = connect({ host: base.hostname, port: Number(base.port || 443), servername: base.hostname, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true });
+      const socket = connect({ host: base.hostname, port: Number(base.port || 443), servername: base.hostname, cert: certificate.tlsCertificatePem, key: certificate.tlsPrivateKeyPem, rejectUnauthorized: true });
       const timer = setTimeout(() => socket.destroy(new Error('mTLS handshake timeout')), 15_000);
       socket.once('secureConnect', () => {
         clearTimeout(timer);
@@ -64,7 +64,7 @@ export class NfseNationalClient {
   private normalizedBase(environment: FiscalEnvironment): string { return resolveNfseBase(environment); }
   private requestJson(url: URL, method: 'GET' | 'POST', body: string | undefined, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     return new Promise((resolve, reject) => {
-      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, pfx: certificate.pfx, passphrase: certificate.password, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.10' } }, (res) => {
+      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, cert: certificate.tlsCertificatePem, key: certificate.tlsPrivateKeyPem, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.10' } }, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
