@@ -6,7 +6,7 @@ import { homologationConsoleHtml } from './homologation-console.page';
 const UTC_DATE_INITIALIZER = "const today=new Date().toISOString().slice(0,10);$('effectiveAt').value=today;$('competence').value=today;";
 const LOCAL_DATE_INITIALIZER = "const now=new Date();const pad=(n)=>String(n).padStart(2,'0');const today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());$('effectiveAt').value=today;$('competence').value=today;if($('prepareKey'))$('prepareKey').value='prep-'+crypto.randomUUID();";
 const STATE_OLD = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false};";
-const STATE_NEW = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',preparedDpsId:'',lastInvoiceBody:null,dryRunValid:false};";
+const STATE_NEW = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',preparedDpsId:'',invoiceId:'',lastInvoiceBody:null,dryRunValid:false};";
 const DESTINATION_CITY_CONTROL = '<div><label>Município destino (IBGE)</label><input id="destinationCity" maxlength="7" /></div>';
 const PROFILE_CONTROLS = `${DESTINATION_CITY_CONTROL}
       <div><label>Perfil de serviço</label><select id="serviceProfile" onchange="serviceProfileChanged()"><option value="">Manual / sem perfil</option><option value="business_consulting">Consultoria empresarial padrão (TaxAgent)</option></select></div>
@@ -52,7 +52,11 @@ const PREBUILD_FUNCTION = `  function restorePreparedPayload(result){
 
 ${DRYRUN_FUNCTION_ANCHOR}`;
 const LIVE_BODY_OLD = "const body=state.lastInvoiceBody||buildInvoiceBody();show('liveOut','Transmitindo uma única operação...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});";
-const LIVE_BODY_NEW = "const baseBody=state.lastInvoiceBody||buildInvoiceBody();const preparedId=state.preparedDpsId||val('preparedDpsId');const body={...baseBody,...(preparedId?{prepared_dps_id:preparedId}:{})};show('liveOut','Transmitindo uma única operação vinculada ao Prepared DPS...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});";
+const LIVE_BODY_NEW = "const baseBody=state.lastInvoiceBody||buildInvoiceBody();const preparedId=state.preparedDpsId||val('preparedDpsId');const body={...baseBody,...(preparedId?{prepared_dps_id:preparedId}:{})};show('liveOut','Transmitindo uma única operação vinculada ao Prepared DPS...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});if(result&&result.id){state.invoiceId=result.id;if($('invoiceId'))$('invoiceId').value=result.id;}";
+const LIVE_CARD_CLOSE = '<pre id="liveOut" class="out">Aguardando gates de homologação...</pre>\n  </div>';
+const INVOICE_DIAGNOSTICS = `<pre id="liveOut" class="out">Aguardando gates de homologação...</pre>\n  </div>\n\n  <div class="card">\n    <div class="step">7 · Acompanhamento</div><h2>Invoice · Fiscal Ledger · documentos</h2>\n    <p class="muted">Consulta somente leitura. Não retransmite DPS e não cria nova invoice.</p>\n    <div class="row"><input id="invoiceId" autocomplete="off" placeholder="inv_..." /><button class="secondary" onclick="loadInvoiceDiagnostics()">Consultar invoice</button></div>\n    <pre id="invoiceOut" class="out">Aguardando consulta...</pre>\n  </div>`;
+const SYNC_STATUS_ANCHOR = '  syncStatus();';
+const INVOICE_DIAGNOSTICS_FUNCTION = `  window.loadInvoiceDiagnostics=async function(){try{const id=val('invoiceId')||state.invoiceId;if(!id)throw new Error('Informe o Invoice ID');state.invoiceId=id;show('invoiceOut','Consultando invoice, Fiscal Ledger e documentos...');const invoice=await request('/v1/invoices/'+encodeURIComponent(id));let documents;try{documents=await request('/v1/invoices/'+encodeURIComponent(id)+'/documents');}catch(e){documents={error:e.message};}show('invoiceOut',{invoice,documents});}catch(e){show('invoiceOut','ERRO: '+e.message);}};\n\n${SYNC_STATUS_ANCHOR}`;
 
 export function prepareHomologationConsoleHtml(html: string): string {
   return html
@@ -65,7 +69,9 @@ export function prepareHomologationConsoleHtml(html: string): string {
     .replace(ISS_RATE_CONTROL, PREPARED_CONTROLS)
     .replace(DPS_ACTIONS_OLD, DPS_ACTIONS_NEW)
     .replace(DRYRUN_FUNCTION_ANCHOR, PREBUILD_FUNCTION)
-    .replace(LIVE_BODY_OLD, LIVE_BODY_NEW);
+    .replace(LIVE_BODY_OLD, LIVE_BODY_NEW)
+    .replace(LIVE_CARD_CLOSE, INVOICE_DIAGNOSTICS)
+    .replace(SYNC_STATUS_ANCHOR, INVOICE_DIAGNOSTICS_FUNCTION);
 }
 
 export function useBrowserLocalDateDefaults(html: string): string {
