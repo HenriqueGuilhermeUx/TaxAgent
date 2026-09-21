@@ -11,6 +11,8 @@ export interface CertificateMaterial {
   password: string;
   fingerprint: string;
   subjectTaxId?: string;
+  tlsCertificatePem: string;
+  tlsPrivateKeyPem: string;
 }
 
 @Injectable()
@@ -59,7 +61,21 @@ export class CertificateVaultService {
     const record = rows[0];
     if (!record) throw new NotFoundException('Active certificate not found for company');
     if (record.valid_to && record.valid_to.getTime() <= Date.now()) throw new BadRequestException('Active certificate is expired');
-    return { pfx: this.crypto.open(record.encrypted_pfx), password: this.crypto.openText(record.encrypted_password), fingerprint: record.certificate_fingerprint, subjectTaxId: record.subject_tax_id ?? undefined };
+    const pfx = this.crypto.open(record.encrypted_pfx);
+    const password = this.crypto.openText(record.encrypted_password);
+    // Do not hand the original PKCS#12 container to Node/OpenSSL for mTLS.
+    // Some valid ICP-Brasil A1 files use PKCS#12 algorithms that node-forge can
+    // open but OpenSSL 3 rejects as "Unsupported PKCS12 PFX data". Normalize the
+    // already validated identity to PEM in memory; neither PEM nor password is persisted.
+    const identity = loadPkcs12Identity(pfx, password);
+    return {
+      pfx,
+      password,
+      fingerprint: record.certificate_fingerprint,
+      subjectTaxId: record.subject_tax_id ?? undefined,
+      tlsCertificatePem: forge.pki.certificateToPem(identity.certificate),
+      tlsPrivateKeyPem: forge.pki.privateKeyToPem(identity.privateKey),
+    };
   }
 
   private inspectPkcs12(pfx: Buffer, password: string) {
