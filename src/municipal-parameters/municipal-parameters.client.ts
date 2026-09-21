@@ -1,20 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { CertificateMaterial } from '../certificates/certificate-vault.service';
 import { request } from 'node:https';
 
 export interface ConventionCheck { supported: boolean; payload: unknown; status: number }
 
 @Injectable()
 export class MunicipalParametersClient {
-  async getConvention(environment: FiscalEnvironment, cityCode: string): Promise<ConventionCheck> {
+  async getConvention(environment: FiscalEnvironment, cityCode: string, certificate?: CertificateMaterial): Promise<ConventionCheck> {
     const base = environment === 'production'
       ? (process.env.NFSE_PRODUCTION_PARAMETERS_BASE_URL ?? 'https://adn.nfse.gov.br')
       : (process.env.NFSE_TEST_PARAMETERS_BASE_URL ?? 'https://adn.producaorestrita.nfse.gov.br');
     const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/parametrizacao/{cityCode}/convenio';
     const path = template.replace('{cityCode}', encodeURIComponent(cityCode));
     const url = new URL(path, base.endsWith('/') ? base : `${base}/`);
-    const { status, raw } = await this.getJson(url);
+    const { status, raw } = await this.getJson(url, certificate);
     let payload: unknown = raw;
     try { payload = raw ? JSON.parse(raw) : null; } catch { /* keep text */ }
     if (status === 404) return { supported: false, payload, status };
@@ -22,7 +23,7 @@ export class MunicipalParametersClient {
     if (status < 200 || status >= 300) throw new FiscalEngineError('NFSE_PARAMETERS_HTTP', `Municipal parameters HTTP ${status}`, false, payload);
     return { supported: true, payload, status };
   }
-  private getJson(url: URL): Promise<{ status: number; raw: string }> {
+  private getJson(url: URL, certificate?: CertificateMaterial): Promise<{ status: number; raw: string }> {
     return new Promise((resolve, reject) => {
       const req = request({
         protocol: url.protocol,
@@ -33,6 +34,9 @@ export class MunicipalParametersClient {
         headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.12', connection: 'close' },
         rejectUnauthorized: true,
         timeout: 15_000,
+        minVersion: 'TLSv1.2',
+        maxVersion: 'TLSv1.2',
+        ...(certificate ? { cert: certificate.tlsCertificatePem, key: certificate.tlsPrivateKeyPem } : {}),
       }, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
