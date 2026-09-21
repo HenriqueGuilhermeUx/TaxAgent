@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { request } from 'node:https';
 
 export interface ConventionCheck { supported: boolean; payload: unknown; status: number }
 
@@ -13,20 +14,33 @@ export class MunicipalParametersClient {
     const template = process.env.NFSE_PARAMETERS_CONVENTION_PATH_TEMPLATE ?? '/parametrizacao/{cityCode}/convenio';
     const path = template.replace('{cityCode}', encodeURIComponent(cityCode));
     const url = new URL(path, base.endsWith('/') ? base : `${base}/`);
-    let response: Response;
-    try {
-      response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.12' }, signal: AbortSignal.timeout(15_000), redirect: 'error' });
-    } catch (error) {
-      const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
-      const detail = error instanceof Error ? error.message : 'Municipal parameters network error';
-      throw new FiscalEngineError('NFSE_PARAMETERS_NETWORK', cause ? `${detail}: ${cause}` : detail, true);
-    }
-    const raw = await response.text();
+    const { status, raw } = await this.getJson(url);
     let payload: unknown = raw;
     try { payload = raw ? JSON.parse(raw) : null; } catch { /* keep text */ }
-    if (response.status === 404) return { supported: false, payload, status: 404 };
-    if (response.status >= 500 || response.status === 408 || response.status === 429) throw new FiscalEngineError('NFSE_PARAMETERS_TRANSIENT', `Municipal parameters HTTP ${response.status}`, true, payload);
-    if (!response.ok) throw new FiscalEngineError('NFSE_PARAMETERS_HTTP', `Municipal parameters HTTP ${response.status}`, false, payload);
-    return { supported: true, payload, status: response.status };
+    if (status === 404) return { supported: false, payload, status };
+    if (status >= 500 || status === 408 || status === 429) throw new FiscalEngineError('NFSE_PARAMETERS_TRANSIENT', `Municipal parameters HTTP ${status}`, true, payload);
+    if (status < 200 || status >= 300) throw new FiscalEngineError('NFSE_PARAMETERS_HTTP', `Municipal parameters HTTP ${status}`, false, payload);
+    return { supported: true, payload, status };
+  }
+  private getJson(url: URL): Promise<{ status: number; raw: string }> {
+    return new Promise((resolve, reject) => {
+      const req = request({
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || undefined,
+        path: `${url.pathname}${url.search}`,
+        method: 'GET',
+        headers: { accept: 'application/json', 'user-agent': 'TaxAgent-Router/0.12', connection: 'close' },
+        rejectUnauthorized: true,
+        timeout: 15_000,
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 500, raw: Buffer.concat(chunks).toString('utf8') }));
+      });
+      req.on('timeout', () => req.destroy(new Error('Municipal parameters request timeout')));
+      req.on('error', (error) => reject(new FiscalEngineError('NFSE_PARAMETERS_NETWORK', error.message, true)));
+      req.end();
+    });
   }
 }
