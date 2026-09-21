@@ -30,6 +30,11 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /service_profile:val\('serviceProfile'\)/);
   assert.match(html, /iss_withholding:val\('taxIssWithholding'\)/);
   assert.match(html, /result\.municipal_tax\.iss_rate/);
+  assert.match(html, /Invoice · Fiscal Ledger · documentos/);
+  assert.match(html, /loadInvoiceDiagnostics/);
+  assert.match(html, /\/v1\/invoices\//);
+  assert.match(html, /\/documents/);
+  assert.match(html, /Consulta somente leitura/);
 
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
   assert.ok(script.length > 0, 'inline console script must exist');
