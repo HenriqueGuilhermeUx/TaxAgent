@@ -1,7 +1,8 @@
 export type FiscalEnvironment = 'test' | 'production';
 export type InvoiceStatus = 'queued' | 'processing' | 'retrying' | 'authorized' | 'cancelling' | 'rejected' | 'cancelled';
 
-export interface CanonicalCustomer { taxId: string; name: string; cityCode: string }
+export interface CanonicalAddress { street: string; number: string; district: string; postalCode: string; cityCode: string }
+export interface CanonicalCustomer { taxId: string; name: string; cityCode: string; address?: CanonicalAddress }
 export interface CanonicalService {
   description: string;
   amount: number;
