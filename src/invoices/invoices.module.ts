@@ -13,6 +13,7 @@ import { GissProvider } from '../providers/giss/giss.provider';
 import { GissClient } from '../providers/giss/giss.client';
 import { GissSignatureService } from '../providers/giss/giss-signature.service';
 import { GissReconciliationService } from '../providers/giss/giss-reconciliation.service';
+import { GissArtifactsService } from '../providers/giss/giss-artifacts.service';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
@@ -27,7 +28,7 @@ import { InvoicesService } from './invoices.service';
 @Module({
   imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient, GissSignatureService, GissReconciliationService],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient, GissSignatureService, GissReconciliationService, GissArtifactsService],
   exports: [InvoicesService],
 })
 export class InvoicesModule {}
