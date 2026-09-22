@@ -2,10 +2,18 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
+class AddressDto {
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(255) street!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(60) number!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(60) district!: string;
+  @ApiProperty({ example: '11045550' }) @IsString() @Length(8, 8) postal_code!: string;
+  @ApiProperty({ example: '3548500' }) @IsString() @Length(7, 7) city_code!: string;
+}
 class CustomerDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(32) tax_id!: string;
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(200) name!: string;
   @ApiProperty({ example: '3550308' }) @IsString() @Length(7, 7) city_code!: string;
+  @ApiPropertyOptional({ type: AddressDto }) @IsOptional() @ValidateNested() @Type(() => AddressDto) address?: AddressDto;
 }
 class ServiceDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(2000) description!: string;
