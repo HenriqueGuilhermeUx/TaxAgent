@@ -11,6 +11,14 @@ const DESTINATION_CITY_CONTROL = '<div><label>Município destino (IBGE)</label><
 const PROFILE_CONTROLS = `${DESTINATION_CITY_CONTROL}
       <div><label>Perfil de serviço</label><select id="serviceProfile" onchange="serviceProfileChanged()"><option value="">Manual / sem perfil</option><option value="business_consulting">Consultoria empresarial padrão (TaxAgent)</option></select></div>
       <div><label>Retenção ISS para a operação</label><select id="taxIssWithholding"><option value="">Confirmar antes de resolver</option><option value="1">1 · Não retido</option><option value="2">2 · Retido pelo tomador</option><option value="3">3 · Retido pelo intermediário</option></select></div>`;
+const CUSTOMER_CITY_CONTROL = '<div><label>Município do tomador (IBGE)</label><input id="customerCity" maxlength="7" /></div>';
+const CUSTOMER_ADDRESS_CONTROLS = `${CUSTOMER_CITY_CONTROL}
+      <div><label>CEP do tomador</label><input id="customerPostalCode" maxlength="8" value="11045550" /></div>
+      <div class="full"><label>Logradouro do tomador</label><input id="customerStreet" value="Rua Governador Pedro de Toledo" /></div>
+      <div><label>Número</label><input id="customerNumber" value="71" /></div>
+      <div><label>Bairro</label><input id="customerDistrict" value="Boqueirao" /></div>`;
+const CUSTOMER_BODY_OLD = "customer:{tax_id:val('customerTaxId'),name:val('customerName'),city_code:val('customerCity')}";
+const CUSTOMER_BODY_NEW = "customer:{tax_id:val('customerTaxId'),name:val('customerName'),city_code:val('customerCity'),address:{street:val('customerStreet'),number:val('customerNumber'),district:val('customerDistrict'),postal_code:val('customerPostalCode'),city_code:val('customerCity')}}";
 const RESOLVE_FUNCTION_ANCHOR = '  window.resolveTax=async function(){';
 const PROFILE_CHANGE_FUNCTION = `  window.serviceProfileChanged=function(){
     if(val('serviceProfile')==='business_consulting'){
@@ -63,6 +71,8 @@ export function prepareHomologationConsoleHtml(html: string): string {
     .replace(UTC_DATE_INITIALIZER, LOCAL_DATE_INITIALIZER)
     .replace(STATE_OLD, STATE_NEW)
     .replace(DESTINATION_CITY_CONTROL, PROFILE_CONTROLS)
+    .replace(CUSTOMER_CITY_CONTROL, CUSTOMER_ADDRESS_CONTROLS)
+    .replace(CUSTOMER_BODY_OLD, CUSTOMER_BODY_NEW)
     .replace(RESOLVE_FUNCTION_ANCHOR, PROFILE_CHANGE_FUNCTION)
     .replace(RESOLVE_BODY_OLD, RESOLVE_BODY_NEW)
     .replace(RESOLVED_ACTION_OLD, RESOLVED_ACTION_NEW)
