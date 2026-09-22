@@ -9,6 +9,7 @@ import { MunicipalParametersModule } from '../municipal-parameters/municipal-par
 import { PreparedDpsModule } from '../prepared-dps/prepared-dps.module';
 import { NfseNationalClient } from '../providers/nfse-national/nfse-national.client';
 import { NfseNationalProvider } from '../providers/nfse-national/nfse-national.provider';
+import { GissProvider } from '../providers/giss/giss.provider';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
@@ -23,7 +24,7 @@ import { InvoicesService } from './invoices.service';
 @Module({
   imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider],
   exports: [InvoicesService],
 })
 export class InvoicesModule {}
