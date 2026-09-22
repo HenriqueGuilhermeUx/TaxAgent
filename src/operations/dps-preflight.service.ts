@@ -45,6 +45,7 @@ export class DpsPreflightService {
       builder_mode: process.env.TAXAGENT_DPS_BUILDER_MODE ?? 'draft',
       fiscal_summary: {
         national_service_code: prepared.service.nationalServiceCode,
+        nbs: prepared.service.nbsCode,
         service_location_city_code: prepared.service.serviceLocationCityCode,
         iss_taxation: prepared.service.issTaxation,
         iss_withholding: prepared.service.issWithholding,
@@ -90,6 +91,7 @@ export class DpsPreflightService {
       description: dto.service.description,
       amount: dto.service.amount,
       nationalServiceCode: dto.service.national_service_code,
+      nbsCode: dto.service.nbs,
       serviceLocationCityCode: dto.service.service_location_city_code,
       issTaxation: dto.service.iss_taxation,
       issWithholding: dto.service.iss_withholding,
