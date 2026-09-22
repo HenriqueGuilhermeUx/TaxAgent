@@ -11,7 +11,7 @@ export class GissClient {
   async probe(cityCode: string): Promise<GissProbeResult> {
     const endpoint = gissEndpointPolicy(cityCode);
     if (!endpoint) throw new FiscalEngineError('TA_GISS_CITY_UNSUPPORTED', `No GISS endpoint policy is registered for municipality ${cityCode}`, false);
-    const url = new URL(endpoint.wsdl);
+    const url = new URL(endpoint.homologationWsdl);
     return new Promise((resolve, reject) => {
       const request = https.request({ hostname: url.hostname, port: 443, path: url.pathname + url.search, method: 'GET', minVersion: 'TLSv1.2', timeout: 10000 }, (response) => {
         response.resume();
