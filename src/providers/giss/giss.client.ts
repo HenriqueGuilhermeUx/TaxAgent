@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as https from 'node:https';
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 import { gissEndpointPolicy } from './giss-endpoints';
+import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
 
 export interface GissProbeResult { host: string; path: string; status: number; reachable: boolean }
 
@@ -20,6 +21,15 @@ export class GissClient {
       request.on('error', reject);
       request.end();
     });
+  }
+
+  buildRpsQuery(input: GissRpsQueryInput): string {
+    return buildConsultarNfsePorRps(input);
+  }
+
+  async queryRps(_cityCode: string, input: GissRpsQueryInput): Promise<never> {
+    const requestXml = this.buildRpsQuery(input);
+    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the official WSDL operation, SOAPAction, authentication and response contract are verified.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
   }
 
   async issueRps(): Promise<never> {
