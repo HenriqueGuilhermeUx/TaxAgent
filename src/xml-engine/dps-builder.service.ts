@@ -65,6 +65,7 @@ export class DpsBuilderService {
     const serviceLocationCityCode = input.service.serviceLocationCityCode ?? input.customer.cityCode;
     const municipalTax = buildMunicipalTaxGroup(input.service, company.tax_regime);
     const ibsCbs = buildIbsCbsGroup(input.service);
+    if (ibsCbs && (!input.service.nbsCode || !/^\\d{9}$/.test(input.service.nbsCode))) throw new BadRequestException('IBS/CBS requires a 9-digit NBS 2.0 cNBS');
     const verifiedLayout = process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified';
     const doc = { DPS: { '@_xmlns': 'http://www.sped.fazenda.gov.br/nfse', '@_versao': '1.01', infDPS: {
       '@_Id': id,
@@ -87,7 +88,7 @@ export class DpsBuilderService {
           xBairro: input.customer.address.district,
         } } : {}),
       },
-      serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description } },
+      serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description, ...(input.service.nbsCode ? { cNBS: input.service.nbsCode } : {}) } },
       valores: { vServPrest: { vServ: input.service.amount.toFixed(2) }, trib: municipalTax },
       ...(ibsCbs ? { IBSCBS: ibsCbs } : {}),
     } } };
