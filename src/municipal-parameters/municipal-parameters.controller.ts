@@ -19,7 +19,7 @@ export class MunicipalParametersController {
   }
 
   @Get(':cityCode/capabilities')
-  getCapabilities(@Param('cityCode') cityCode: string, @Query('environment') environment: FiscalEnvironment = 'test') {
-    return this.capabilities.resolve(cityCode, environment);
+  getCapabilities(@Param('cityCode') cityCode: string, @Query('environment') environment: FiscalEnvironment = 'test', @Query('tax_regime') taxRegime?: string, @Query('effective_at') effectiveAt?: string) {
+    return this.capabilities.resolve(cityCode, environment, { taxRegime, effectiveAt });
   }
 }
