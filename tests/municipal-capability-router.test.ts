@@ -19,3 +19,19 @@ test('unknown participating municipality fails closed without explicit public is
   assert.equal(result.nationalStandard, true);
   assert.equal(result.nationalPublicIssuer, false);
 });
+
+
+test('Simples Nacional routes national-direct from 2026-11-01', async () => {
+  const service = new MunicipalCapabilityService({} as any, {} as any);
+  const result = await service.resolve('3530607', 'test', { taxRegime: 'simples_nacional', effectiveAt: '2026-11-01' });
+  assert.equal(result.route, 'national-direct');
+  assert.equal(result.provider, 'nfse-national');
+  assert.equal(result.source, 'official-regime-rule');
+});
+
+test('Santos regular taxpayer remains municipal-provider before national Simples rule', async () => {
+  const service = new MunicipalCapabilityService({} as any, {} as any);
+  const result = await service.resolve('3548500', 'test', { taxRegime: 'regular', effectiveAt: '2026-09-22' });
+  assert.equal(result.route, 'municipal-provider');
+  assert.equal(result.provider, 'giss');
+});
