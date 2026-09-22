@@ -13,7 +13,7 @@ export interface MunicipalCapability {
   nationalPublicIssuer: boolean;
   route: MunicipalIssueRoute;
   provider: 'nfse-national' | 'giss' | 'unknown';
-  source: 'official-national-parameters' | 'taxagent-observed-official-rejection';
+  source: 'official-national-parameters' | 'taxagent-observed-official-rejection' | 'official-regime-rule';
   checkedAt: string;
   evidence?: unknown;
 }
@@ -22,8 +22,21 @@ export interface MunicipalCapability {
 export class MunicipalCapabilityService {
   constructor(private readonly db: DatabaseService, private readonly client: MunicipalParametersClient) {}
 
-  async resolve(cityCode: string, environment: FiscalEnvironment): Promise<MunicipalCapability> {
+  async resolve(cityCode: string, environment: FiscalEnvironment, taxpayer: { taxRegime?: string; effectiveAt?: string } = {}): Promise<MunicipalCapability> {
     if (!/^\d{7}$/.test(cityCode)) throw new FiscalEngineError('TA_CITY_CODE_INVALID', 'Municipality IBGE code must contain 7 digits', false);
+
+    const regime = String(taxpayer.taxRegime ?? '').trim().toLowerCase();
+    const effectiveAt = taxpayer.effectiveAt ? new Date(`${taxpayer.effectiveAt.slice(0, 10)}T12:00:00-03:00`) : new Date();
+    const simpleNational = ['simples', 'simples_nacional', 'mei', 'me', 'epp'].includes(regime);
+    const nationalSimpleEffective = new Date('2026-11-01T00:00:00-03:00');
+    if (simpleNational && effectiveAt >= nationalSimpleEffective) {
+      return {
+        cityCode, environment, nationalStandard: true, nationalPublicIssuer: true,
+        route: 'national-direct', provider: 'nfse-national',
+        source: 'official-regime-rule', checkedAt: new Date().toISOString(),
+        evidence: { rule: 'simples_nacional_national_issuer', effective_from: '2026-11-01', tax_regime: regime },
+      };
+    }
 
     // E0039 was observed from SEFIN for Santos in Produção Restrita: Santos participates
     // in the national ecosystem but is not parametrized to use the National Public Issuer.
