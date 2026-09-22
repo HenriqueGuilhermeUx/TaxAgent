@@ -31,7 +31,7 @@ export class InvoicesService {
 
     let service: CanonicalService = { description: dto.service.description, amount: dto.service.amount, nationalServiceCode: dto.service.national_service_code, serviceLocationCityCode: dto.service.service_location_city_code, issTaxation: dto.service.iss_taxation, issWithholding: dto.service.iss_withholding, issRate: dto.service.iss_rate, finalConsumption: dto.service.final_consumption, operationIndicator: dto.service.operation_indicator, taxSituation: dto.service.tax_situation, taxClassification: dto.service.tax_classification };
     if (taxDecisionId) service = await this.taxEngine.hydrateServiceFromDecision(dto.company_id, taxDecisionId, service);
-    let input: CanonicalInvoiceInput = this.taxEngine.validate({ companyId: dto.company_id, environment: dto.environment, competence: dto.competence, customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code }, service });
+    let input: CanonicalInvoiceInput = this.taxEngine.validate({ companyId: dto.company_id, environment: dto.environment, competence: dto.competence, customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code, address: dto.customer.address ? { street: dto.customer.address.street, number: dto.customer.address.number, district: dto.customer.address.district, postalCode: dto.customer.address.postal_code, cityCode: dto.customer.address.city_code } : undefined }, service });
     if (prepared) {
       prepared = await this.preparedDps.assertBindable(dto.prepared_dps_id!, dto, input);
       input = prepared.canonical_input;
