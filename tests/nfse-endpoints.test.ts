@@ -30,3 +30,11 @@ test('custom endpoint requires an explicit opt-in', () => {
     assert.equal(resolveNfseBase('test'), 'https://nfse.private.example/SefinNacional/');
   });
 });
+
+
+test('relative SEFIN resources preserve the official base path', () => {
+  const base = 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/';
+  assert.equal(new URL('nfse', base).pathname, '/API/SefinNacional/nfse');
+  assert.equal(new URL('dps/DPS123', base).pathname, '/API/SefinNacional/dps/DPS123');
+  assert.equal(new URL('nfse/ABC/eventos', base).pathname, '/API/SefinNacional/nfse/ABC/eventos');
+});
