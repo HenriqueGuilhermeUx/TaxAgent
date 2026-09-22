@@ -13,6 +13,7 @@
       "expected": {
         "classification": {
           "national_service_code": "170101",
+          "nbs": "114011900",
           "cIndOp": "100301",
           "cst": "000",
           "cClassTrib": "000001",
@@ -39,6 +40,7 @@
       "expected": {
         "classification": {
           "national_service_code": "170101",
+          "nbs": "114011900",
           "cIndOp": "100301",
           "cst": "000",
           "cClassTrib": "000001",
@@ -64,6 +66,7 @@
       "expected": {
         "classification": {
           "national_service_code": "170101",
+          "nbs": "114011900",
           "cIndOp": "100301",
           "cst": "000",
           "cClassTrib": "000001",
@@ -88,6 +91,7 @@
       "expected": {
         "classification": {
           "national_service_code": "170101",
+          "nbs": "114011900",
           "cIndOp": "100301",
           "cst": "000",
           "cClassTrib": "000001",
@@ -114,6 +118,7 @@
       "expected": {
         "classification": {
           "national_service_code": "170101",
+          "nbs": "114011900",
           "cIndOp": "100301",
           "cst": "000",
           "cClassTrib": "000001",
