@@ -77,7 +77,16 @@ export class DpsBuilderService {
       tpEmit: 1,
       cLocEmi: company.city_code,
       prest: { CNPJ: providerIdentity.xmlValue, ...(company.municipal_registration ? { IM: company.municipal_registration } : {}), regTrib: buildRegularRegimeGroup(company.tax_regime) },
-      toma: { [customerIdentity.kind]: customerIdentity.xmlValue, xNome: input.customer.name },
+      toma: {
+        [customerIdentity.kind]: customerIdentity.xmlValue,
+        xNome: input.customer.name,
+        ...(input.customer.address ? { end: {
+          endNac: { cMun: input.customer.address.cityCode, CEP: input.customer.address.postalCode },
+          xLgr: input.customer.address.street,
+          nro: input.customer.address.number,
+          xBairro: input.customer.address.district,
+        } } : {}),
+      },
       serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description } },
       valores: { vServPrest: { vServ: input.service.amount.toFixed(2) }, trib: municipalTax },
       ...(ibsCbs ? { IBSCBS: ibsCbs } : {}),
