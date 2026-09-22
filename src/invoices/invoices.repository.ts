@@ -33,6 +33,20 @@ export class InvoicesRepository {
   async findById(id: string): Promise<InvoiceRecord | null> { const { rows } = await this.db.query<InvoiceRecord>('SELECT * FROM invoices WHERE id=$1', [id]); return rows[0] ?? null; }
   async markProcessing(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='processing', updated_at=NOW() WHERE id=$1", [id]); }
   async markRetrying(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='retrying', updated_at=NOW() WHERE id=$1", [id]); }
+  async requeueRejectedRouteFailure(id: string): Promise<boolean> {
+    const { rowCount } = await this.db.query(
+      `UPDATE invoices
+       SET status='retrying', updated_at=NOW()
+       WHERE id=$1
+         AND environment='test'
+         AND status='rejected'
+         AND prepared_dps_id IS NOT NULL
+         AND rejection->>'code'='NFSE_NON_JSON_RESPONSE'
+         AND rejection->>'message' LIKE '%(404)%'`,
+      [id],
+    );
+    return (rowCount ?? 0) === 1;
+  }
   async markCancelling(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='cancelling', updated_at=NOW() WHERE id=$1", [id]); }
   async markCancelled(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='cancelled', updated_at=NOW() WHERE id=$1", [id]); }
   async restoreAuthorized(id: string): Promise<void> { await this.db.query("UPDATE invoices SET status='authorized', updated_at=NOW() WHERE id=$1", [id]); }
