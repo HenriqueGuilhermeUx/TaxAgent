@@ -28,6 +28,7 @@ export interface ResolvedServiceProfile {
   profile: ServiceProfile;
   classification: {
     national_service_code: string;
+    nbs: string;
     cIndOp: string;
     cst: string;
     cClassTrib: string;
@@ -44,6 +45,7 @@ const MOGI_CCM_REFERENCE_URL = 'https://www.mogidascruzes.sp.gov.br/servico/impo
 const MOGI_ISS_RATE_TABLE_URL = 'https://www.mogidascruzes.sp.gov.br/public/site/doc/201804040846525ac4bb2c9a512.pdf';
 const SANTOS_ACTIVITY_REFERENCE_URL = 'https://www.santos.sp.gov.br/?q=node%2F32262';
 const LC116_URL = 'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp116.htm';
+const NBS_2_REFERENCE_URL = 'https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/legislacao/documentos-e-arquivos/anexo_i-nbs.pdf';
 
 export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServiceProfile {
   if (input.profile !== 'business_consulting') {
@@ -60,6 +62,13 @@ export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServi
       authority: 'official-domain',
       url: NFSE_SERVICE_LIST_URL,
       note: '170101 = assessoria ou consultoria de qualquer natureza, não contida em outros itens.',
+    },
+    {
+      dataset: 'nbs-2',
+      record_key: '1.1401.19.00',
+      authority: 'official-domain',
+      url: NBS_2_REFERENCE_URL,
+      note: 'NBS 2.0 1.1401.19.00 = serviços de consultoria em gestão empresarial não classificados em subposições anteriores; XML cNBS uses digits-only 114011900.',
     },
     {
       dataset: 'nfse-indop',
@@ -151,6 +160,7 @@ export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServi
     profile: 'business_consulting',
     classification: {
       national_service_code: '170101',
+      nbs: '114011900',
       cIndOp: '100301',
       cst: '000',
       cClassTrib: '000001',
