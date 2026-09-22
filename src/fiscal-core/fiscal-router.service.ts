@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FiscalEngineError } from './fiscal-engine.error';
 import { MunicipalCapabilityService } from '../municipal-parameters/municipal-capability.service';
 import { NfseNationalProvider } from '../providers/nfse-national/nfse-national.provider';
+import { GissProvider } from '../providers/giss/giss.provider';
 import { FiscalProvider } from './fiscal-provider.interface';
 import { FiscalContext } from './fiscal.types';
 
@@ -10,12 +11,15 @@ export class FiscalRouterService {
   constructor(
     private readonly nfseNational: NfseNationalProvider,
     private readonly capabilities: MunicipalCapabilityService,
+    private readonly giss: GissProvider,
   ) {}
 
   async resolve(context: FiscalContext): Promise<FiscalProvider> {
     const capability = await this.capabilities.resolve(context.issuerCityCode, context.environment, { taxRegime: context.taxRegime, effectiveAt: context.effectiveAt });
 
     if (capability.route === 'national-direct') return this.nfseNational;
+
+    if (capability.route === 'municipal-provider' && capability.provider === 'giss') return this.giss;
 
     if (capability.route === 'municipal-provider') {
       throw new FiscalEngineError(
