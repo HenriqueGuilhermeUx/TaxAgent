@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CertificateVaultService } from '../certificates/certificate-vault.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { MunicipalParametersClient } from '../municipal-parameters/municipal-parameters.client';
+import { MunicipalCapabilityService } from '../municipal-parameters/municipal-capability.service';
 import { NfseNationalClient } from '../providers/nfse-national/nfse-national.client';
 import { nfseEndpointPolicy } from '../providers/nfse-national/nfse-endpoints';
 import { SchemaRegistryService } from '../schema-registry/schema-registry.service';
@@ -11,12 +12,14 @@ import { ReadinessGate, summarizeReadiness } from './readiness.types';
 interface CompanyRecord { id: string; tax_id: string; municipal_registration: string | null; city_code: string; tax_regime?: string | null }
 @Injectable()
 export class ReadinessService {
-  constructor(private readonly tenancy: TenancyService, private readonly vault: CertificateVaultService, private readonly schemas: SchemaRegistryService, private readonly parameters: MunicipalParametersClient, private readonly nfse: NfseNationalClient) {}
+  constructor(private readonly tenancy: TenancyService, private readonly vault: CertificateVaultService, private readonly schemas: SchemaRegistryService, private readonly parameters: MunicipalParametersClient, private readonly capabilities: MunicipalCapabilityService, private readonly nfse: NfseNationalClient) {}
   async report(companyId: string, environment: FiscalEnvironment) {
     const company = await this.tenancy.getCompany(companyId) as CompanyRecord;
     const certificates = await this.vault.metadata(companyId) as Array<{ status: string; valid_to?: Date | string | null; certificate_fingerprint?: string; subject_tax_id?: string | null }>;
     const activeCertificate = certificates.find((certificate) => certificate.status === 'active');
     const endpoint = nfseEndpointPolicy(environment); const schema = this.schemas.active(environment); const gates: ReadinessGate[] = [];
+    const capability = await this.capabilities.resolve(company.city_code, environment, { taxRegime: company.tax_regime ?? undefined });
+    gates.push({ id: 'fiscal_route', label: 'Rota fiscal do município/contribuinte', status: capability.route === 'national-direct' ? 'pass' : 'fail', blocking: true, detail: capability.route === 'national-direct' ? `Rota SEFIN Nacional comprovada para ${company.city_code}.` : capability.route === 'municipal-provider' ? `Município ${company.city_code} exige provider municipal ${capability.provider}; transmissão direta SEFIN bloqueada.` : `Rota nacional direta ainda não comprovada para ${company.city_code}; transmissão bloqueada.`, data: capability } as ReadinessGate);
     const taxId = normalizeTaxId(company.tax_id);
     gates.push({ id: 'company_tax_id', label: 'CNPJ do prestador', status: /^[A-Z0-9]{14}$/.test(taxId) ? 'pass' : 'fail', blocking: true, detail: /^[A-Z0-9]{14}$/.test(taxId) ? 'Identificador de 14 posições compatível com CNPJ numérico/alfanumérico.' : 'CNPJ deve possuir 14 posições alfanuméricas.' });
     gates.push({ id: 'company_city_code', label: 'Código IBGE do município emissor', status: /^\d{7}$/.test(String(company.city_code ?? '')) ? 'pass' : 'fail', blocking: true, detail: /^\d{7}$/.test(String(company.city_code ?? '')) ? `Município emissor ${company.city_code}.` : 'Código IBGE municipal deve possuir 7 dígitos.' });
@@ -44,6 +47,8 @@ export class ReadinessService {
     const company = await this.tenancy.getCompany(companyId) as CompanyRecord; const base = await this.report(companyId, environment); const probes: Array<{ id: string; status: 'pass' | 'fail'; detail: string; data?: unknown }> = [];
     try { const certificate = await this.vault.getActiveMaterial(companyId); const tls = await this.nfse.probeMutualTls(environment, certificate); probes.push({ id: 'sefin_mtls', status: 'pass', detail: 'Handshake TLS com certificado cliente concluído contra a SEFIN configurada.', data: tls }); } catch (error) { probes.push({ id: 'sefin_mtls', status: 'fail', detail: error instanceof Error ? error.message : 'Falha no handshake mTLS.' }); }
     try { const certificate = await this.vault.getActiveMaterial(companyId); const convention = await this.parameters.getConvention(environment, company.city_code, certificate); probes.push({ id: 'municipal_convention', status: convention.supported ? 'pass' : 'fail', detail: convention.supported ? `Parâmetros do convênio encontrados para ${company.city_code}.` : `Município ${company.city_code} não retornou convênio no endpoint configurado.`, data: { status: convention.status } }); } catch (error) { probes.push({ id: 'municipal_convention', status: 'fail', detail: error instanceof Error ? error.message : 'Falha na consulta de parâmetros municipais.' }); }
+    const route = await this.capabilities.resolve(company.city_code, environment, { taxRegime: company.tax_regime ?? undefined });
+    probes.push({ id: 'fiscal_route', status: route.route === 'national-direct' ? 'pass' : 'fail', detail: route.route === 'national-direct' ? `Rota national-direct confirmada para ${company.city_code}.` : `Rota resolvida como ${route.route}/${route.provider}; SEFIN direta não será usada.`, data: route });
     const networkReady = probes.every((probe) => probe.status === 'pass');
     return { ...base, probes, network_ready: networkReady, ready_to_enable_live: base.readyToEnableLive && networkReady, ready_for_transmission: base.readyForTransmission && networkReady, probed_at: new Date().toISOString() };
   }
