@@ -12,6 +12,7 @@ test('business consulting profile resolves vetted national fields and Mogi ISS 1
 
   assert.deepEqual(result.classification, {
     national_service_code: '170101',
+    nbs: '114011900',
     cIndOp: '100301',
     cst: '000',
     cClassTrib: '000001',
@@ -68,6 +69,8 @@ test('business consulting profile resolves vetted Santos ISS 17.01 at 3 percent'
     issWithholding: '1',
   });
 
+  assert.equal(result.classification.nbs, '114011900');
+  assert.ok(result.sources.some((source) => source.dataset === 'nbs-2' && source.record_key === '1.1401.19.00'));
   assert.equal(result.municipal_tax?.iss_item, '17.01');
   assert.equal(result.municipal_tax?.incidence_city_code, '3548500');
   assert.equal(result.municipal_tax?.iss_taxation, '1');
