@@ -19,6 +19,7 @@ class ServiceDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(2000) description!: string;
   @ApiProperty({ example: 5000 }) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @IsPositive() amount!: number;
   @ApiPropertyOptional({ example: '010201', description: 'cTribNac / código de tributação nacional.' }) @IsOptional() @IsString() national_service_code?: string;
+  @ApiPropertyOptional({ example: '114011900', description: 'cNBS / NBS 2.0, 9 dígitos sem pontuação.' }) @IsOptional() @IsString() @Length(9, 9) nbs?: string;
   @ApiPropertyOptional({ example: '3550308', description: 'Município IBGE onde o serviço é prestado. Explicitamente exigido pelo TaxAgent antes de live.' }) @IsOptional() @IsString() @Length(7, 7) service_location_city_code?: string;
   @ApiPropertyOptional({ enum: ['1', '2', '3', '4'], description: 'tribISSQN: 1 tributável, 2 imunidade, 3 exportação, 4 não incidência.' }) @IsOptional() @IsIn(['1', '2', '3', '4']) iss_taxation?: '1' | '2' | '3' | '4';
   @ApiPropertyOptional({ enum: ['1', '2', '3'], description: 'tpRetISSQN: 1 não retido, 2 tomador, 3 intermediário.' }) @IsOptional() @IsIn(['1', '2', '3']) iss_withholding?: '1' | '2' | '3';
