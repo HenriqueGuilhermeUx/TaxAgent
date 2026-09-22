@@ -208,7 +208,7 @@ export class PreparedDpsService {
       environment: dto.environment,
       competence,
       issuedAt,
-      customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code },
+      customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code, address: dto.customer.address ? { street: dto.customer.address.street, number: dto.customer.address.number, district: dto.customer.address.district, postalCode: dto.customer.address.postal_code, cityCode: dto.customer.address.city_code } : undefined },
       service,
     });
     const requestIntent = {
@@ -249,6 +249,7 @@ export class PreparedDpsService {
         tax_id: input.customer.taxId,
         name: input.customer.name,
         city_code: input.customer.cityCode,
+        address: input.customer.address ? { street: input.customer.address.street, number: input.customer.address.number, district: input.customer.address.district, postal_code: input.customer.address.postalCode, city_code: input.customer.address.cityCode } : undefined,
       },
       service: {
         description: input.service.description,
