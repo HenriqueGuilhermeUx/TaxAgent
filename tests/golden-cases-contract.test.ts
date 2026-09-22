@@ -45,7 +45,7 @@ function assertGoldenCaseContract(item: GoldenCase): void {
 
   assert.deepEqual(
     Object.keys(item.expected.classification).sort(),
-    ['cClassTrib', 'cIndOp', 'cst', 'national_service_code', 'tax_treatment'].sort(),
+    ['cClassTrib', 'cIndOp', 'cst', 'national_service_code', 'nbs', 'tax_treatment'].sort(),
     `${item.id}: classification contract changed`,
   );
   assert.equal(new Set(item.expected.missing).size, item.expected.missing.length, `${item.id}: duplicate missing gates`);
