@@ -11,6 +11,7 @@ import { NfseNationalClient } from '../providers/nfse-national/nfse-national.cli
 import { NfseNationalProvider } from '../providers/nfse-national/nfse-national.provider';
 import { GissProvider } from '../providers/giss/giss.provider';
 import { GissClient } from '../providers/giss/giss.client';
+import { GissSignatureService } from '../providers/giss/giss-signature.service';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
@@ -25,7 +26,7 @@ import { InvoicesService } from './invoices.service';
 @Module({
   imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient, GissSignatureService],
   exports: [InvoicesService],
 })
 export class InvoicesModule {}
