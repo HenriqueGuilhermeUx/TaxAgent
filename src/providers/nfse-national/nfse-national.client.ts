@@ -22,13 +22,13 @@ export interface NationalApiResponse {
 export class NfseNationalClient {
   issue(environment: FiscalEnvironment, signedXml: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     const body = JSON.stringify({ dpsXmlGZipB64: gzipSync(Buffer.from(signedXml, 'utf8')).toString('base64') });
-    return this.requestJson(new URL('/nfse', this.normalizedBase(environment)), 'POST', body, certificate);
+    return this.requestJson(new URL('nfse', this.normalizedBase(environment)), 'POST', body, certificate);
   }
   getByAccessKey(environment: FiscalEnvironment, accessKey: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
-    return this.requestJson(new URL(`/nfse/${encodeURIComponent(accessKey)}`, this.normalizedBase(environment)), 'GET', undefined, certificate);
+    return this.requestJson(new URL(`nfse/${encodeURIComponent(accessKey)}`, this.normalizedBase(environment)), 'GET', undefined, certificate);
   }
   getByDpsId(environment: FiscalEnvironment, dpsId: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
-    return this.requestJson(new URL(`/dps/${encodeURIComponent(dpsId)}`, this.normalizedBase(environment)), 'GET', undefined, certificate);
+    return this.requestJson(new URL(`dps/${encodeURIComponent(dpsId)}`, this.normalizedBase(environment)), 'GET', undefined, certificate);
   }
   async findByDpsId(environment: FiscalEnvironment, dpsId: string, certificate: CertificateMaterial): Promise<NationalApiResponse | null> {
     try { return await this.getByDpsId(environment, dpsId, certificate); }
@@ -36,7 +36,7 @@ export class NfseNationalClient {
   }
   registerEvent(environment: FiscalEnvironment, accessKey: string, signedXml: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     const body = JSON.stringify({ pedidoRegistroEventoXmlGZipB64: gzipSync(Buffer.from(signedXml, 'utf8')).toString('base64') });
-    return this.requestJson(new URL(`/nfse/${encodeURIComponent(accessKey)}/eventos`, this.normalizedBase(environment)), 'POST', body, certificate);
+    return this.requestJson(new URL(`nfse/${encodeURIComponent(accessKey)}/eventos`, this.normalizedBase(environment)), 'POST', body, certificate);
   }
   probeMutualTls(environment: FiscalEnvironment, certificate: CertificateMaterial): Promise<{ host: string; protocol: string | null; cipher: string | null; authorized: boolean }> {
     const base = new URL(this.normalizedBase(environment));
