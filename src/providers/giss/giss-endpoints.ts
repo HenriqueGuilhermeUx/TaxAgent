@@ -1,4 +1,4 @@
-export interface GissEndpointConfig { citySlug: string; wsdl: string; protocol: 'soap'; layout: 'abrasf-2.03-2.04' }
+export interface GissEndpointConfig { citySlug: string; productionWsdl: string; homologationWsdl: string; protocol: 'soap'; layout: 'abrasf-2.04'; source: string }
 
 const CITY_SLUGS: Record<string, string> = { '3548500': 'santos' };
 
@@ -7,8 +7,10 @@ export function gissEndpointPolicy(cityCode: string): GissEndpointConfig | null 
   if (!citySlug) return null;
   return {
     citySlug,
-    wsdl: `https://ws-${citySlug}.giss.com.br/service-ws/nf/nfse-ws?wsdl`,
+    productionWsdl: `https://ws-${citySlug}.giss.com.br/service-ws/nf/nfse-ws?wsdl`,
+    homologationWsdl: 'https://v2-ws-homologacao.giss.com.br/service-ws/nf/nfse-ws?wsdl',
     protocol: 'soap',
-    layout: 'abrasf-2.03-2.04',
+    layout: 'abrasf-2.04',
+    source: 'GissOnline Guia Rapido WS RPS + Santos municipal GISS/NFS-e portal',
   };
 }
