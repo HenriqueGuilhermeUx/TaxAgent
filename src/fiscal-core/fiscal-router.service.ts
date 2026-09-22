@@ -13,7 +13,7 @@ export class FiscalRouterService {
   ) {}
 
   async resolve(context: FiscalContext): Promise<FiscalProvider> {
-    const capability = await this.capabilities.resolve(context.issuerCityCode, context.environment);
+    const capability = await this.capabilities.resolve(context.issuerCityCode, context.environment, { taxRegime: context.taxRegime, effectiveAt: context.effectiveAt });
 
     if (capability.route === 'national-direct') return this.nfseNational;
 
