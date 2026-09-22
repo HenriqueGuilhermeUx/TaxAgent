@@ -107,7 +107,7 @@ export class DpsPreflightService {
       environment: 'test',
       competence: dto.competence ?? issuedAt.slice(0, 10),
       issuedAt,
-      customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code },
+      customer: { taxId: dto.customer.tax_id, name: dto.customer.name, cityCode: dto.customer.city_code, address: dto.customer.address ? { street: dto.customer.address.street, number: dto.customer.address.number, district: dto.customer.address.district, postalCode: dto.customer.address.postal_code, cityCode: dto.customer.address.city_code } : undefined },
       service,
     });
     const built = this.builder.buildPreview(input, company, 1);
