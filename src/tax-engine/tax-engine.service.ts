@@ -33,6 +33,7 @@ export class TaxEngineService {
       taxSituation: classification.cst as string | undefined,
       taxClassification: classification.cClassTrib as string | undefined,
       nationalServiceCode: classification.national_service_code as string | undefined,
+      nbsCode: classification.nbs as string | undefined,
       issTaxation: municipalTax.iss_taxation as CanonicalService['issTaxation'] | undefined,
       issWithholding: municipalTax.iss_withholding as CanonicalService['issWithholding'] | undefined,
       issRate: typeof municipalTax.iss_rate === 'number' ? municipalTax.iss_rate as number : undefined,
@@ -41,6 +42,7 @@ export class TaxEngineService {
     this.assertNoConflict('tax_situation', service.taxSituation, resolved.taxSituation);
     this.assertNoConflict('tax_classification', service.taxClassification, resolved.taxClassification);
     this.assertNoConflict('national_service_code', service.nationalServiceCode, resolved.nationalServiceCode);
+    this.assertNoConflict('nbs', service.nbsCode, resolved.nbsCode);
     this.assertNoConflict('iss_taxation', service.issTaxation, resolved.issTaxation);
     this.assertNoConflict('iss_withholding', service.issWithholding, resolved.issWithholding);
     this.assertNoNumericConflict('iss_rate', service.issRate, resolved.issRate);
@@ -50,6 +52,7 @@ export class TaxEngineService {
       taxSituation: service.taxSituation ?? resolved.taxSituation,
       taxClassification: service.taxClassification ?? resolved.taxClassification,
       nationalServiceCode: service.nationalServiceCode ?? resolved.nationalServiceCode,
+      nbsCode: service.nbsCode ?? resolved.nbsCode,
       issTaxation: service.issTaxation ?? resolved.issTaxation,
       issWithholding: service.issWithholding ?? resolved.issWithholding,
       issRate: service.issRate ?? resolved.issRate,
@@ -78,6 +81,7 @@ export class TaxEngineService {
     }
 
     const nationalServiceCode = this.mergeProfileField('national_service_code', dto.national_service_code, profile?.classification.national_service_code);
+    const nbs = this.mergeProfileField('nbs', dto.nbs, profile?.classification.nbs);
     const operationIndicator = this.mergeProfileField('operation_indicator', dto.operation_indicator, profile?.classification.cIndOp);
     const cst = this.mergeProfileField('cst', dto.cst, profile?.classification.cst);
     const taxClassification = this.mergeProfileField('tax_classification', dto.tax_classification, profile?.classification.cClassTrib);
@@ -131,7 +135,7 @@ export class TaxEngineService {
       effective_at: dto.effective_at,
       service_profile: profile?.profile,
       classification: {
-        nbs: dto.nbs,
+        nbs,
         national_service_code: nationalServiceCode,
         cIndOp: operationIndicator,
         cst,
