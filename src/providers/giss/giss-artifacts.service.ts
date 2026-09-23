@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FiscalDocumentsService } from '../../documents/fiscal-documents.service';
 
-export type GissArtifactKind = 'giss_rps_xml' | 'giss_rps_signed_xml' | 'giss_soap_request' | 'giss_soap_response' | 'giss_nfse_xml';
+export type GissArtifactKind = 'giss_rps_xml' | 'giss_rps_signed_xml' | 'giss_batch_xml' | 'giss_batch_signed_xml' | 'giss_soap_request' | 'giss_soap_response' | 'giss_nfse_xml';
 
 @Injectable()
 export class GissArtifactsService {
