@@ -12,12 +12,32 @@ const deps = () => ({
   vault: { getActiveMaterial: async () => ({}) },
 });
 
-test('Santos GISS adapter builds and signs RPS and batch but fails closed at reconciliation before external transmission', async () => {
+test('Santos GISS adapter builds and signs schema-complete RPS and batch but fails closed at reconciliation before external transmission', async () => {
   const d = deps();
   const provider = new GissProvider(d.client as any, d.reconciliation as any, d.artifacts as any, d.signatures as any, d.tenancy as any, d.vault as any);
   assert.equal(await provider.canHandle({ companyId: 'comp_test', environment: 'test', issuerCityCode: '3548500', serviceLocationCityCode: '3548500' }), true);
   await assert.rejects(
-    provider.issue({ companyId: 'comp_test', environment: 'test', issuedAt: '2026-09-22T18:30:00-03:00', customer: { taxId: '12345678901', name: 'Test', cityCode: '3548500' }, service: { description: 'Test', amount: 1, nationalServiceCode: '170101', serviceLocationCityCode: '3548500', issRate: 3 } }, { invoiceId: 'inv_123' }),
+    provider.issue({
+      companyId: 'comp_test',
+      environment: 'test',
+      issuedAt: '2026-09-22T18:30:00-03:00',
+      customer: {
+        taxId: '12345678901',
+        name: 'Test',
+        cityCode: '3548500',
+        address: { street: 'Rua Teste', number: '1', district: 'Centro', postalCode: '11010000', cityCode: '3548500' },
+      },
+      service: {
+        description: 'Test',
+        amount: 1,
+        nationalServiceCode: '170101',
+        nbsCode: '114011900',
+        serviceLocationCityCode: '3548500',
+        issRate: 3,
+        issTaxation: '1',
+        issWithholding: '1',
+      },
+    }, { invoiceId: 'inv_123' }),
     (error: unknown) => error instanceof FiscalEngineError && error.code === 'TA_GISS_RECONCILIATION_REQUIRED' && error.retryable === false,
   );
 });
