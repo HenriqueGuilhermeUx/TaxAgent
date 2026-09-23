@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GissClient } from '../src/providers/giss/giss.client';
 
-test('prepareRpsQuery builds deterministic SOAP bytes from authenticated WSDL evidence without POST', async () => {
+test('prepareRpsQuery builds deterministic SOAP bytes from authenticated RTC WSDL evidence without POST', async () => {
   const client = new GissClient();
   (client as any).inspectWsdl = async () => ({
-    host: 'ws-homologacao.giss.com.br',
+    host: 'ws-homologacao-rtc.giss.com.br',
     path: '/service-ws/nf/nfse-ws',
     status: 200,
     reachable: true,
     bytes: 1,
     sha256: 'wsdl',
-    targetNamespace: 'http://nfse.abrasf.org.br',
+    targetNamespace: 'http://impl.webservice.ws.declaracao.eicon.com.br/',
     operations: ['ConsultarNfsePorRps'],
     soapActions: ['http://nfse.abrasf.org.br/ConsultarNfsePorRps'],
-    soapAddresses: ['https://ws-homologacao.giss.com.br/service-ws/nf/nfse-ws'],
+    soapAddresses: ['https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws'],
     operationBindings: [{ operation: 'ConsultarNfsePorRps', soapAction: 'http://nfse.abrasf.org.br/ConsultarNfsePorRps' }],
     requestWrappers: ['ConsultarNfsePorRpsRequest'],
     hasNfseCabecMsg: true,
@@ -24,9 +24,17 @@ test('prepareRpsQuery builds deterministic SOAP bytes from authenticated WSDL ev
     requiredOperationsPresent: true,
     reconciliationShapePresent: true,
     reconciliationTransportPresent: true,
-    reconciliationSoapAddress: 'https://ws-homologacao.giss.com.br/service-ws/nf/nfse-ws',
+    reconciliationSoapAddress: 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws',
     reconciliationSoapAction: 'http://nfse.abrasf.org.br/ConsultarNfsePorRps',
     reconciliationSoapVersion: '1.1',
+    reconciliationRequestWrapper: 'ConsultarNfsePorRpsRequest',
+    reconciliationRequestNamespace: 'http://nfse.abrasf.org.br',
+    reconciliationResponseWrapper: 'ConsultarNfsePorRpsResponse',
+    reconciliationResponseNamespace: 'http://nfse.abrasf.org.br',
+    requestMessageParts: ['parameters'],
+    responseMessageParts: ['parameters'],
+    supportingDocumentsInspected: 1,
+    sameHostImportsDiscovered: 1,
     missingRequiredOperations: [],
   });
 
@@ -40,7 +48,9 @@ test('prepareRpsQuery builds deterministic SOAP bytes from authenticated WSDL ev
   assert.equal(prepared.queryAttempted, false);
   assert.equal(prepared.soapVersion, '1.1');
   assert.equal(prepared.requestWrapper, 'ConsultarNfsePorRpsRequest');
-  assert.match(prepared.body, /nfseCabecMsg/);
-  assert.match(prepared.body, /nfseDadosMsg/);
+  assert.equal(prepared.targetNamespace, 'http://nfse.abrasf.org.br');
+  assert.match(prepared.body, /<tns:ConsultarNfsePorRpsRequest>/);
+  assert.match(prepared.body, /http:\/\/www\.giss\.com\.br\/cabecalho-v2_04\.xsd/);
+  assert.match(prepared.body, /http:\/\/www\.giss\.com\.br\/consultar-nfse-rps-envio-v2_04\.xsd/);
   assert.equal(prepared.bodySha256.length, 64);
 });
