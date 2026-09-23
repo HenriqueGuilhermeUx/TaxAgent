@@ -8,6 +8,7 @@ import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { PreparedDpsService } from '../prepared-dps/prepared-dps.service';
 import { DpsPreflightService } from './dps-preflight.service';
+import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { ReadinessService } from './readiness.service';
 
@@ -18,11 +19,14 @@ export class OperationsController {
     private readonly dpsPreflight: DpsPreflightService,
     private readonly preparedDps: PreparedDpsService,
     private readonly noA1: NoA1HomologationService,
+    private readonly gissWsdl: GissWsdlDiagnosticService,
   ) {}
   @Get('readiness/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect local gates required before real NFS-e transmission' })
   report(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.report(companyId, environment); }
   @Post('readiness/:companyId/probe') @RequireScope('operations:read') @ApiOperation({ summary: 'Run non-emitting Produção Restrita/Produção connectivity preflight' })
   probe(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.probe(companyId, environment); }
+  @Post('giss/wsdl/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect the authenticated GISS homologation WSDL without fiscal transmission' })
+  inspectGissWsdl(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('cityCode') cityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissWsdl.inspect(companyId, environment, cityCode ?? '3548500'); }
   @Post('no-a1/validate') @RequireScope('operations:write') @ApiOperation({ summary: 'Validate the full pre-certificate fiscal path without A1, XML signature or SEFIN transmission' })
   validateWithoutA1(@Body() dto: CreateInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); return this.noA1.validate(dto); }
   @Post('dps/prebuild') @RequireScope('operations:write') @ApiOperation({ summary: 'Build and XSD-validate an unsigned DPS without A1 or SEFIN transmission' })
