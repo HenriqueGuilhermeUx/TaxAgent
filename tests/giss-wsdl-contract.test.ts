@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { inspectGissWsdlContract } from '../src/providers/giss/giss.client';
+import { gissEndpointPolicy } from '../src/providers/giss/giss-endpoints';
 
 test('authenticated GISS WSDL contract parser recognizes reconciliation wrapper and message parameters', () => {
   const wsdl = `<?xml version="1.0"?>
@@ -34,4 +35,13 @@ test('WSDL probe shape fails closed when reconciliation parameters are absent', 
   assert.equal(result.requiredOperationsPresent, true);
   assert.equal(result.reconciliationShapePresent, false);
   assert.equal(result.hasNfseCabecMsg, false);
+});
+
+test('Santos GISS policy uses RTC homologation endpoint without changing production municipality routing', () => {
+  const policy = gissEndpointPolicy('3548500');
+  assert.ok(policy);
+  assert.equal(policy.homologationWsdl, 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl');
+  assert.equal(policy.productionWsdl, 'https://ws-santos.giss.com.br/service-ws/nf/nfse-ws?wsdl');
+  assert.equal(policy.layout, 'abrasf-2.04');
+  assert.equal(gissEndpointPolicy('9999999'), null);
 });
