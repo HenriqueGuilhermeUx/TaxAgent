@@ -43,6 +43,28 @@ export class GissQueryExecutionService {
 
     const company = await this.tenancy.getCompany(companyId);
     if (company.city_code !== '3548500') throw new BadRequestException('Current GISS reconciliation execution is restricted to Santos issuer municipality 3548500');
+    const municipalRegistration = typeof company.municipal_registration === 'string' ? company.municipal_registration.trim() : '';
+    if (!municipalRegistration) {
+      await this.ledger.append({
+        invoiceId,
+        type: 'giss_reconciliation_query_blocked',
+        payload: {
+          provider: 'giss',
+          operation: 'ConsultarNfsePorRps',
+          code: 'TA_GISS_MUNICIPAL_REGISTRATION_REQUIRED',
+          city_code: '3548500',
+          query_attempted: false,
+          fiscal_emission: false,
+        },
+      });
+      throw new BadRequestException({
+        code: 'TA_GISS_MUNICIPAL_REGISTRATION_REQUIRED',
+        message: 'Santos GISS requires the issuer Municipal Registration for ConsultarNfsePorRps. TaxAgent will not call the provider until a real Municipal Registration is persisted for the Company.',
+        query_attempted: false,
+        fiscal_transmission_attempted: false,
+        fiscal_emission_attempted: false,
+      });
+    }
 
     const rpsArtifact = await this.documents.latestContent(invoiceId, 'giss_rps_xml');
     if (!rpsArtifact) throw new BadRequestException('Invoice has no persisted GISS RPS artifact; reconciliation query will not guess an RPS identity');
@@ -57,7 +79,7 @@ export class GissQueryExecutionService {
       '3548500',
       {
         providerTaxId: company.tax_id,
-        municipalRegistration: company.municipal_registration,
+        municipalRegistration,
         number,
         series,
       },
