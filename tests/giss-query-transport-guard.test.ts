@@ -3,7 +3,7 @@ import test from 'node:test';
 import { FiscalEngineError } from '../src/fiscal-core/fiscal-engine.error';
 import { requireVerifiedGissReconciliationTransport } from '../src/providers/giss/giss-query-transport.guard';
 
-test('returns exact SOAP address/action only when authenticated reconciliation contract is fully proven', () => {
+test('returns exact SOAP address/action/version only when authenticated reconciliation contract is fully proven', () => {
   const result = requireVerifiedGissReconciliationTransport({
     reachable: true,
     isWsdl: true,
@@ -12,10 +12,12 @@ test('returns exact SOAP address/action only when authenticated reconciliation c
     reconciliationTransportPresent: true,
     reconciliationSoapAddress: 'https://example.test/nfse-ws',
     reconciliationSoapAction: 'urn:ConsultarNfsePorRps',
+    reconciliationSoapVersion: '1.1',
     targetNamespace: 'urn:nfse',
   });
   assert.equal(result.soapAddress, 'https://example.test/nfse-ws');
   assert.equal(result.soapAction, 'urn:ConsultarNfsePorRps');
+  assert.equal(result.soapVersion, '1.1');
 });
 
 test('fails closed before any query when endpoint/action evidence is incomplete', () => {
