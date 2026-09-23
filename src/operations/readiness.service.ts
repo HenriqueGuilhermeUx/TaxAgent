@@ -81,7 +81,7 @@ export class ReadinessService {
         label: 'Contrato SOAP GISS homologado',
         status: 'fail',
         blocking: true,
-        detail: 'Rota, assinatura SHA-1 e builders GISS estão montados, mas o transporte SOAP continua deliberadamente bloqueado até o WSDL autenticado confirmar wrapper/SOAPAction e a reconciliação ConsultarNfsePorRps ser validada ponta a ponta.',
+        detail: 'Rota, assinatura SHA-1 e builders GISS estão montados, mas o transporte SOAP continua deliberadamente bloqueado até o WSDL autenticado confirmar wrapper, namespace, versão SOAP, endereço HTTPS, SOAPAction e a reconciliação ConsultarNfsePorRps ser validada ponta a ponta.',
         data: gissEndpoint ? { protocol: gissEndpoint.protocol, layout: gissEndpoint.layout, homologation_wsdl: gissEndpoint.homologationWsdl } : undefined,
       });
     }
@@ -136,14 +136,29 @@ export class ReadinessService {
           detail: transportOk ? 'WSDL GISS de homologação acessado por GET com A1/mTLS; nenhuma operação fiscal foi transmitida.' : `Resposta GISS não comprovou um WSDL válido (HTTP ${wsdl.status}).`,
           data: wsdl,
         });
-        const contractOk = wsdl.requiredOperationsPresent && wsdl.reconciliationShapePresent;
+        const contractOk = wsdl.requiredOperationsPresent
+          && wsdl.reconciliationShapePresent
+          && wsdl.reconciliationTransportPresent
+          && Boolean(wsdl.reconciliationSoapAddress)
+          && Boolean(wsdl.reconciliationSoapAction)
+          && Boolean(wsdl.reconciliationSoapVersion)
+          && Boolean(wsdl.targetNamespace);
         probes.push({
           id: 'giss_wsdl_contract',
           status: contractOk ? 'pass' : 'fail',
           detail: contractOk
-            ? 'WSDL autenticado contém ConsultarNfsePorRps e o shape de reconciliação nfseCabecMsg/nfseDadosMsg/outputXML.'
-            : `Contrato de reconciliação incompleto; operações ausentes: ${wsdl.missingRequiredOperations.join(', ') || 'nenhuma'}, wrapper/partes ainda não comprovados.`,
-          data: { targetNamespace: wsdl.targetNamespace, operations: wsdl.operations, soapActions: wsdl.soapActions, requestWrappers: wsdl.requestWrappers, reconciliationShapePresent: wsdl.reconciliationShapePresent },
+            ? 'WSDL autenticado comprovou ConsultarNfsePorRps, wrapper/partes, namespace, versão SOAP, endereço HTTPS e SOAPAction.'
+            : `Contrato de reconciliação incompleto; operações ausentes: ${wsdl.missingRequiredOperations.join(', ') || 'nenhuma'}, shape/transporte ainda não comprovados.`,
+          data: {
+            targetNamespace: wsdl.targetNamespace,
+            operations: wsdl.operations,
+            requestWrappers: wsdl.requestWrappers,
+            reconciliationShapePresent: wsdl.reconciliationShapePresent,
+            reconciliationTransportPresent: wsdl.reconciliationTransportPresent,
+            soapAddress: wsdl.reconciliationSoapAddress,
+            soapAction: wsdl.reconciliationSoapAction,
+            soapVersion: wsdl.reconciliationSoapVersion,
+          },
         });
       } catch (error) {
         probes.push({ id: 'giss_wsdl_mtls', status: 'fail', detail: error instanceof Error ? error.message : 'Falha no acesso autenticado ao WSDL GISS.' });
