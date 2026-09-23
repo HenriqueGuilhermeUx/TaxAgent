@@ -8,6 +8,7 @@ import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { PreparedDpsService } from '../prepared-dps/prepared-dps.service';
 import { DpsPreflightService } from './dps-preflight.service';
+import { GissQueryExecutionService } from './giss-query-execution.service';
 import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { MunicipalityScenarioService } from './municipality-scenario.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
@@ -21,6 +22,7 @@ export class OperationsController {
     private readonly preparedDps: PreparedDpsService,
     private readonly noA1: NoA1HomologationService,
     private readonly gissWsdl: GissWsdlDiagnosticService,
+    private readonly gissQuery: GissQueryExecutionService,
     private readonly municipalityScenario: MunicipalityScenarioService,
   ) {}
   @Get('readiness/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect local gates required before real NFS-e transmission' })
@@ -31,6 +33,8 @@ export class OperationsController {
   inspectGissWsdl(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('cityCode') cityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissWsdl.inspect(companyId, environment, cityCode ?? '3548500'); }
   @Post('giss/query/prepare/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Prepare exact authenticated-WSDL GISS ConsultarNfsePorRps SOAP bytes without POSTing them' })
   prepareGissRpsQuery(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('cityCode') cityCode: string | undefined, @Query('number') number: string | undefined, @Query('series') series: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissWsdl.prepareQuery(companyId, environment, cityCode ?? '3548500', number ?? '1', series ?? 'TA'); }
+  @Post('giss/query/execute/:companyId/:invoiceId') @RequireScope('operations:write') @ApiOperation({ summary: 'Execute one audited GISS ConsultarNfsePorRps query for a persisted test RPS; never emits an RPS' })
+  executeGissRpsQuery(@Param('companyId') companyId: string, @Param('invoiceId') invoiceId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissQuery.execute(companyId, environment, invoiceId); }
   @Post('scenario/municipality/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect a cross-municipality service scenario using the same Company/A1 without changing issuer city or transmitting a fiscal document' })
   inspectMunicipalityScenario(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('serviceCityCode') serviceCityCode: string | undefined, @Query('effectiveAt') effectiveAt: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); if (!serviceCityCode) throw new BadRequestException('serviceCityCode is required'); return this.municipalityScenario.inspect(companyId, environment, serviceCityCode, effectiveAt); }
   @Post('no-a1/validate') @RequireScope('operations:write') @ApiOperation({ summary: 'Validate the full pre-certificate fiscal path without A1, XML signature or SEFIN transmission' })
