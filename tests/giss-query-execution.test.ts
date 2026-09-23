@@ -19,8 +19,8 @@ function buildService(overrides: Record<string, any> = {}) {
         soapVersion: '1.1',
         requestWrapper: 'ConsultarNfsePorRpsRequest',
         targetNamespace: 'http://nfse.abrasf.org.br',
-        body: '<soapenv:Envelope>SECRET_REQUEST_BODY</soapenv:Envelope>',
-        bodyBytes: 61,
+        body: '<soapenv:Envelope>fixture-request</soapenv:Envelope>',
+        bodyBytes: 52,
         bodySha256: 'request_sha',
         fiscalTransmissionAttempted: false,
         queryAttempted: false,
@@ -35,8 +35,8 @@ function buildService(overrides: Record<string, any> = {}) {
         queryAttempted: true,
       }),
     },
-    vault: { getActiveMaterial: async () => ({ fingerprint: 'fp', tlsCertificatePem: 'CERT', tlsPrivateKeyPem: 'KEY' }) },
-    tenancy: { getCompany: async () => ({ tax_id: '12345678000190', municipal_registration: null, city_code: '3548500' }) },
+    vault: { getActiveMaterial: async () => ({ fingerprint: 'fixture-fingerprint', tlsCertificatePem: 'fixture-cert', tlsPrivateKeyPem: 'fixture-key' }) },
+    tenancy: { getCompany: async () => ({ tax_id: '12345678000190', municipal_registration: '123456', city_code: '3548500' }) },
   };
   const d = { ...defaults, ...overrides };
   return {
@@ -53,6 +53,32 @@ test('real GISS reconciliation query remains test-only before DB/certificate/net
   assert.equal(dbCalls, 0);
 });
 
+test('missing issuer Municipal Registration blocks reconciliation before certificate load or provider POST', async () => {
+  let vaultCalls = 0;
+  let prepareCalls = 0;
+  const { service, artifactCalls, ledgerCalls } = buildService({
+    tenancy: { getCompany: async () => ({ tax_id: '12345678000190', municipal_registration: null, city_code: '3548500' }) },
+    vault: { getActiveMaterial: async () => { vaultCalls += 1; return {}; } },
+    client: { prepareRpsQuery: async () => { prepareCalls += 1; return {}; } },
+  });
+  await assert.rejects(
+    service.execute('comp_1', 'test', 'inv_1'),
+    (error: unknown) => {
+      assert.ok(error instanceof BadRequestException);
+      const response = error.getResponse() as Record<string, unknown>;
+      assert.equal(response.code, 'TA_GISS_MUNICIPAL_REGISTRATION_REQUIRED');
+      assert.equal(response.query_attempted, false);
+      assert.equal(response.fiscal_emission_attempted, false);
+      return true;
+    },
+  );
+  assert.equal(vaultCalls, 0);
+  assert.equal(prepareCalls, 0);
+  assert.equal(artifactCalls.length, 0);
+  assert.equal(ledgerCalls.length, 1);
+  assert.equal(ledgerCalls[0].type, 'giss_reconciliation_query_blocked');
+});
+
 test('executes only the persisted invoice RPS, stores exact SOAP request/response and never upgrades unknown code to not_found', async () => {
   let executeBody: string | undefined;
   const client = {
@@ -62,8 +88,8 @@ test('executes only the persisted invoice RPS, stores exact SOAP request/respons
       soapVersion: '1.1',
       requestWrapper: 'ConsultarNfsePorRpsRequest',
       targetNamespace: 'http://nfse.abrasf.org.br',
-      body: '<soapenv:Envelope>EXACT_BYTES</soapenv:Envelope>',
-      bodyBytes: 49,
+      body: '<soapenv:Envelope>fixture-bytes</soapenv:Envelope>',
+      bodyBytes: 51,
       bodySha256: 'request_sha',
       fiscalTransmissionAttempted: false,
       queryAttempted: false,
@@ -83,8 +109,7 @@ test('executes only the persisted invoice RPS, stores exact SOAP request/respons
   };
   const { service, artifactCalls, ledgerCalls } = buildService({ client });
   const result = await service.execute('comp_1', 'test', 'inv_1');
-
-  assert.equal(executeBody, '<soapenv:Envelope>EXACT_BYTES</soapenv:Envelope>');
+  assert.equal(executeBody, '<soapenv:Envelope>fixture-bytes</soapenv:Envelope>');
   assert.equal(artifactCalls.length, 2);
   assert.equal(artifactCalls[0][1], 'giss_soap_request');
   assert.equal(artifactCalls[1][1], 'giss_soap_response');
@@ -95,7 +120,7 @@ test('executes only the persisted invoice RPS, stores exact SOAP request/respons
   assert.equal(result.fiscal_emission_attempted, false);
   assert.equal(result.request_body_exposed, false);
   assert.equal(result.response_body_exposed, false);
-  assert.equal(JSON.stringify(result).includes('EXACT_BYTES'), false);
+  assert.equal(JSON.stringify(result).includes('fixture-bytes'), false);
   assert.equal(JSON.stringify(result).includes('ListaMensagemRetorno'), false);
   assert.deepEqual(ledgerCalls.map((entry) => entry.type), [
     'giss_reconciliation_query_prepared',
@@ -112,8 +137,8 @@ test('network failure is returned as safe 502 after persisting the exact request
       soapVersion: '1.1',
       requestWrapper: 'ConsultarNfsePorRpsRequest',
       targetNamespace: 'http://nfse.abrasf.org.br',
-      body: '<soapenv:Envelope>EXACT_BYTES</soapenv:Envelope>',
-      bodyBytes: 49,
+      body: '<soapenv:Envelope>fixture-bytes</soapenv:Envelope>',
+      bodyBytes: 51,
       bodySha256: 'request_sha',
       fiscalTransmissionAttempted: false,
       queryAttempted: false,
