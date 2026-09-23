@@ -74,6 +74,8 @@ export class GissQueryExecutionService {
       soap_action: prepared.soapAction,
       soap_version: prepared.soapVersion,
       endpoint_host: new URL(prepared.soapAddress).hostname,
+      query_data_signed: prepared.queryDataSigned,
+      query_signature_profile: prepared.querySignatureProfile,
       fiscal_emission: false,
     });
     await this.ledger.append({
@@ -86,6 +88,8 @@ export class GissQueryExecutionService {
         series,
         request_sha256: prepared.bodySha256,
         request_bytes: prepared.bodyBytes,
+        query_data_signed: prepared.queryDataSigned,
+        query_signature_profile: prepared.querySignatureProfile,
         fiscal_emission: false,
       },
     });
@@ -174,6 +178,23 @@ export class GissQueryExecutionService {
       },
     });
 
+    // Deliberately safe operational log: no raw SOAP, certificate material or taxpayer data.
+    console.log(JSON.stringify({
+      event: 'giss_reconciliation_query_result',
+      invoice_id: invoiceId,
+      rps_number: number,
+      series,
+      http_status: response.status,
+      request_sha256: prepared.bodySha256,
+      response_sha256: response.bodySha256,
+      query_data_signed: prepared.queryDataSigned,
+      query_signature_profile: prepared.querySignatureProfile,
+      classification_state: classification.state,
+      classification_code: classification.state === 'unknown' ? classification.code : undefined,
+      classification_detail_code: classification.state === 'unknown' ? classification.detailCode : undefined,
+      fiscal_emission_attempted: false,
+    }));
+
     return {
       environment,
       company_id: companyId,
@@ -184,6 +205,8 @@ export class GissQueryExecutionService {
       endpoint_host: new URL(prepared.soapAddress).hostname,
       action: prepared.soapAction,
       soap_version: prepared.soapVersion,
+      query_data_signed: prepared.queryDataSigned,
+      query_signature_profile: prepared.querySignatureProfile,
       request_sha256: prepared.bodySha256,
       request_bytes: prepared.bodyBytes,
       http_status: response.status,
