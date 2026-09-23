@@ -6,6 +6,10 @@ const decode = (v?: string) => v?.replace(/&lt;/g, '<').replace(/&gt;/g, '>').re
 const tag = (xml: string, name: string) => decode(xml.match(new RegExp(`<(?:\\w+:)?${name}[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${name}>`, 'i'))?.[1]?.trim());
 
 export function parseGissResponse(xml: string): GissResponse {
+  const faultCode = tag(xml, 'faultcode');
+  const faultMessage = tag(xml, 'faultstring');
+  if (faultCode || faultMessage) return { authorized: false, errorCode: faultCode, errorMessage: faultMessage, raw: xml };
+
   const payload = tag(xml, 'outputXML') ?? tag(xml, 'return') ?? tag(xml, 'nfseXML') ?? xml;
   const nfseNumber = tag(payload, 'Numero');
   const verificationCode = tag(payload, 'CodigoVerificacao');
@@ -14,5 +18,5 @@ export function parseGissResponse(xml: string): GissResponse {
   const errorMessage = tag(payload, 'Mensagem');
   if (nfseNumber) return { authorized: true, nfseNumber, verificationCode, protocol, raw: xml };
   if (errorCode || errorMessage) return { authorized: false, protocol, errorCode, errorMessage, raw: xml };
-  throw new FiscalEngineError('TA_GISS_RESPONSE_UNRECOGNIZED', 'GISS response did not contain an authorization or a structured ABRASF error', false, { response_received: true });
+  throw new FiscalEngineError('TA_GISS_RESPONSE_UNRECOGNIZED', 'GISS response did not contain an authorization or a structured ABRASF/SOAP error', false, { response_received: true });
 }
