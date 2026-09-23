@@ -1,3 +1,5 @@
+export type GissSoapVersion = '1.1' | '1.2';
+
 export interface GissWsdlOperationBinding {
   operation: string;
   soapAction?: string;
@@ -6,6 +8,7 @@ export interface GissWsdlOperationBinding {
 export interface GissWsdlTransportBinding {
   soapAddresses: string[];
   operationBindings: GissWsdlOperationBinding[];
+  soapVersion?: GissSoapVersion;
 }
 
 export function inspectGissWsdlTransport(body: string): GissWsdlTransportBinding {
@@ -24,10 +27,16 @@ export function inspectGissWsdlTransport(body: string): GissWsdlTransportBinding
 
   const uniqueBindings = [...new Map(operationBindings.map((binding) => [`${binding.operation}|${binding.soapAction ?? ''}`, binding])).values()]
     .sort((a, b) => a.operation.localeCompare(b.operation));
+  const soapVersion: GissSoapVersion | undefined = /http:\/\/schemas\.xmlsoap\.org\/wsdl\/soap12\//i.test(body)
+    ? '1.2'
+    : /http:\/\/schemas\.xmlsoap\.org\/wsdl\/soap\//i.test(body)
+      ? '1.1'
+      : undefined;
 
   return {
     soapAddresses: [...new Set(soapAddresses)].sort(),
     operationBindings: uniqueBindings,
+    soapVersion,
   };
 }
 
@@ -35,9 +44,10 @@ export function reconciliationTransportBinding(binding: GissWsdlTransportBinding
   const operation = binding.operationBindings.find((candidate) => candidate.operation === 'ConsultarNfsePorRps' && candidate.soapAction);
   const soapAddress = binding.soapAddresses[0];
   return {
-    proven: Boolean(operation?.soapAction && soapAddress),
+    proven: Boolean(operation?.soapAction && soapAddress && binding.soapVersion),
     soapAddress,
     soapAction: operation?.soapAction,
+    soapVersion: binding.soapVersion,
     operation: operation?.operation,
   };
 }
