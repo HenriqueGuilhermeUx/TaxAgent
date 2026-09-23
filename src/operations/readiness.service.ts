@@ -81,7 +81,7 @@ export class ReadinessService {
         label: 'Contrato SOAP GISS homologado',
         status: 'fail',
         blocking: true,
-        detail: 'Rota e builders GISS estão montados, mas o transporte SOAP continua deliberadamente bloqueado até WSDL/SOAPAction/reconciliação serem verificados ponta a ponta.',
+        detail: 'Rota, assinatura SHA-1 e builders GISS estão montados, mas o transporte SOAP continua deliberadamente bloqueado até o WSDL autenticado confirmar wrapper/SOAPAction e a reconciliação ConsultarNfsePorRps ser validada ponta a ponta.',
         data: gissEndpoint ? { protocol: gissEndpoint.protocol, layout: gissEndpoint.layout, homologation_wsdl: gissEndpoint.homologationWsdl } : undefined,
       });
     }
@@ -129,15 +129,25 @@ export class ReadinessService {
       try {
         const certificate = await this.vault.getActiveMaterial(companyId);
         const wsdl = await this.giss.inspectWsdl(company.city_code, certificate);
-        const success = wsdl.status >= 200 && wsdl.status < 400;
+        const transportOk = wsdl.reachable && wsdl.isWsdl;
         probes.push({
           id: 'giss_wsdl_mtls',
-          status: success ? 'pass' : 'fail',
-          detail: success ? 'WSDL GISS de homologação acessado por GET com A1/mTLS; nenhuma operação fiscal foi transmitida.' : `WSDL GISS respondeu HTTP ${wsdl.status}.`,
+          status: transportOk ? 'pass' : 'fail',
+          detail: transportOk ? 'WSDL GISS de homologação acessado por GET com A1/mTLS; nenhuma operação fiscal foi transmitida.' : `Resposta GISS não comprovou um WSDL válido (HTTP ${wsdl.status}).`,
           data: wsdl,
+        });
+        const contractOk = wsdl.requiredOperationsPresent && wsdl.reconciliationShapePresent;
+        probes.push({
+          id: 'giss_wsdl_contract',
+          status: contractOk ? 'pass' : 'fail',
+          detail: contractOk
+            ? 'WSDL autenticado contém ConsultarNfsePorRps e o shape de reconciliação nfseCabecMsg/nfseDadosMsg/outputXML.'
+            : `Contrato de reconciliação incompleto; operações ausentes: ${wsdl.missingRequiredOperations.join(', ') || 'nenhuma'}, wrapper/partes ainda não comprovados.`,
+          data: { targetNamespace: wsdl.targetNamespace, operations: wsdl.operations, soapActions: wsdl.soapActions, requestWrappers: wsdl.requestWrappers, reconciliationShapePresent: wsdl.reconciliationShapePresent },
         });
       } catch (error) {
         probes.push({ id: 'giss_wsdl_mtls', status: 'fail', detail: error instanceof Error ? error.message : 'Falha no acesso autenticado ao WSDL GISS.' });
+        probes.push({ id: 'giss_wsdl_contract', status: 'fail', detail: 'Contrato SOAP não pôde ser inspecionado porque o WSDL autenticado não foi obtido.' });
       }
       probes.push({ id: 'fiscal_route', status: 'pass', detail: `Rota municipal-provider/giss confirmada para ${company.city_code}; SEFIN direta não será usada.`, data: route });
     } else {
