@@ -1,4 +1,5 @@
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
+import { GissSoapVersion } from './giss-wsdl-binding';
 
 export interface GissReconciliationContract {
   reachable: boolean;
@@ -8,13 +9,15 @@ export interface GissReconciliationContract {
   reconciliationTransportPresent: boolean;
   reconciliationSoapAddress?: string;
   reconciliationSoapAction?: string;
+  reconciliationSoapVersion?: GissSoapVersion;
   targetNamespace?: string;
 }
 
 export interface VerifiedGissReconciliationTransport {
   soapAddress: string;
   soapAction: string;
-  targetNamespace?: string;
+  soapVersion: GissSoapVersion;
+  targetNamespace: string;
 }
 
 export function requireVerifiedGissReconciliationTransport(contract: GissReconciliationContract): VerifiedGissReconciliationTransport {
@@ -24,12 +27,14 @@ export function requireVerifiedGissReconciliationTransport(contract: GissReconci
     && contract.reconciliationShapePresent
     && contract.reconciliationTransportPresent
     && Boolean(contract.reconciliationSoapAddress)
-    && Boolean(contract.reconciliationSoapAction);
+    && Boolean(contract.reconciliationSoapAction)
+    && Boolean(contract.reconciliationSoapVersion)
+    && Boolean(contract.targetNamespace);
 
   if (!ready) {
     throw new FiscalEngineError(
       'TA_GISS_RECONCILIATION_CONTRACT_UNVERIFIED',
-      'GISS reconciliation transport remains locked until the authenticated WSDL proves the ConsultarNfsePorRps wrapper, SOAPAction, HTTPS service address and response shape.',
+      'GISS reconciliation transport remains locked until the authenticated WSDL proves the ConsultarNfsePorRps wrapper, SOAPAction, SOAP version, HTTPS service address, target namespace and response shape.',
       false,
       {
         transmission_attempted: false,
@@ -46,6 +51,7 @@ export function requireVerifiedGissReconciliationTransport(contract: GissReconci
   return {
     soapAddress: contract.reconciliationSoapAddress!,
     soapAction: contract.reconciliationSoapAction!,
-    targetNamespace: contract.targetNamespace,
+    soapVersion: contract.reconciliationSoapVersion!,
+    targetNamespace: contract.targetNamespace!,
   };
 }
