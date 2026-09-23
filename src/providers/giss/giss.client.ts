@@ -8,6 +8,7 @@ import { buildGissCabecalho } from './giss-header.builder';
 import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
 import { buildGissQuerySoapEnvelope } from './giss-query-soap.builder';
 import { requireVerifiedGissReconciliationTransport } from './giss-query-transport.guard';
+import { GissSignatureService } from './giss-signature.service';
 import { inspectGissWsdlTransport, reconciliationTransportBinding, GissSoapVersion, GissWsdlOperationBinding } from './giss-wsdl-binding';
 import { GissWsdlContractDocument, inspectResolvedGissWsdlShape } from './giss-wsdl-contract';
 
@@ -52,6 +53,8 @@ export interface GissPreparedQuery {
   body: string;
   bodyBytes: number;
   bodySha256: string;
+  queryDataSigned: true;
+  querySignatureProfile: 'xmldsig-rsa-sha1-empty-uri';
   fiscalTransmissionAttempted: false;
   queryAttempted: false;
 }
@@ -119,6 +122,8 @@ export function inspectGissWsdlContract(body: string, supportingDocuments: GissW
 
 @Injectable()
 export class GissClient {
+  constructor(private readonly signatures?: GissSignatureService) {}
+
   async probe(cityCode: string, material?: CertificateMaterial): Promise<GissProbeResult> {
     const inspection = await this.inspectWsdl(cityCode, material);
     return { host: inspection.host, path: inspection.path, status: inspection.status, reachable: inspection.reachable };
@@ -152,12 +157,17 @@ export class GissClient {
   async prepareRpsQuery(cityCode: string, input: GissRpsQueryInput, material: CertificateMaterial): Promise<GissPreparedQuery> {
     const wsdl = await this.inspectWsdl(cityCode, material);
     const verified = requireVerifiedGissReconciliationTransport(wsdl);
+    if (!this.signatures) {
+      throw new FiscalEngineError('TA_GISS_QUERY_SIGNER_UNAVAILABLE', 'GISS reconciliation query signing service is unavailable; no query was transmitted.', false, { transmission_attempted: false, query_attempted: false });
+    }
+    const queryXml = this.buildRpsQuery(input);
+    const signedQueryXml = this.signatures.signRpsQuery(queryXml, material);
     const body = buildGissQuerySoapEnvelope({
       targetNamespace: verified.requestNamespace,
       requestWrapper: verified.requestWrapper,
       soapVersion: verified.soapVersion,
       headerXml: buildGissCabecalho(),
-      dataXml: this.buildRpsQuery(input),
+      dataXml: signedQueryXml,
     });
     return {
       soapAddress: verified.soapAddress,
@@ -168,6 +178,8 @@ export class GissClient {
       body,
       bodyBytes: Buffer.byteLength(body, 'utf8'),
       bodySha256: createHash('sha256').update(body, 'utf8').digest('hex'),
+      queryDataSigned: true,
+      querySignatureProfile: 'xmldsig-rsa-sha1-empty-uri',
       fiscalTransmissionAttempted: false,
       queryAttempted: false,
     };
