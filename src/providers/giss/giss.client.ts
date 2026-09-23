@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as https from 'node:https';
+import { CertificateMaterial } from '../../certificates/certificate-vault.service';
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 import { gissEndpointPolicy } from './giss-endpoints';
 import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
@@ -8,12 +9,22 @@ export interface GissProbeResult { host: string; path: string; status: number; r
 
 @Injectable()
 export class GissClient {
-  async probe(cityCode: string): Promise<GissProbeResult> {
+  async probe(cityCode: string, material?: CertificateMaterial): Promise<GissProbeResult> {
     const endpoint = gissEndpointPolicy(cityCode);
     if (!endpoint) throw new FiscalEngineError('TA_GISS_CITY_UNSUPPORTED', `No GISS endpoint policy is registered for municipality ${cityCode}`, false);
+    if (!material) throw new FiscalEngineError('TA_GISS_CLIENT_CERTIFICATE_REQUIRED', 'GISS WSDL access requires ICP-Brasil client-certificate authentication. No network request was sent.', false, { network_attempted: false });
     const url = new URL(endpoint.homologationWsdl);
     return new Promise((resolve, reject) => {
-      const request = https.request({ hostname: url.hostname, port: 443, path: url.pathname + url.search, method: 'GET', minVersion: 'TLSv1.2', timeout: 10000 }, (response) => {
+      const request = https.request({
+        hostname: url.hostname,
+        port: 443,
+        path: url.pathname + url.search,
+        method: 'GET',
+        minVersion: 'TLSv1.2',
+        cert: material.tlsCertificatePem,
+        key: material.tlsPrivateKeyPem,
+        timeout: 10000,
+      }, (response) => {
         response.resume();
         resolve({ host: url.hostname, path: url.pathname, status: response.statusCode ?? 0, reachable: (response.statusCode ?? 500) < 500 });
       });
