@@ -4,8 +4,11 @@ import * as https from 'node:https';
 import { CertificateMaterial } from '../../certificates/certificate-vault.service';
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 import { gissEndpointPolicy } from './giss-endpoints';
+import { buildGissCabecalho } from './giss-header.builder';
 import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
-import { inspectGissWsdlTransport, reconciliationTransportBinding, GissWsdlOperationBinding } from './giss-wsdl-binding';
+import { buildGissQuerySoapEnvelope } from './giss-query-soap.builder';
+import { requireVerifiedGissReconciliationTransport } from './giss-query-transport.guard';
+import { inspectGissWsdlTransport, reconciliationTransportBinding, GissSoapVersion, GissWsdlOperationBinding } from './giss-wsdl-binding';
 
 export interface GissProbeResult { host: string; path: string; status: number; reachable: boolean }
 export interface GissWsdlInspection extends GissProbeResult {
@@ -27,7 +30,21 @@ export interface GissWsdlInspection extends GissProbeResult {
   reconciliationTransportPresent: boolean;
   reconciliationSoapAddress?: string;
   reconciliationSoapAction?: string;
+  reconciliationSoapVersion?: GissSoapVersion;
   missingRequiredOperations: string[];
+}
+
+export interface GissPreparedQuery {
+  soapAddress: string;
+  soapAction: string;
+  soapVersion: GissSoapVersion;
+  requestWrapper: 'ConsultarNfsePorRpsRequest';
+  targetNamespace: string;
+  body: string;
+  bodyBytes: number;
+  bodySha256: string;
+  fiscalTransmissionAttempted: false;
+  queryAttempted: false;
 }
 
 export const GISS_REQUIRED_RECONCILIATION_OPERATIONS = ['ConsultarNfsePorRps'] as const;
@@ -67,6 +84,7 @@ export function inspectGissWsdlContract(body: string) {
     reconciliationTransportPresent: reconciliationTransport.proven,
     reconciliationSoapAddress: reconciliationTransport.soapAddress,
     reconciliationSoapAction: reconciliationTransport.soapAction,
+    reconciliationSoapVersion: reconciliationTransport.soapVersion,
     missingRequiredOperations,
   };
 }
@@ -132,9 +150,37 @@ export class GissClient {
     return buildConsultarNfsePorRps(input);
   }
 
+  async prepareRpsQuery(cityCode: string, input: GissRpsQueryInput, material: CertificateMaterial): Promise<GissPreparedQuery> {
+    const wsdl = await this.inspectWsdl(cityCode, material);
+    const verified = requireVerifiedGissReconciliationTransport(wsdl);
+    const requestWrapper = wsdl.requestWrappers.find((name) => name === 'ConsultarNfsePorRpsRequest');
+    if (requestWrapper !== 'ConsultarNfsePorRpsRequest') {
+      throw new FiscalEngineError('TA_GISS_QUERY_WRAPPER_UNVERIFIED', 'Authenticated WSDL did not expose the exact ConsultarNfsePorRpsRequest wrapper.', false, { transmission_attempted: false, query_attempted: false });
+    }
+    const body = buildGissQuerySoapEnvelope({
+      targetNamespace: verified.targetNamespace,
+      requestWrapper,
+      soapVersion: verified.soapVersion,
+      headerXml: buildGissCabecalho(),
+      dataXml: this.buildRpsQuery(input),
+    });
+    return {
+      soapAddress: verified.soapAddress,
+      soapAction: verified.soapAction,
+      soapVersion: verified.soapVersion,
+      requestWrapper,
+      targetNamespace: verified.targetNamespace,
+      body,
+      bodyBytes: Buffer.byteLength(body, 'utf8'),
+      bodySha256: createHash('sha256').update(body, 'utf8').digest('hex'),
+      fiscalTransmissionAttempted: false,
+      queryAttempted: false,
+    };
+  }
+
   async queryRps(_cityCode: string, input: GissRpsQueryInput): Promise<never> {
     const requestXml = this.buildRpsQuery(input);
-    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the authenticated WSDL proves operation, wrapper, SOAPAction, HTTPS service address, authentication and response shape.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
+    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP POST remains locked until authenticated WSDL evidence and response semantics are validated end-to-end.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
   }
 
   async issueRps(): Promise<never> {
