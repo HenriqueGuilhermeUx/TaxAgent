@@ -18,3 +18,10 @@ test('parses escaped outputXML from verified SOAP response wrapper', () => {
   assert.equal(r.nfseNumber, '77');
   assert.equal(r.verificationCode, 'XYZ');
 });
+
+test('parses SOAP 1.1 Fault as a structured unknown reconciliation response', () => {
+  const r = parseGissResponse('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultcode>soap:Client</faultcode><faultstring>Invalid request</faultstring></soap:Fault></soap:Body></soap:Envelope>');
+  assert.equal(r.authorized, false);
+  assert.equal(r.errorCode, 'soap:Client');
+  assert.equal(r.errorMessage, 'Invalid request');
+});
