@@ -11,6 +11,7 @@ import { DpsPreflightService } from './dps-preflight.service';
 import { GissQueryExecutionService } from './giss-query-execution.service';
 import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { MunicipalityScenarioService } from './municipality-scenario.service';
+import { NationalDpsEligibilityService } from './national-dps-eligibility.service';
 import { NationalPreflightService } from './national-preflight.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { ReadinessService } from './readiness.service';
@@ -26,6 +27,7 @@ export class OperationsController {
     private readonly gissQuery: GissQueryExecutionService,
     private readonly municipalityScenario: MunicipalityScenarioService,
     private readonly nationalPreflight: NationalPreflightService,
+    private readonly nationalDpsEligibility: NationalDpsEligibilityService,
   ) {}
   @Get('readiness/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect local gates required before real NFS-e transmission' })
   report(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.report(companyId, environment); }
@@ -45,8 +47,8 @@ export class OperationsController {
   validateWithoutA1(@Body() dto: CreateInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); return this.noA1.validate(dto); }
   @Post('dps/prebuild') @RequireScope('operations:write') @ApiOperation({ summary: 'Build and XSD-validate an unsigned DPS without A1 or SEFIN transmission' })
   prebuildDps(@Body() dto: CreateInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); return this.dpsPreflight.prebuild(dto); }
-  @Post('dps/prepare') @RequireScope('operations:write') @ApiOperation({ summary: 'Persist an immutable XSD-valid Prepared DPS with real sequence and idempotency' })
-  prepareDps(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); return this.preparedDps.prepare(dto, idempotencyKey ?? ''); }
+  @Post('dps/prepare') @RequireScope('operations:write') @ApiOperation({ summary: 'Persist an immutable XSD-valid Prepared DPS with real sequence only for a proven national-direct issuer route' })
+  async prepareDps(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); await this.nationalDpsEligibility.assertPreparedDpsAllowed(dto); return this.preparedDps.prepare(dto, idempotencyKey ?? ''); }
   @Get('dps/prepared/:preparedDpsId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect immutable Prepared DPS metadata and hashes' })
   inspectPreparedDps(@Param('preparedDpsId') preparedDpsId: string, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { return this.preparedDps.inspect(preparedDpsId, this.requireAuthCompany(auth)); }
   @Post('dps/prepared/:preparedDpsId/sign') @RequireScope('operations:write') @ApiOperation({ summary: 'Sign the exact persisted Prepared DPS with the active A1 without transmitting to SEFIN' })
