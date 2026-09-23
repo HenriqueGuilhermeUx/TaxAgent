@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { TaxAgentAuthContext } from '../auth/auth.types';
 import { CurrentTaxAgentAuth } from '../auth/current-auth.decorator';
@@ -33,7 +33,11 @@ export class OperationsController {
   report(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.report(companyId, environment); }
   @Post('readiness/:companyId/probe') @RequireScope('operations:read') @ApiOperation({ summary: 'Run non-emitting Produção Restrita/Produção connectivity preflight' })
   probe(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.probe(companyId, environment); }
-  @Post('national/preflight/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Reuse the Company A1 to probe National NFS-e mTLS and target-municipality parameters without transmitting a fiscal document' })
+  @Post('national/preflight/:companyId')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Reuse the Company A1 to probe National NFS-e mTLS and target-municipality parameters without transmitting a fiscal document' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test', description: 'Fiscal environment. This preflight currently accepts test only.' })
+  @ApiQuery({ name: 'targetCityCode', required: true, example: '3530607', description: '7-digit IBGE municipality code to inspect in National NFS-e parameters (Mogi das Cruzes = 3530607).' })
   probeNational(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('targetCityCode') targetCityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); if (!targetCityCode) throw new BadRequestException('targetCityCode is required'); return this.nationalPreflight.probe(companyId, environment, targetCityCode); }
   @Post('giss/wsdl/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect the authenticated GISS homologation WSDL without fiscal transmission' })
   inspectGissWsdl(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('cityCode') cityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissWsdl.inspect(companyId, environment, cityCode ?? '3548500'); }
