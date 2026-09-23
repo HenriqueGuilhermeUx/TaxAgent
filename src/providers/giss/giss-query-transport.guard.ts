@@ -15,6 +15,13 @@ export interface GissReconciliationContract {
   reconciliationRequestNamespace?: string;
   reconciliationResponseWrapper?: string;
   reconciliationResponseNamespace?: string;
+  requestMessageParts?: string[];
+  responseMessageParts?: string[];
+  supportingDocumentsInspected?: number;
+  sameHostImportsDiscovered?: number;
+  hasNfseCabecMsg?: boolean;
+  hasNfseDadosMsg?: boolean;
+  hasOutputXml?: boolean;
 }
 
 export interface VerifiedGissReconciliationTransport {
@@ -56,6 +63,17 @@ export function requireVerifiedGissReconciliationTransport(contract: GissReconci
         operation_present: contract.requiredOperationsPresent,
         shape_present: contract.reconciliationShapePresent,
         transport_present: contract.reconciliationTransportPresent,
+        request_wrapper: contract.reconciliationRequestWrapper ?? '',
+        request_namespace: contract.reconciliationRequestNamespace ?? '',
+        response_wrapper: contract.reconciliationResponseWrapper ?? '',
+        response_namespace: contract.reconciliationResponseNamespace ?? '',
+        request_parts: contract.requestMessageParts?.join(',') ?? '',
+        response_parts: contract.responseMessageParts?.join(',') ?? '',
+        supporting_documents_inspected: contract.supportingDocumentsInspected ?? 0,
+        same_host_imports_discovered: contract.sameHostImportsDiscovered ?? 0,
+        has_nfse_cabec_msg: Boolean(contract.hasNfseCabecMsg),
+        has_nfse_dados_msg: Boolean(contract.hasNfseDadosMsg),
+        has_output_xml: Boolean(contract.hasOutputXml),
         request_namespace_verified: requestNamespaceVerified,
         response_namespace_verified: responseNamespaceVerified,
       },
