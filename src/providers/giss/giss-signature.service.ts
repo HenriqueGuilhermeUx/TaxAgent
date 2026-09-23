@@ -19,6 +19,17 @@ export class GissSignatureService {
     return this.signatures.sign(xml, match[1], 'LoteRps', material, 'sha1');
   }
 
+  signRpsQuery(xml: string, material: CertificateMaterial): string {
+    if (!/<ConsultarNfseRpsEnvio(?:\s|>)/i.test(xml)) {
+      throw new FiscalEngineError('TA_GISS_QUERY_ROOT_REQUIRED', 'GISS reconciliation signature requires ConsultarNfseRpsEnvio as the query document root', false, { transmission_attempted: false, query_attempted: false });
+    }
+    const signed = this.signatures.signEmptyUri(xml, 'ConsultarNfseRpsEnvio', material, 'sha1');
+    if (!/<Signature\b[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#"/i.test(signed) || !/<Reference\s+URI=""/i.test(signed)) {
+      throw new FiscalEngineError('TA_GISS_QUERY_SIGNATURE_INVALID', 'GISS reconciliation query signature did not match the required enveloped empty-URI XMLDSig shape', false, { transmission_attempted: false, query_attempted: false });
+    }
+    return signed;
+  }
+
   signRpsAndBatch(xml: string, material: CertificateMaterial): string {
     return this.signBatch(this.signRps(xml, material), material);
   }
