@@ -45,6 +45,14 @@ interface ElementDescriptor {
   name: string;
   namespace?: string;
   node: XmlNode;
+  owner: ParsedDocument;
+}
+
+interface WrapperDescriptor {
+  name?: string;
+  namespace?: string;
+  node?: XmlNode;
+  owner?: ParsedDocument;
 }
 
 const parser = new XMLParser({
@@ -126,11 +134,11 @@ function collectMessages(documents: ParsedDocument[]): MessageDescriptor[] {
 
 function collectElements(documents: ParsedDocument[]): ElementDescriptor[] {
   const result: ElementDescriptor[] = [];
-  for (const document of documents) {
-    for (const schema of document.schemas) {
+  for (const owner of documents) {
+    for (const schema of owner.schemas) {
       for (const node of arr(schema.node.element as XmlNode | XmlNode[] | undefined)) {
         const name = attr(node, 'name');
-        if (name) result.push({ name, namespace: schema.namespace, node });
+        if (name) result.push({ name, namespace: schema.namespace, node, owner });
       }
     }
   }
@@ -173,16 +181,16 @@ function messageParts(message: MessageDescriptor | undefined) {
   });
 }
 
-function resolveWrapper(parts: ReturnType<typeof messageParts>, elements: ElementDescriptor[], expectedName: string) {
+function resolveWrapper(parts: ReturnType<typeof messageParts>, elements: ElementDescriptor[], expectedName: string): WrapperDescriptor | undefined {
   const elementPart = parts.find((part) => local(part.element) === expectedName) ?? parts.find((part) => Boolean(part.element));
   if (elementPart?.element) {
     const name = local(elementPart.element);
     const namespace = elementPart.namespace;
     const exact = elements.find((element) => element.name === name && (!namespace || element.namespace === namespace));
-    return { name, namespace: exact?.namespace ?? namespace, node: exact?.node };
+    return exact ?? { name, namespace };
   }
   const exact = elements.find((element) => element.name === expectedName);
-  return exact ? { name: exact.name, namespace: exact.namespace, node: exact.node } : undefined;
+  return exact ?? undefined;
 }
 
 function nestedElementNames(node: unknown): string[] {
@@ -206,6 +214,27 @@ function nestedElementNames(node: unknown): string[] {
 
 const normalizeNs = (value: string | undefined) => value?.replace(/\/+$/, '');
 
+function wrapperContentNode(wrapper: WrapperDescriptor | undefined, documents: ParsedDocument[]): XmlNode | undefined {
+  if (!wrapper?.node) return undefined;
+  const inlineComplexType = wrapper.node.complexType;
+  if (inlineComplexType && typeof inlineComplexType === 'object') return inlineComplexType as XmlNode;
+
+  const typeQName = attr(wrapper.node, 'type');
+  const typeName = local(typeQName);
+  if (!typeName) return wrapper.node;
+  const typeNamespace = wrapper.owner ? qnameNamespace(typeQName, wrapper.owner) : wrapper.namespace;
+
+  for (const document of documents) {
+    for (const schema of document.schemas) {
+      if (typeNamespace && schema.namespace && normalizeNs(schema.namespace) !== normalizeNs(typeNamespace)) continue;
+      for (const complexType of arr(schema.node.complexType as XmlNode | XmlNode[] | undefined)) {
+        if (attr(complexType, 'name') === typeName) return complexType;
+      }
+    }
+  }
+  return wrapper.node;
+}
+
 export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument[]): GissResolvedWsdlShape {
   const parsed = documents.map(parseDocument).filter((value): value is ParsedDocument => Boolean(value));
   const main = parsed[0];
@@ -218,8 +247,8 @@ export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument
   const responseParts = messageParts(responseMessage);
   const request = resolveWrapper(requestParts, elements, 'ConsultarNfsePorRpsRequest');
   const response = resolveWrapper(responseParts, elements, 'ConsultarNfsePorRpsResponse');
-  const requestNames = nestedElementNames(request?.node);
-  const responseNames = nestedElementNames(response?.node);
+  const requestNames = nestedElementNames(wrapperContentNode(request, parsed));
+  const responseNames = nestedElementNames(wrapperContentNode(response, parsed));
   const hasNfseCabecMsg = requestNames.includes('nfseCabecMsg') || requestParts.some((part) => part.name === 'nfseCabecMsg');
   const hasNfseDadosMsg = requestNames.includes('nfseDadosMsg') || requestParts.some((part) => part.name === 'nfseDadosMsg');
   const hasOutputXml = responseNames.includes('outputXML') || responseParts.some((part) => part.name === 'outputXML');
