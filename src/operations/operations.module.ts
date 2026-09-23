@@ -7,6 +7,7 @@ import { MunicipalParametersModule } from '../municipal-parameters/municipal-par
 import { PreparedDpsModule } from '../prepared-dps/prepared-dps.module';
 import { GissArtifactsService } from '../providers/giss/giss-artifacts.service';
 import { GissClient } from '../providers/giss/giss.client';
+import { GissSignatureService } from '../providers/giss/giss-signature.service';
 import { NfseNationalClient } from '../providers/nfse-national/nfse-national.client';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineModule } from '../tax-engine/tax-engine.module';
@@ -24,7 +25,7 @@ import { ReadinessService } from './readiness.service';
 @Module({
   imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
   controllers: [OperationsController, MunicipalityScenarioController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService],
   exports: [ReadinessService, NoA1HomologationService],
 })
 export class OperationsModule {}
