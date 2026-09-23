@@ -1,8 +1,21 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable } from '@nestjs/common';
 import { CertificateVaultService } from '../certificates/certificate-vault.service';
+import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { GissClient } from '../providers/giss/giss.client';
 import { TenancyService } from '../tenancy/tenancy.service';
+
+const SAFE_GISS_DETAIL_KEYS = [
+  'transmission_attempted',
+  'query_attempted',
+  'network_attempted',
+  'reachable',
+  'is_wsdl',
+  'operation_present',
+  'shape_present',
+  'transport_present',
+  'request_bytes',
+] as const;
 
 @Injectable()
 export class GissWsdlDiagnosticService {
@@ -15,15 +28,22 @@ export class GissWsdlDiagnosticService {
   async inspect(companyId: string, environment: FiscalEnvironment, cityCode: string) {
     this.assertTestEnvironment(environment);
     const material = await this.vault.getActiveMaterial(companyId);
-    const result = await this.giss.inspectWsdl(cityCode, material);
-    return {
-      ...result,
-      environment,
-      city_code: cityCode,
-      certificate_fingerprint: material.fingerprint,
-      network_method: 'GET',
-      fiscal_transmission_attempted: false,
-    };
+    try {
+      const result = await this.giss.inspectWsdl(cityCode, material);
+      return {
+        ...result,
+        environment,
+        city_code: cityCode,
+        certificate_fingerprint: material.fingerprint,
+        network_method: 'GET',
+        fiscal_transmission_attempted: false,
+        query_attempted: false,
+        certificate_private_material_exposed: false,
+        response_body_exposed: false,
+      };
+    } catch (error) {
+      throw this.safeUpstreamFailure(error, 'authenticated_wsdl_get');
+    }
   }
 
   async prepareQuery(
@@ -40,16 +60,21 @@ export class GissWsdlDiagnosticService {
     }
 
     const material = await this.vault.getActiveMaterial(companyId);
-    const prepared = await this.giss.prepareRpsQuery(
-      cityCode,
-      {
-        providerTaxId: company.tax_id,
-        municipalRegistration: company.municipal_registration,
-        number,
-        series,
-      },
-      material,
-    );
+    let prepared;
+    try {
+      prepared = await this.giss.prepareRpsQuery(
+        cityCode,
+        {
+          providerTaxId: company.tax_id,
+          municipalRegistration: company.municipal_registration,
+          number,
+          series,
+        },
+        material,
+      );
+    } catch (error) {
+      throw this.safeUpstreamFailure(error, 'authenticated_wsdl_get_and_contract');
+    }
 
     const body = prepared.body;
     return {
@@ -84,6 +109,50 @@ export class GissWsdlDiagnosticService {
       certificate_private_material_exposed: false,
       request_body_exposed: false,
     };
+  }
+
+  private safeUpstreamFailure(error: unknown, stage: 'authenticated_wsdl_get' | 'authenticated_wsdl_get_and_contract') {
+    const common = {
+      stage,
+      fiscal_transmission_attempted: false,
+      query_attempted: false,
+      certificate_private_material_exposed: false,
+      request_body_exposed: false,
+    };
+
+    if (error instanceof FiscalEngineError) {
+      return new BadGatewayException({
+        ...common,
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+        details: this.safeDetails(error.details),
+      });
+    }
+
+    const networkCode = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : undefined;
+
+    return new BadGatewayException({
+      ...common,
+      code: 'TA_GISS_WSDL_DIAGNOSTIC_FAILED',
+      message: 'Authenticated GISS WSDL diagnostic failed before any fiscal POST.',
+      retryable: true,
+      error_name: error instanceof Error ? error.name : 'UnknownError',
+      ...(networkCode ? { network_code: networkCode } : {}),
+    });
+  }
+
+  private safeDetails(details: unknown) {
+    if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
+    const source = details as Record<string, unknown>;
+    const safe: Record<string, unknown> = {};
+    for (const key of SAFE_GISS_DETAIL_KEYS) {
+      const value = source[key];
+      if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') safe[key] = value;
+    }
+    return Object.keys(safe).length > 0 ? safe : undefined;
   }
 
   private assertTestEnvironment(environment: FiscalEnvironment) {
