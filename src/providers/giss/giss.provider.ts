@@ -31,9 +31,9 @@ export class GissProvider implements FiscalProvider {
     await this.artifacts.save(operation.invoiceId, 'giss_rps_signed_xml', signedRps, { rps_number: rpsNumber, series: 'TA' });
     const batchNumber = rpsNumber;
     const batch = buildAbrasfLoteRps({ batchNumber, providerTaxId: company.tax_id, municipalRegistration: company.municipal_registration, rpsXml: signedRps });
-    await this.artifacts.save(operation.invoiceId, 'giss_batch_xml' as any, batch, { batch_number: batchNumber, rps_number: rpsNumber, series: 'TA' });
+    await this.artifacts.save(operation.invoiceId, 'giss_batch_xml', batch, { batch_number: batchNumber, rps_number: rpsNumber, series: 'TA' });
     const signedBatch = this.signatures.signBatch(batch, material);
-    await this.artifacts.save(operation.invoiceId, 'giss_batch_signed_xml' as any, signedBatch, { batch_number: batchNumber, rps_number: rpsNumber, series: 'TA' });
+    await this.artifacts.save(operation.invoiceId, 'giss_batch_signed_xml', signedBatch, { batch_number: batchNumber, rps_number: rpsNumber, series: 'TA' });
     await this.reconciliation.beforeIssue({ cityCode: '3548500', providerTaxId: company.tax_id, municipalRegistration: company.municipal_registration, number: rpsNumber, series: 'TA' });
     // No SOAP POST is reachable until reconciliation is validated end-to-end.
     throw new FiscalEngineError(
