@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BadRequestException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException } from '@nestjs/common';
+import { FiscalEngineError } from '../src/fiscal-core/fiscal-engine.error';
 import { GissWsdlDiagnosticService } from '../src/operations/giss-wsdl-diagnostic.service';
 
 test('GISS WSDL/query diagnostic is test-only and does not touch certificate, tenancy or network in production', async () => {
@@ -22,7 +23,7 @@ test('GISS WSDL/query diagnostic is test-only and does not touch certificate, te
 test('GISS WSDL diagnostic exposes contract metadata without returning certificate material', async () => {
   const service = new GissWsdlDiagnosticService(
     { getActiveMaterial: async () => ({ fingerprint: 'fp_test', tlsCertificatePem: 'SECRET_CERT', tlsPrivateKeyPem: 'SECRET_KEY' }) } as any,
-    { inspectWsdl: async () => ({ host: 'ws-homologacao.giss.com.br', path: '/service-ws/nf/nfse-ws', status: 200, reachable: true, bytes: 1234, sha256: 'abc', operations: ['ConsultarNfsePorRps'], soapActions: ['action'] }) } as any,
+    { inspectWsdl: async () => ({ host: 'ws-homologacao-rtc.giss.com.br', path: '/service-ws/nf/nfse-ws', status: 200, reachable: true, bytes: 1234, sha256: 'abc', operations: ['ConsultarNfsePorRps'], soapActions: ['action'] }) } as any,
     { getCompany: async () => ({}) } as any,
   );
   const result = await service.inspect('comp_1', 'test', '3548500');
@@ -41,7 +42,7 @@ test('GISS query diagnostic prepares exact bytes with Company identity without e
       prepareRpsQuery: async (cityCode: string, input: unknown) => {
         preparedInput = { cityCode, input };
         return {
-          soapAddress: 'https://ws-homologacao.giss.com.br/service-ws/nf/nfse-ws',
+          soapAddress: 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws',
           soapAction: 'ConsultarNfsePorRps',
           soapVersion: '1.1',
           requestWrapper: 'ConsultarNfsePorRpsRequest',
@@ -60,7 +61,7 @@ test('GISS query diagnostic prepares exact bytes with Company identity without e
   const result = await service.prepareQuery('comp_1', 'test', '3548500', '77', 'TA');
   assert.equal(preparedInput.cityCode, '3548500');
   assert.deepEqual(preparedInput.input, { providerTaxId: '12345678000190', municipalRegistration: null, number: '77', series: 'TA' });
-  assert.equal(result.endpoint, 'https://ws-homologacao.giss.com.br/service-ws/nf/nfse-ws');
+  assert.equal(result.endpoint, 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws');
   assert.equal(result.action, 'ConsultarNfsePorRps');
   assert.equal(result.soap_version, '1.1');
   assert.equal(result.namespace, 'http://tempuri.org/');
@@ -92,4 +93,79 @@ test('GISS query diagnostic rejects service-location city as issuer before certi
   await assert.rejects(service.prepareQuery('comp_1', 'test', '3530607'), BadRequestException);
   assert.equal(vaultCalls, 0);
   assert.equal(clientCalls, 0);
+});
+
+test('GISS query diagnostic maps contract failures to safe structured 502 without exposing secrets', async () => {
+  const service = new GissWsdlDiagnosticService(
+    { getActiveMaterial: async () => ({ fingerprint: 'fp_test', tlsCertificatePem: 'SECRET_CERT', tlsPrivateKeyPem: 'SECRET_KEY' }) } as any,
+    {
+      prepareRpsQuery: async () => {
+        throw new FiscalEngineError(
+          'TA_GISS_RECONCILIATION_CONTRACT_UNVERIFIED',
+          'GISS reconciliation transport remains locked until the authenticated WSDL proves the contract.',
+          false,
+          {
+            transmission_attempted: false,
+            query_attempted: false,
+            reachable: true,
+            is_wsdl: false,
+            operation_present: false,
+            shape_present: false,
+            transport_present: false,
+            secret: 'DO_NOT_EXPOSE',
+          },
+        );
+      },
+    } as any,
+    { getCompany: async () => ({ tax_id: '12345678000190', municipal_registration: null, city_code: '3548500' }) } as any,
+  );
+
+  await assert.rejects(
+    service.prepareQuery('comp_1', 'test', '3548500', '1', 'TA'),
+    (error: unknown) => {
+      assert.ok(error instanceof BadGatewayException);
+      const response = error.getResponse() as Record<string, unknown>;
+      assert.equal(response.code, 'TA_GISS_RECONCILIATION_CONTRACT_UNVERIFIED');
+      assert.equal(response.stage, 'authenticated_wsdl_get_and_contract');
+      assert.equal(response.fiscal_transmission_attempted, false);
+      assert.equal(response.query_attempted, false);
+      assert.deepEqual(response.details, {
+        transmission_attempted: false,
+        query_attempted: false,
+        reachable: true,
+        is_wsdl: false,
+        operation_present: false,
+        shape_present: false,
+        transport_present: false,
+      });
+      assert.equal(JSON.stringify(response).includes('DO_NOT_EXPOSE'), false);
+      assert.equal(JSON.stringify(response).includes('SECRET_CERT'), false);
+      assert.equal(JSON.stringify(response).includes('SECRET_KEY'), false);
+      return true;
+    },
+  );
+});
+
+test('GISS WSDL diagnostic maps network errors to safe structured 502 without raw error message', async () => {
+  const networkError = Object.assign(new Error('getaddrinfo ENOTFOUND ws-homologacao-rtc.giss.com.br WITH_SECRET_PATH'), { code: 'ENOTFOUND' });
+  const service = new GissWsdlDiagnosticService(
+    { getActiveMaterial: async () => ({ fingerprint: 'fp_test', tlsCertificatePem: 'SECRET_CERT', tlsPrivateKeyPem: 'SECRET_KEY' }) } as any,
+    { inspectWsdl: async () => { throw networkError; } } as any,
+    { getCompany: async () => ({}) } as any,
+  );
+
+  await assert.rejects(
+    service.inspect('comp_1', 'test', '3548500'),
+    (error: unknown) => {
+      assert.ok(error instanceof BadGatewayException);
+      const response = error.getResponse() as Record<string, unknown>;
+      assert.equal(response.code, 'TA_GISS_WSDL_DIAGNOSTIC_FAILED');
+      assert.equal(response.stage, 'authenticated_wsdl_get');
+      assert.equal(response.network_code, 'ENOTFOUND');
+      assert.equal(response.fiscal_transmission_attempted, false);
+      assert.equal(response.query_attempted, false);
+      assert.equal(JSON.stringify(response).includes('WITH_SECRET_PATH'), false);
+      return true;
+    },
+  );
 });
