@@ -56,6 +56,16 @@ export interface GissPreparedQuery {
   queryAttempted: false;
 }
 
+export interface GissQueryHttpResponse {
+  status: number;
+  body: string;
+  contentType?: string;
+  bodyBytes: number;
+  bodySha256: string;
+  fiscalTransmissionAttempted: false;
+  queryAttempted: true;
+}
+
 interface AuthenticatedXmlResponse {
   status: number;
   body: string;
@@ -65,6 +75,7 @@ interface AuthenticatedXmlResponse {
 export const GISS_REQUIRED_RECONCILIATION_OPERATIONS = ['ConsultarNfsePorRps'] as const;
 const MAX_WSDL_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_WSDL_DOCUMENTS = 8;
+const MAX_GISS_QUERY_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export function inspectGissWsdlContract(body: string, supportingDocuments: GissWsdlContractDocument[] = []) {
   const documents: GissWsdlContractDocument[] = [{ url: 'memory://root.wsdl', body }, ...supportingDocuments];
@@ -162,9 +173,58 @@ export class GissClient {
     };
   }
 
-  async queryRps(_cityCode: string, input: GissRpsQueryInput): Promise<never> {
-    const requestXml = this.buildRpsQuery(input);
-    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP POST remains locked until authenticated WSDL evidence and response semantics are validated end-to-end.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
+  async executePreparedRpsQuery(cityCode: string, prepared: GissPreparedQuery, material: CertificateMaterial): Promise<GissQueryHttpResponse> {
+    const policy = gissEndpointPolicy(cityCode);
+    if (!policy) throw new FiscalEngineError('TA_GISS_CITY_UNSUPPORTED', `No GISS endpoint policy is registered for municipality ${cityCode}`, false);
+
+    const expectedHost = new URL(policy.homologationWsdl).hostname;
+    let endpoint: URL;
+    try {
+      endpoint = new URL(prepared.soapAddress);
+    } catch {
+      throw new FiscalEngineError('TA_GISS_QUERY_ENDPOINT_UNVERIFIED', 'Verified GISS reconciliation endpoint is not a valid HTTPS URL.', false, { transmission_attempted: false, query_attempted: false });
+    }
+    if (endpoint.protocol !== 'https:' || endpoint.hostname !== expectedHost) {
+      throw new FiscalEngineError('TA_GISS_QUERY_ENDPOINT_UNVERIFIED', 'GISS reconciliation POST is restricted to the authenticated homologation WSDL host.', false, {
+        transmission_attempted: false,
+        query_attempted: false,
+        endpoint_host_verified: false,
+      });
+    }
+
+    try {
+      const response = await this.postAuthenticatedSoap(endpoint, prepared, material);
+      return {
+        status: response.status,
+        body: response.body,
+        contentType: response.contentType,
+        bodyBytes: Buffer.byteLength(response.body, 'utf8'),
+        bodySha256: createHash('sha256').update(response.body, 'utf8').digest('hex'),
+        fiscalTransmissionAttempted: false,
+        queryAttempted: true,
+      };
+    } catch (error) {
+      if (error instanceof FiscalEngineError) throw error;
+      const networkCode = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : undefined;
+      throw new FiscalEngineError(
+        'TA_GISS_QUERY_NETWORK_ERROR',
+        'Authenticated GISS reconciliation query failed at the network/TLS layer. No RPS emission was attempted.',
+        true,
+        {
+          transmission_attempted: false,
+          query_attempted: true,
+          ...(networkCode ? { network_code: networkCode } : {}),
+        },
+      );
+    }
+  }
+
+  async queryRps(cityCode: string, input: GissRpsQueryInput, material: CertificateMaterial) {
+    const prepared = await this.prepareRpsQuery(cityCode, input, material);
+    const response = await this.executePreparedRpsQuery(cityCode, prepared, material);
+    return { prepared, response };
   }
 
   async issueRps(): Promise<never> {
@@ -249,6 +309,55 @@ export class GissClient {
       request.on('timeout', () => request.destroy(new Error('GISS WSDL probe timeout')));
       request.on('error', reject);
       request.end();
+    });
+  }
+
+  private postAuthenticatedSoap(url: URL, prepared: GissPreparedQuery, material: CertificateMaterial): Promise<AuthenticatedXmlResponse> {
+    return new Promise((resolve, reject) => {
+      const body = Buffer.from(prepared.body, 'utf8');
+      const contentType = prepared.soapVersion === '1.2'
+        ? `application/soap+xml; charset=utf-8; action="${prepared.soapAction}"`
+        : 'text/xml; charset=utf-8';
+      const headers: Record<string, string | number> = {
+        Accept: 'text/xml, application/soap+xml, application/xml',
+        'Content-Type': contentType,
+        'Content-Length': body.length,
+      };
+      if (prepared.soapVersion === '1.1') headers.SOAPAction = `"${prepared.soapAction}"`;
+
+      const request = https.request({
+        hostname: url.hostname,
+        port: url.port ? Number(url.port) : 443,
+        path: url.pathname + url.search,
+        method: 'POST',
+        minVersion: 'TLSv1.2',
+        cert: material.tlsCertificatePem,
+        key: material.tlsPrivateKeyPem,
+        timeout: 15000,
+        headers,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        response.on('data', (chunk: Buffer | string) => {
+          const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          bytes += part.length;
+          if (bytes > MAX_GISS_QUERY_RESPONSE_BYTES) {
+            response.destroy(new Error('GISS reconciliation response exceeds 2 MiB safety limit'));
+            return;
+          }
+          chunks.push(part);
+        });
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString('utf8'),
+            contentType: Array.isArray(response.headers['content-type']) ? response.headers['content-type'][0] : response.headers['content-type'],
+          });
+        });
+      });
+      request.on('timeout', () => request.destroy(new Error('GISS reconciliation query timeout')));
+      request.on('error', reject);
+      request.end(body);
     });
   }
 }
