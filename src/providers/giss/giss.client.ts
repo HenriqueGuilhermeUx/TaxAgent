@@ -14,8 +14,13 @@ export interface GissWsdlInspection extends GissProbeResult {
   targetNamespace?: string;
   operations: string[];
   soapActions: string[];
+  requestWrappers: string[];
+  hasNfseCabecMsg: boolean;
+  hasNfseDadosMsg: boolean;
+  hasOutputXml: boolean;
   isWsdl: boolean;
   requiredOperationsPresent: boolean;
+  reconciliationShapePresent: boolean;
   missingRequiredOperations: string[];
 }
 
@@ -25,16 +30,30 @@ export function inspectGissWsdlContract(body: string) {
   const targetNamespace = body.match(/targetNamespace\s*=\s*["']([^"']+)["']/i)?.[1];
   const operations = [...body.matchAll(/<(?:\w+:)?operation\b[^>]*\bname\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
   const soapActions = [...body.matchAll(/\bsoapAction\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+  const requestWrappers = [...body.matchAll(/<(?:\w+:)?element\b[^>]*\bname\s*=\s*["']([^"']*Request)["']/gi)].map((match) => match[1]);
   const uniqueOperations = [...new Set(operations)].sort();
   const uniqueSoapActions = [...new Set(soapActions)].sort();
+  const uniqueRequestWrappers = [...new Set(requestWrappers)].sort();
   const isWsdl = /<(?:\w+:)?definitions\b/i.test(body);
+  const hasNfseCabecMsg = /\bname\s*=\s*["']nfseCabecMsg["']/i.test(body);
+  const hasNfseDadosMsg = /\bname\s*=\s*["']nfseDadosMsg["']/i.test(body);
+  const hasOutputXml = /\bname\s*=\s*["']outputXML["']/i.test(body);
   const missingRequiredOperations = GISS_REQUIRED_RECONCILIATION_OPERATIONS.filter((operation) => !uniqueOperations.includes(operation));
+  const reconciliationShapePresent = uniqueRequestWrappers.some((name) => /ConsultarNfsePorRpsRequest/i.test(name))
+    && hasNfseCabecMsg
+    && hasNfseDadosMsg
+    && hasOutputXml;
   return {
     targetNamespace,
     operations: uniqueOperations,
     soapActions: uniqueSoapActions,
+    requestWrappers: uniqueRequestWrappers,
+    hasNfseCabecMsg,
+    hasNfseDadosMsg,
+    hasOutputXml,
     isWsdl,
     requiredOperationsPresent: isWsdl && missingRequiredOperations.length === 0,
+    reconciliationShapePresent,
     missingRequiredOperations,
   };
 }
@@ -102,7 +121,7 @@ export class GissClient {
 
   async queryRps(_cityCode: string, input: GissRpsQueryInput): Promise<never> {
     const requestXml = this.buildRpsQuery(input);
-    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the official WSDL operation, SOAPAction, authentication and response contract are verified.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
+    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the authenticated WSDL proves operation, wrapper, SOAPAction, authentication and response shape.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
   }
 
   async issueRps(): Promise<never> {
