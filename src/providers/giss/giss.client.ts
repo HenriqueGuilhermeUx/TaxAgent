@@ -10,9 +10,33 @@ export interface GissProbeResult { host: string; path: string; status: number; r
 export interface GissWsdlInspection extends GissProbeResult {
   bytes: number;
   sha256: string;
+  contentType?: string;
   targetNamespace?: string;
   operations: string[];
   soapActions: string[];
+  isWsdl: boolean;
+  requiredOperationsPresent: boolean;
+  missingRequiredOperations: string[];
+}
+
+export const GISS_REQUIRED_RECONCILIATION_OPERATIONS = ['ConsultarNfsePorRps'] as const;
+
+export function inspectGissWsdlContract(body: string) {
+  const targetNamespace = body.match(/targetNamespace\s*=\s*["']([^"']+)["']/i)?.[1];
+  const operations = [...body.matchAll(/<(?:\w+:)?operation\b[^>]*\bname\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
+  const soapActions = [...body.matchAll(/\bsoapAction\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+  const uniqueOperations = [...new Set(operations)].sort();
+  const uniqueSoapActions = [...new Set(soapActions)].sort();
+  const isWsdl = /<(?:\w+:)?definitions\b/i.test(body);
+  const missingRequiredOperations = GISS_REQUIRED_RECONCILIATION_OPERATIONS.filter((operation) => !uniqueOperations.includes(operation));
+  return {
+    targetNamespace,
+    operations: uniqueOperations,
+    soapActions: uniqueSoapActions,
+    isWsdl,
+    requiredOperationsPresent: isWsdl && missingRequiredOperations.length === 0,
+    missingRequiredOperations,
+  };
 }
 
 @Injectable()
@@ -53,19 +77,16 @@ export class GissClient {
         response.on('end', () => {
           const status = response.statusCode ?? 0;
           const body = Buffer.concat(chunks).toString('utf8');
-          const targetNamespace = body.match(/targetNamespace\s*=\s*["']([^"']+)["']/i)?.[1];
-          const operations = [...body.matchAll(/<(?:\w+:)?operation\b[^>]*\bname\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
-          const soapActions = [...body.matchAll(/\bsoapAction\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+          const contract = inspectGissWsdlContract(body);
           resolve({
             host: url.hostname,
             path: url.pathname,
             status,
-            reachable: status > 0 && status < 500,
+            reachable: status >= 200 && status < 400,
             bytes: Buffer.byteLength(body, 'utf8'),
             sha256: createHash('sha256').update(body, 'utf8').digest('hex'),
-            targetNamespace,
-            operations: [...new Set(operations)].sort(),
-            soapActions: [...new Set(soapActions)].sort(),
+            contentType: Array.isArray(response.headers['content-type']) ? response.headers['content-type'][0] : response.headers['content-type'],
+            ...contract,
           });
         });
       });
