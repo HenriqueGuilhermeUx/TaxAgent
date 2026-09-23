@@ -7,6 +7,7 @@ test('returns an existing RPS assignment without consuming another number', asyn
   const client = {
     query: async (query: string) => {
       sql.push(query);
+      if (query.includes('pg_advisory_xact_lock')) return { rows: [] };
       if (query.includes('SELECT number::text')) return { rows: [{ number: '7' }] };
       throw new Error('unexpected allocation query');
     },
