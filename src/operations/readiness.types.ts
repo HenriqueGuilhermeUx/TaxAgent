@@ -6,6 +6,7 @@ export interface ReadinessGate {
   status: ReadinessGateStatus;
   blocking: boolean;
   detail: string;
+  data?: unknown;
 }
 
 export interface ReadinessSummary {
