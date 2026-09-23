@@ -1,6 +1,6 @@
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 
-export interface GissSoapRequest { operation: 'RecepcionarLoteRpsSincrono' | 'ConsultarNfsePorRps' | 'CancelarNfse'; xml: string }
+export interface GissSoapRequest { operation: 'RecepcionarLoteRps' | 'ConsultarNfsePorRps' | 'CancelarNfse'; xml: string }
 
 const esc = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
