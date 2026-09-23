@@ -18,6 +18,7 @@ import { GissQueryExecutionService } from './giss-query-execution.service';
 import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { MunicipalityScenarioController } from './municipality-scenario.controller';
 import { MunicipalityScenarioService } from './municipality-scenario.service';
+import { NationalPreflightService } from './national-preflight.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { OperationsController } from './operations.controller';
 import { ReadinessService } from './readiness.service';
@@ -25,7 +26,7 @@ import { ReadinessService } from './readiness.service';
 @Module({
   imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
   controllers: [OperationsController, MunicipalityScenarioController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService],
   exports: [ReadinessService, NoA1HomologationService],
 })
 export class OperationsModule {}
