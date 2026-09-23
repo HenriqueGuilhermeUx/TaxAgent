@@ -51,10 +51,16 @@ export class OperationsController {
   async prepareDps(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); await this.nationalDpsEligibility.assertPreparedDpsAllowed(dto); return this.preparedDps.prepare(dto, idempotencyKey ?? ''); }
   @Get('dps/prepared/:preparedDpsId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect immutable Prepared DPS metadata and hashes' })
   inspectPreparedDps(@Param('preparedDpsId') preparedDpsId: string, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { return this.preparedDps.inspect(preparedDpsId, this.requireAuthCompany(auth)); }
-  @Post('dps/prepared/:preparedDpsId/sign') @RequireScope('operations:write') @ApiOperation({ summary: 'Sign the exact persisted Prepared DPS with the active A1 without transmitting to SEFIN' })
-  signPreparedDps(@Param('preparedDpsId') preparedDpsId: string, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { return this.preparedDps.sign(preparedDpsId, this.requireAuthCompany(auth)); }
-  @Post('dps/validate') @RequireScope('operations:write') @ApiOperation({ summary: 'Build, XSD-validate, A1-sign and revalidate a DPS without sending it to SEFIN' })
-  validateDps(@Body() dto: CreateInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); return this.dpsPreflight.validate(dto); }
+  @Post('dps/prepared/:preparedDpsId/sign') @RequireScope('operations:write') @ApiOperation({ summary: 'Sign a persisted Prepared DPS with A1 only when its issuer route is proven national-direct; never transmits' })
+  async signPreparedDps(@Param('preparedDpsId') preparedDpsId: string, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+    const companyId = this.requireAuthCompany(auth);
+    const record = await this.preparedDps.get(preparedDpsId, companyId);
+    const effectiveAt = record.competence ? String(record.competence).slice(0, 10) : undefined;
+    await this.nationalDpsEligibility.assertCompanyAllowed(companyId, record.environment, effectiveAt);
+    return this.preparedDps.sign(preparedDpsId, companyId);
+  }
+  @Post('dps/validate') @RequireScope('operations:write') @ApiOperation({ summary: 'Build, XSD-validate and A1-sign a DPS only for a proven national-direct issuer route; never transmits' })
+  async validateDps(@Body() dto: CreateInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { this.assertAccess(dto.company_id, dto.environment, auth); await this.nationalDpsEligibility.assertPreparedDpsAllowed(dto); return this.dpsPreflight.validate(dto); }
   private environment(value: string): FiscalEnvironment { if (value !== 'test' && value !== 'production') throw new BadRequestException('environment must be test or production'); return value; }
   private assertAccess(companyId: string, environment: FiscalEnvironment, auth?: TaxAgentAuthContext) { if (!auth) return; if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot inspect another company'); if (auth.environment !== environment) throw new ForbiddenException('API key environment does not match requested environment'); }
   private requireAuthCompany(auth?: TaxAgentAuthContext): string { if (!auth?.companyId) throw new ForbiddenException('API key authentication is required'); return auth.companyId; }
