@@ -5,6 +5,7 @@ import { CertificateMaterial } from '../../certificates/certificate-vault.servic
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
 import { gissEndpointPolicy } from './giss-endpoints';
 import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
+import { inspectGissWsdlTransport, reconciliationTransportBinding, GissWsdlOperationBinding } from './giss-wsdl-binding';
 
 export interface GissProbeResult { host: string; path: string; status: number; reachable: boolean }
 export interface GissWsdlInspection extends GissProbeResult {
@@ -14,6 +15,8 @@ export interface GissWsdlInspection extends GissProbeResult {
   targetNamespace?: string;
   operations: string[];
   soapActions: string[];
+  soapAddresses: string[];
+  operationBindings: GissWsdlOperationBinding[];
   requestWrappers: string[];
   hasNfseCabecMsg: boolean;
   hasNfseDadosMsg: boolean;
@@ -21,6 +24,9 @@ export interface GissWsdlInspection extends GissProbeResult {
   isWsdl: boolean;
   requiredOperationsPresent: boolean;
   reconciliationShapePresent: boolean;
+  reconciliationTransportPresent: boolean;
+  reconciliationSoapAddress?: string;
+  reconciliationSoapAction?: string;
   missingRequiredOperations: string[];
 }
 
@@ -34,6 +40,8 @@ export function inspectGissWsdlContract(body: string) {
   const uniqueOperations = [...new Set(operations)].sort();
   const uniqueSoapActions = [...new Set(soapActions)].sort();
   const uniqueRequestWrappers = [...new Set(requestWrappers)].sort();
+  const transport = inspectGissWsdlTransport(body);
+  const reconciliationTransport = reconciliationTransportBinding(transport);
   const isWsdl = /<(?:\w+:)?definitions\b/i.test(body);
   const hasNfseCabecMsg = /\bname\s*=\s*["']nfseCabecMsg["']/i.test(body);
   const hasNfseDadosMsg = /\bname\s*=\s*["']nfseDadosMsg["']/i.test(body);
@@ -47,6 +55,8 @@ export function inspectGissWsdlContract(body: string) {
     targetNamespace,
     operations: uniqueOperations,
     soapActions: uniqueSoapActions,
+    soapAddresses: transport.soapAddresses,
+    operationBindings: transport.operationBindings,
     requestWrappers: uniqueRequestWrappers,
     hasNfseCabecMsg,
     hasNfseDadosMsg,
@@ -54,6 +64,9 @@ export function inspectGissWsdlContract(body: string) {
     isWsdl,
     requiredOperationsPresent: isWsdl && missingRequiredOperations.length === 0,
     reconciliationShapePresent,
+    reconciliationTransportPresent: reconciliationTransport.proven,
+    reconciliationSoapAddress: reconciliationTransport.soapAddress,
+    reconciliationSoapAction: reconciliationTransport.soapAction,
     missingRequiredOperations,
   };
 }
@@ -121,7 +134,7 @@ export class GissClient {
 
   async queryRps(_cityCode: string, input: GissRpsQueryInput): Promise<never> {
     const requestXml = this.buildRpsQuery(input);
-    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the authenticated WSDL proves operation, wrapper, SOAPAction, authentication and response shape.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
+    throw new FiscalEngineError('TA_GISS_QUERY_TRANSPORT_LOCKED', 'GISS ConsultarNfsePorRps request is assembled, but SOAP transport remains locked until the authenticated WSDL proves operation, wrapper, SOAPAction, HTTPS service address, authentication and response shape.', false, { transmission_attempted: false, query_attempted: false, request_bytes: Buffer.byteLength(requestXml, 'utf8') });
   }
 
   async issueRps(): Promise<never> {
