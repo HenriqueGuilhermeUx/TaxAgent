@@ -4,7 +4,7 @@ import { GissResponse } from './giss-response.parser';
 export type GissReconciliationClassification =
   | { state: 'authorized'; nfseNumber: string; verificationCode?: string; protocol?: string }
   | { state: 'not_found'; code: string }
-  | { state: 'unknown'; code?: string; message?: string };
+  | { state: 'unknown'; code?: string; message?: string; detailCode?: string; detailMessage?: string };
 
 export function classifyGissReconciliation(
   response: GissResponse,
@@ -23,7 +23,13 @@ export function classifyGissReconciliation(
   if (code && verifiedNotFoundCodes.includes(code)) return { state: 'not_found', code };
 
   if (!response.authorized) {
-    return { state: 'unknown', code, message: response.errorMessage };
+    return {
+      state: 'unknown',
+      code,
+      message: response.errorMessage,
+      detailCode: response.detailCode,
+      detailMessage: response.detailMessage,
+    };
   }
 
   throw new FiscalEngineError(
