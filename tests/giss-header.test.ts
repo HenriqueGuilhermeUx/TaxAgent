@@ -3,10 +3,10 @@ import test from 'node:test';
 import { FiscalEngineError } from '../src/fiscal-core/fiscal-engine.error';
 import { buildGissCabecalho } from '../src/providers/giss/giss-header.builder';
 
-test('builds exact ABRASF 2.04 GISS header', () => {
+test('builds exact GISS ABRASF 2.04 header with provider namespaces', () => {
   assert.equal(
     buildGissCabecalho(),
-    '<cabecalho xmlns="http://www.abrasf.org.br/nfse.xsd" versao="2.04"><versaoDados>2.04</versaoDados></cabecalho>',
+    '<cabecalho xmlns="http://www.giss.com.br/cabecalho-v2_04.xsd" xmlns:tipos="http://www.giss.com.br/tipos-v2_04.xsd" versao="2.04"><versaoDados>2.04</versaoDados></cabecalho>',
   );
 });
 
