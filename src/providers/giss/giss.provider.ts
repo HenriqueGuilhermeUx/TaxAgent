@@ -23,8 +23,31 @@ export class GissProvider implements FiscalProvider {
 
   async issue(input: CanonicalInvoiceInput, operation: FiscalOperationContext): Promise<IssueResult> {
     const company = await this.tenancy.getCompany(input.companyId) as { tax_id: string; municipal_registration?: string | null };
-    const rpsNumber = operation.invoiceId.replace(/\\D/g, '').slice(-12) || '1';
-    const rps = buildAbrasfRps({ number: rpsNumber, series: 'TA', issuedAt: input.issuedAt ?? new Date().toISOString(), providerTaxId: company.tax_id, municipalRegistration: company.municipal_registration, customerTaxId: input.customer.taxId, customerName: input.customer.name, serviceCode: input.service.nationalServiceCode ?? '', description: input.service.description, amount: input.service.amount, issRate: input.service.issRate, serviceCityCode: input.service.serviceLocationCityCode ?? '3548500' });
+    if (!input.customer.address) throw new FiscalEngineError('TA_GISS_CUSTOMER_ADDRESS_REQUIRED', 'Current GISS layout requires the domestic customer address before RPS assembly.', false, { transmission_attempted: false });
+    if (!input.service.nbsCode) throw new FiscalEngineError('TA_GISS_NBS_REQUIRED', 'Current GISS layout requires CodigoNbs before RPS assembly.', false, { transmission_attempted: false });
+    if (!input.service.nationalServiceCode) throw new FiscalEngineError('TA_GISS_SERVICE_ITEM_REQUIRED', 'GISS requires an LC 116 service item derived from the classified national service code.', false, { transmission_attempted: false });
+    if (!input.service.issWithholding) throw new FiscalEngineError('TA_GISS_ISS_WITHHOLDING_REQUIRED', 'GISS requires an explicit ISS withholding decision.', false, { transmission_attempted: false });
+    if (input.service.issTaxation !== '1') throw new FiscalEngineError('TA_GISS_ISS_MAPPING_REQUIRED', 'Only the verified taxable ISS mapping is enabled for the current GISS adapter.', false, { iss_taxation: input.service.issTaxation, transmission_attempted: false });
+
+    const rpsNumber = operation.invoiceId.replace(/\D/g, '').slice(-12) || '1';
+    const rps = buildAbrasfRps({
+      number: rpsNumber,
+      series: 'TA',
+      issuedAt: input.issuedAt ?? new Date().toISOString(),
+      providerTaxId: company.tax_id,
+      municipalRegistration: company.municipal_registration,
+      customerTaxId: input.customer.taxId,
+      customerName: input.customer.name,
+      customerAddress: input.customer.address,
+      serviceCode: input.service.nationalServiceCode,
+      nbsCode: input.service.nbsCode,
+      description: input.service.description,
+      amount: input.service.amount,
+      issRate: input.service.issRate,
+      issWithholding: input.service.issWithholding,
+      issExigibility: '1',
+      serviceCityCode: input.service.serviceLocationCityCode ?? '3548500',
+    });
     await this.artifacts.save(operation.invoiceId, 'giss_rps_xml', rps, { rps_number: rpsNumber, series: 'TA' });
     const material = await this.vault.getActiveMaterial(input.companyId);
     const signedRps = this.signatures.signRps(rps, material);
@@ -38,7 +61,7 @@ export class GissProvider implements FiscalProvider {
     // No SOAP POST is reachable until reconciliation is validated end-to-end.
     throw new FiscalEngineError(
       'TA_GISS_INTEGRATION_NOT_CONFIGURED',
-      'Santos requires the municipal GISS/GINFES route. TaxAgent has resolved the provider, but live transmission remains blocked until the municipality/provider integration contract and credentials are configured.',
+      'Santos requires the municipal GISS route. TaxAgent has resolved the provider, but live transmission remains blocked until the WSDL operation, SOAP contract and reconciliation transport are validated end-to-end.',
       false,
       { provider: this.name, city_code: '3548500', endpoint: gissEndpointPolicy('3548500'), transmission_attempted: false },
     );
@@ -47,7 +70,7 @@ export class GissProvider implements FiscalProvider {
   async cancel(_input: CancelFiscalInput, _operation: FiscalOperationContext): Promise<EventResult> {
     throw new FiscalEngineError(
       'TA_GISS_INTEGRATION_NOT_CONFIGURED',
-      'Santos cancellation requires the municipal GISS/GINFES integration. No external request was sent.',
+      'Santos cancellation requires the municipal GISS integration. No external request was sent.',
       false,
       { provider: this.name, city_code: '3548500', endpoint: gissEndpointPolicy('3548500'), transmission_attempted: false },
     );
