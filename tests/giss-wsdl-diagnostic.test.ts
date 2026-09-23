@@ -43,11 +43,11 @@ test('GISS query diagnostic prepares exact bytes with Company identity without e
         preparedInput = { cityCode, input };
         return {
           soapAddress: 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws',
-          soapAction: 'ConsultarNfsePorRps',
+          soapAction: 'http://nfse.abrasf.org.br/ConsultarNfsePorRps',
           soapVersion: '1.1',
           requestWrapper: 'ConsultarNfsePorRpsRequest',
-          targetNamespace: 'http://tempuri.org/',
-          body: '<soap:Envelope><ConsultarNfsePorRpsRequest><nfseCabecMsg>cab</nfseCabecMsg><nfseDadosMsg><ConsultarNfseRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd"></ConsultarNfseRpsEnvio></nfseDadosMsg></ConsultarNfsePorRpsRequest></soap:Envelope>',
+          targetNamespace: 'http://nfse.abrasf.org.br',
+          body: '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://nfse.abrasf.org.br"><soapenv:Body><tns:ConsultarNfsePorRpsRequest><nfseCabecMsg>&lt;cabecalho/&gt;</nfseCabecMsg><nfseDadosMsg>&lt;ConsultarNfseRpsEnvio xmlns=&quot;http://www.giss.com.br/consultar-nfse-rps-envio-v2_04.xsd&quot;&gt;&lt;/ConsultarNfseRpsEnvio&gt;</nfseDadosMsg></tns:ConsultarNfsePorRpsRequest></soapenv:Body></soapenv:Envelope>',
           bodyBytes: 321,
           bodySha256: 'sha_test',
           fiscalTransmissionAttempted: false,
@@ -62,9 +62,9 @@ test('GISS query diagnostic prepares exact bytes with Company identity without e
   assert.equal(preparedInput.cityCode, '3548500');
   assert.deepEqual(preparedInput.input, { providerTaxId: '12345678000190', municipalRegistration: null, number: '77', series: 'TA' });
   assert.equal(result.endpoint, 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws');
-  assert.equal(result.action, 'ConsultarNfsePorRps');
+  assert.equal(result.action, 'http://nfse.abrasf.org.br/ConsultarNfsePorRps');
   assert.equal(result.soap_version, '1.1');
-  assert.equal(result.namespace, 'http://tempuri.org/');
+  assert.equal(result.namespace, 'http://nfse.abrasf.org.br');
   assert.equal(result.request_sha256, 'sha_test');
   assert.equal(result.request_bytes, 321);
   assert.equal(result.shape.soap_envelope, true);
@@ -78,7 +78,7 @@ test('GISS query diagnostic prepares exact bytes with Company identity without e
   assert.equal(result.request_body_exposed, false);
   assert.equal(JSON.stringify(result).includes('SECRET_CERT'), false);
   assert.equal(JSON.stringify(result).includes('SECRET_KEY'), false);
-  assert.equal(JSON.stringify(result).includes('<soap:Envelope>'), false);
+  assert.equal(JSON.stringify(result).includes('<soapenv:Envelope'), false);
 });
 
 test('GISS query diagnostic rejects service-location city as issuer before certificate/network access', async () => {
