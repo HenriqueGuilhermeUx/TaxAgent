@@ -2,8 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GissClient } from '../src/providers/giss/giss.client';
 
-test('prepareRpsQuery builds deterministic SOAP bytes from authenticated RTC WSDL evidence without POST', async () => {
-  const client = new GissClient();
+test('prepareRpsQuery builds deterministic signed SOAP bytes from authenticated RTC WSDL evidence without POST', async () => {
+  const signatures = {
+    signRpsQuery: (xml: string) => xml.replace(
+      '</ConsultarNfseRpsEnvio>',
+      '<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><Reference URI=""/></SignedInfo></Signature></ConsultarNfseRpsEnvio>',
+    ),
+  };
+  const client = new GissClient(signatures as any);
   (client as any).inspectWsdl = async () => ({
     host: 'ws-homologacao-rtc.giss.com.br',
     path: '/service-ws/nf/nfse-ws',
@@ -46,11 +52,14 @@ test('prepareRpsQuery builds deterministic SOAP bytes from authenticated RTC WSD
 
   assert.equal(prepared.fiscalTransmissionAttempted, false);
   assert.equal(prepared.queryAttempted, false);
+  assert.equal(prepared.queryDataSigned, true);
+  assert.equal(prepared.querySignatureProfile, 'xmldsig-rsa-sha1-empty-uri');
   assert.equal(prepared.soapVersion, '1.1');
   assert.equal(prepared.requestWrapper, 'ConsultarNfsePorRpsRequest');
   assert.equal(prepared.targetNamespace, 'http://nfse.abrasf.org.br');
   assert.match(prepared.body, /<tns:ConsultarNfsePorRpsRequest>/);
   assert.match(prepared.body, /http:\/\/www\.giss\.com\.br\/cabecalho-v2_04\.xsd/);
   assert.match(prepared.body, /http:\/\/www\.giss\.com\.br\/consultar-nfse-rps-envio-v2_04\.xsd/);
+  assert.match(prepared.body, /Reference URI=&quot;&quot;/);
   assert.equal(prepared.bodySha256.length, 64);
 });
