@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import * as https from 'node:https';
 import { CertificateMaterial } from '../../certificates/certificate-vault.service';
 import { FiscalEngineError } from '../../fiscal-core/fiscal-engine.error';
@@ -6,10 +7,22 @@ import { gissEndpointPolicy } from './giss-endpoints';
 import { buildConsultarNfsePorRps, GissRpsQueryInput } from './giss-query.builder';
 
 export interface GissProbeResult { host: string; path: string; status: number; reachable: boolean }
+export interface GissWsdlInspection extends GissProbeResult {
+  bytes: number;
+  sha256: string;
+  targetNamespace?: string;
+  operations: string[];
+  soapActions: string[];
+}
 
 @Injectable()
 export class GissClient {
   async probe(cityCode: string, material?: CertificateMaterial): Promise<GissProbeResult> {
+    const inspection = await this.inspectWsdl(cityCode, material);
+    return { host: inspection.host, path: inspection.path, status: inspection.status, reachable: inspection.reachable };
+  }
+
+  async inspectWsdl(cityCode: string, material?: CertificateMaterial): Promise<GissWsdlInspection> {
     const endpoint = gissEndpointPolicy(cityCode);
     if (!endpoint) throw new FiscalEngineError('TA_GISS_CITY_UNSUPPORTED', `No GISS endpoint policy is registered for municipality ${cityCode}`, false);
     if (!material) throw new FiscalEngineError('TA_GISS_CLIENT_CERTIFICATE_REQUIRED', 'GISS WSDL access requires ICP-Brasil client-certificate authentication. No network request was sent.', false, { network_attempted: false });
@@ -24,9 +37,37 @@ export class GissClient {
         cert: material.tlsCertificatePem,
         key: material.tlsPrivateKeyPem,
         timeout: 10000,
+        headers: { Accept: 'text/xml, application/wsdl+xml, application/xml' },
       }, (response) => {
-        response.resume();
-        resolve({ host: url.hostname, path: url.pathname, status: response.statusCode ?? 0, reachable: (response.statusCode ?? 500) < 500 });
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        response.on('data', (chunk: Buffer | string) => {
+          const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          bytes += part.length;
+          if (bytes > 2 * 1024 * 1024) {
+            response.destroy(new Error('GISS WSDL exceeds 2 MiB safety limit'));
+            return;
+          }
+          chunks.push(part);
+        });
+        response.on('end', () => {
+          const status = response.statusCode ?? 0;
+          const body = Buffer.concat(chunks).toString('utf8');
+          const targetNamespace = body.match(/targetNamespace\s*=\s*["']([^"']+)["']/i)?.[1];
+          const operations = [...body.matchAll(/<(?:\w+:)?operation\b[^>]*\bname\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
+          const soapActions = [...body.matchAll(/\bsoapAction\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+          resolve({
+            host: url.hostname,
+            path: url.pathname,
+            status,
+            reachable: status > 0 && status < 500,
+            bytes: Buffer.byteLength(body, 'utf8'),
+            sha256: createHash('sha256').update(body, 'utf8').digest('hex'),
+            targetNamespace,
+            operations: [...new Set(operations)].sort(),
+            soapActions: [...new Set(soapActions)].sort(),
+          });
+        });
       });
       request.on('timeout', () => request.destroy(new Error('GISS WSDL probe timeout')));
       request.on('error', reject);
