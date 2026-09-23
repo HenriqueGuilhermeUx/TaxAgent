@@ -35,6 +35,7 @@ test('Prepared DPS eligibility blocks municipal-provider issuer before any DPS s
       assert.equal(response.code, 'TA_NATIONAL_DPS_ISSUER_NOT_ELIGIBLE');
       assert.equal(response.resolved_provider, 'giss');
       assert.equal(response.dps_sequence_consumed, false);
+      assert.equal(response.dps_signed, false);
       assert.equal(response.fiscal_transmission_attempted, false);
       return true;
     },
@@ -46,5 +47,17 @@ test('Prepared DPS eligibility fails closed for unresolved national participatio
     { getCompany: async () => ({ city_code: '3530607', tax_regime: 'regular' }) } as any,
     { resolve: async () => ({ cityCode: '3530607', environment: 'test', nationalStandard: true, nationalPublicIssuer: false, route: 'unknown', provider: 'unknown', source: 'official-national-parameters', checkedAt: new Date().toISOString() }) } as any,
   );
-  await assert.rejects(service.assertPreparedDpsAllowed(dto as any), /Prepared DPS is allowed only/);
+  await assert.rejects(
+    service.assertPreparedDpsAllowed(dto as any),
+    (error: unknown) => {
+      assert.ok(error instanceof BadRequestException);
+      const response = error.getResponse() as Record<string, unknown>;
+      assert.equal(response.code, 'TA_NATIONAL_DPS_ISSUER_NOT_ELIGIBLE');
+      assert.equal(response.resolved_provider, 'unknown');
+      assert.equal(response.dps_sequence_consumed, false);
+      assert.equal(response.dps_signed, false);
+      assert.equal(response.fiscal_transmission_attempted, false);
+      return true;
+    },
+  );
 });
