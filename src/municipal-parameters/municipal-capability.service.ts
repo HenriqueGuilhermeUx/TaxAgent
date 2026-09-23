@@ -26,15 +26,15 @@ export class MunicipalCapabilityService {
     if (!/^\d{7}$/.test(cityCode)) throw new FiscalEngineError('TA_CITY_CODE_INVALID', 'Municipality IBGE code must contain 7 digits', false);
 
     const regime = String(taxpayer.taxRegime ?? '').trim().toLowerCase();
-    const effectiveAt = taxpayer.effectiveAt ? new Date(`${taxpayer.effectiveAt.slice(0, 10)}T12:00:00-03:00`) : new Date();
-    const simpleNational = ['simples', 'simples_nacional', 'mei', 'me', 'epp'].includes(regime);
-    const nationalSimpleEffective = new Date('2026-11-01T00:00:00-03:00');
-    if (simpleNational && effectiveAt >= nationalSimpleEffective) {
+    const effectiveDate = (taxpayer.effectiveAt ?? new Date().toISOString()).slice(0, 10);
+    // Regime transitions are municipality/profile specific. Never generalize a local
+    // migration rule to every Brazilian municipality; ME/EPP are company sizes, not tax regimes.
+    if (cityCode === '3530607' && ['simples', 'simples_nacional'].includes(regime) && effectiveDate >= '2026-11-01') {
       return {
         cityCode, environment, nationalStandard: true, nationalPublicIssuer: true,
         route: 'national-direct', provider: 'nfse-national',
         source: 'official-regime-rule', checkedAt: new Date().toISOString(),
-        evidence: { rule: 'simples_nacional_national_issuer', effective_from: '2026-11-01', tax_regime: regime },
+        evidence: { rule: 'mogi_simples_nacional_national_issuer', effective_from: '2026-11-01', tax_regime: regime },
       };
     }
 
