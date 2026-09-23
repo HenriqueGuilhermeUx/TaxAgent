@@ -11,6 +11,7 @@ import { DpsPreflightService } from './dps-preflight.service';
 import { GissQueryExecutionService } from './giss-query-execution.service';
 import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { MunicipalityScenarioService } from './municipality-scenario.service';
+import { NationalPreflightService } from './national-preflight.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { ReadinessService } from './readiness.service';
 
@@ -24,11 +25,14 @@ export class OperationsController {
     private readonly gissWsdl: GissWsdlDiagnosticService,
     private readonly gissQuery: GissQueryExecutionService,
     private readonly municipalityScenario: MunicipalityScenarioService,
+    private readonly nationalPreflight: NationalPreflightService,
   ) {}
   @Get('readiness/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect local gates required before real NFS-e transmission' })
   report(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.report(companyId, environment); }
   @Post('readiness/:companyId/probe') @RequireScope('operations:read') @ApiOperation({ summary: 'Run non-emitting Produção Restrita/Produção connectivity preflight' })
   probe(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.readiness.probe(companyId, environment); }
+  @Post('national/preflight/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Reuse the Company A1 to probe National NFS-e mTLS and target-municipality parameters without transmitting a fiscal document' })
+  probeNational(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('targetCityCode') targetCityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); if (!targetCityCode) throw new BadRequestException('targetCityCode is required'); return this.nationalPreflight.probe(companyId, environment, targetCityCode); }
   @Post('giss/wsdl/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Inspect the authenticated GISS homologation WSDL without fiscal transmission' })
   inspectGissWsdl(@Param('companyId') companyId: string, @Query('environment') rawEnvironment: string | undefined, @Query('cityCode') cityCode: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test'); this.assertAccess(companyId, environment, auth); return this.gissWsdl.inspect(companyId, environment, cityCode ?? '3548500'); }
   @Post('giss/query/prepare/:companyId') @RequireScope('operations:read') @ApiOperation({ summary: 'Prepare exact authenticated-WSDL GISS ConsultarNfsePorRps SOAP bytes without POSTing them' })
