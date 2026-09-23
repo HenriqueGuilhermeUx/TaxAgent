@@ -20,7 +20,7 @@ import { NationalApiResponse, NfseNationalClient } from './nfse-national.client'
 export class NfseNationalProvider implements FiscalProvider {
   readonly name = 'nfse-national';
   constructor(private readonly tenancy: TenancyService, private readonly vault: CertificateVaultService, private readonly schemas: SchemaRegistryService, private readonly coverage: NationalCoverageService, private readonly builder: DpsBuilderService, private readonly eventBuilder: EventBuilderService, private readonly validation: XmlValidationService, private readonly signature: XmlSignatureService, private readonly client: NfseNationalClient, private readonly documents: FiscalDocumentsService, private readonly preparedDps: PreparedDpsService) {}
-  canHandle(context: FiscalContext): Promise<boolean> { return this.coverage.supports(context.issuerCityCode, context.environment); }
+  canHandle(context: FiscalContext): Promise<boolean> { return this.coverage.supports(context.issuerCityCode, context.environment, { taxRegime: context.taxRegime, effectiveAt: context.effectiveAt }); }
   async issue(input: CanonicalInvoiceInput, operation: FiscalOperationContext): Promise<IssueResult> {
     const mode = process.env.TAXAGENT_NFSE_MODE ?? 'mock';
     if (mode === 'mock') return { status: 'authorized', provider: this.name, accessKey: `MOCK-${randomUUID().replaceAll('-', '').toUpperCase()}`, providerReference: `dps_mock_${Date.now()}`, raw: { mode, schema: this.schemas.active(input.environment).id, amount: input.service.amount, prepared_dps_id: operation.preparedDpsId } };
