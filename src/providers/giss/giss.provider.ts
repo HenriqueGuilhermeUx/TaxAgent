@@ -32,6 +32,15 @@ export class GissProvider implements FiscalProvider {
 
   async issue(input: CanonicalInvoiceInput, operation: FiscalOperationContext): Promise<IssueResult> {
     const company = await this.tenancy.getCompany(input.companyId) as { tax_id: string; municipal_registration?: string | null };
+    const municipalRegistration = company.municipal_registration?.trim();
+    if (!municipalRegistration) {
+      throw new FiscalEngineError(
+        'TA_GISS_MUNICIPAL_REGISTRATION_REQUIRED',
+        'Santos GISS requires the issuer Municipal Registration before RPS assembly. TaxAgent will not reserve an RPS number or call GISS without a persisted issuer registration.',
+        false,
+        { provider: this.name, city_code: '3548500', transmission_attempted: false, rps_reserved: false },
+      );
+    }
     if (!input.customer.address) throw new FiscalEngineError('TA_GISS_CUSTOMER_ADDRESS_REQUIRED', 'Current GISS layout requires the domestic customer address before RPS assembly.', false, { transmission_attempted: false });
     if (!input.service.nbsCode) throw new FiscalEngineError('TA_GISS_NBS_REQUIRED', 'Current GISS layout requires CodigoNbs before RPS assembly.', false, { transmission_attempted: false });
     if (!input.service.nationalServiceCode) throw new FiscalEngineError('TA_GISS_SERVICE_ITEM_REQUIRED', 'GISS requires an LC 116 service item derived from the classified national service code.', false, { transmission_attempted: false });
@@ -45,7 +54,7 @@ export class GissProvider implements FiscalProvider {
       series,
       issuedAt: input.issuedAt ?? new Date().toISOString(),
       providerTaxId: company.tax_id,
-      municipalRegistration: company.municipal_registration,
+      municipalRegistration,
       customerTaxId: input.customer.taxId,
       customerName: input.customer.name,
       customerAddress: input.customer.address,
@@ -63,11 +72,11 @@ export class GissProvider implements FiscalProvider {
     const signedRps = this.signatures.signRps(rps, material);
     await this.artifacts.save(operation.invoiceId, 'giss_rps_signed_xml', signedRps, { rps_number: rpsNumber, series });
     const batchNumber = rpsNumber;
-    const batch = buildAbrasfLoteRps({ batchNumber, providerTaxId: company.tax_id, municipalRegistration: company.municipal_registration, rpsXml: signedRps });
+    const batch = buildAbrasfLoteRps({ batchNumber, providerTaxId: company.tax_id, municipalRegistration, rpsXml: signedRps });
     await this.artifacts.save(operation.invoiceId, 'giss_batch_xml', batch, { batch_number: batchNumber, rps_number: rpsNumber, series });
     const signedBatch = this.signatures.signBatch(batch, material);
     await this.artifacts.save(operation.invoiceId, 'giss_batch_signed_xml', signedBatch, { batch_number: batchNumber, rps_number: rpsNumber, series });
-    await this.reconciliation.beforeIssue({ cityCode: '3548500', providerTaxId: company.tax_id, municipalRegistration: company.municipal_registration, number: rpsNumber, series });
+    await this.reconciliation.beforeIssue({ cityCode: '3548500', providerTaxId: company.tax_id, municipalRegistration, number: rpsNumber, series });
     throw new FiscalEngineError(
       'TA_GISS_INTEGRATION_NOT_CONFIGURED',
       'Santos requires the municipal GISS route. TaxAgent has resolved the provider, but live transmission remains blocked until the WSDL operation, SOAP contract and reconciliation transport are validated end-to-end.',
