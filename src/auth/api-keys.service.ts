@@ -45,6 +45,45 @@ export class ApiKeysService {
     if (!result.rowCount) throw new NotFoundException('API key not found');
   }
 
+  async rotateCurrent(auth: TaxAgentAuthContext, name = 'Rotated API key') {
+    const id = createId('key');
+    const prefix = auth.environment === 'production' ? 'ta_live' : 'ta_test';
+    const secret = `${prefix}_${randomBytes(32).toString('base64url')}`;
+    const hash = this.hash(secret);
+    const scopes = auth.scopes.length ? auth.scopes : ['*'];
+
+    await this.db.withTransaction(async (client) => {
+      const current = await client.query<{ id: string }>(
+        'SELECT id FROM api_keys WHERE id=$1 AND company_id=$2 AND revoked_at IS NULL FOR UPDATE',
+        [auth.keyId, auth.companyId],
+      );
+      if (!current.rowCount) throw new NotFoundException('Current API key is already revoked or unavailable');
+
+      await client.query(
+        `INSERT INTO api_keys(id, company_id, name, environment, key_prefix, secret_hash, scopes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [id, auth.companyId, name, auth.environment, secret.slice(0, 16), hash, scopes],
+      );
+      await client.query(
+        'UPDATE api_keys SET revoked_at=NOW() WHERE id=$1 AND company_id=$2 AND revoked_at IS NULL',
+        [auth.keyId, auth.companyId],
+      );
+    });
+
+    return {
+      id,
+      company_id: auth.companyId,
+      name,
+      environment: auth.environment,
+      key: secret,
+      scopes,
+      rotated_from_key_id: auth.keyId,
+      previous_key_revoked: true,
+      key_exposed_once: true,
+      created_at: new Date().toISOString(),
+    };
+  }
+
   private hash(secret: string): string {
     return createHash('sha256').update(secret, 'utf8').digest('hex');
   }
