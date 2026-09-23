@@ -8,13 +8,24 @@ const deps = () => ({
   reconciliation: { beforeIssue: async () => { throw new FiscalEngineError('TA_GISS_RECONCILIATION_REQUIRED', 'reconciliation required', false); } },
   artifacts: { save: async () => ({ id: 'doc_test' }) },
   signatures: { signRps: (xml: string) => xml + '<Signature/>', signBatch: (xml: string) => xml + '<Signature/>' },
+  sequences: { reserve: async () => 41 },
   tenancy: { getCompany: async () => ({ tax_id: '12345678000190', municipal_registration: null }) },
   vault: { getActiveMaterial: async () => ({}) },
 });
 
+const providerFrom = (d: ReturnType<typeof deps>) => new GissProvider(
+  d.client as any,
+  d.reconciliation as any,
+  d.artifacts as any,
+  d.signatures as any,
+  d.sequences as any,
+  d.tenancy as any,
+  d.vault as any,
+);
+
 test('Santos GISS adapter builds and signs schema-complete RPS and batch but fails closed at reconciliation before external transmission', async () => {
   const d = deps();
-  const provider = new GissProvider(d.client as any, d.reconciliation as any, d.artifacts as any, d.signatures as any, d.tenancy as any, d.vault as any);
+  const provider = providerFrom(d);
   assert.equal(await provider.canHandle({ companyId: 'comp_test', environment: 'test', issuerCityCode: '3548500', serviceLocationCityCode: '3548500' }), true);
   await assert.rejects(
     provider.issue({
@@ -44,6 +55,6 @@ test('Santos GISS adapter builds and signs schema-complete RPS and batch but fai
 
 test('GISS adapter does not claim municipalities other than Santos', async () => {
   const d = deps();
-  const provider = new GissProvider(d.client as any, d.reconciliation as any, d.artifacts as any, d.signatures as any, d.tenancy as any, d.vault as any);
+  const provider = providerFrom(d);
   assert.equal(await provider.canHandle({ companyId: 'comp_test', environment: 'test', issuerCityCode: '3530607', serviceLocationCityCode: '3530607' }), false);
 });
