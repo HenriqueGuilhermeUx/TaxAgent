@@ -19,6 +19,15 @@ test('parses escaped outputXML from verified SOAP response wrapper', () => {
   assert.equal(r.verificationCode, 'XYZ');
 });
 
+test('preserves GISS V999 wrapper and extracts nested ABRASF E174 detail', () => {
+  const nested = '&lt;Codigo&gt;V999&lt;/Codigo&gt;&lt;Mensagem&gt;E174 - RPS não assinado. Assine o RPS&lt;/Mensagem&gt;';
+  const r = parseGissResponse(`<ConsultarNfsePorRpsResponse><outputXML>&lt;ConsultarNfseRpsResposta&gt;&lt;ListaMensagemRetorno&gt;&lt;MensagemRetorno&gt;&lt;Codigo&gt;V999&lt;/Codigo&gt;&lt;Mensagem&gt;${nested.replaceAll('&', '&amp;')}&lt;/Mensagem&gt;&lt;/MensagemRetorno&gt;&lt;/ListaMensagemRetorno&gt;&lt;/ConsultarNfseRpsResposta&gt;</outputXML></ConsultarNfsePorRpsResponse>`);
+  assert.equal(r.authorized, false);
+  assert.equal(r.errorCode, 'V999');
+  assert.equal(r.detailCode, 'E174');
+  assert.match(r.detailMessage ?? '', /RPS não assinado/i);
+});
+
 test('parses SOAP 1.1 Fault as a structured unknown reconciliation response', () => {
   const r = parseGissResponse('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultcode>soap:Client</faultcode><faultstring>Invalid request</faultstring></soap:Fault></soap:Body></soap:Envelope>');
   assert.equal(r.authorized, false);
