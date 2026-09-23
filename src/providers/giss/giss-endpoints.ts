@@ -8,9 +8,9 @@ export function gissEndpointPolicy(cityCode: string): GissEndpointConfig | null 
   return {
     citySlug,
     productionWsdl: `https://ws-${citySlug}.giss.com.br/service-ws/nf/nfse-ws?wsdl`,
-    homologationWsdl: 'https://ws-homologacao.giss.com.br/service-ws/nf/nfse-ws?wsdl',
+    homologationWsdl: 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl',
     protocol: 'soap',
     layout: 'abrasf-2.04',
-    source: 'GissOnline Manual Tecnico Servicos Prestados V1.6 + Santos municipal GISS/NFS-e portal',
+    source: 'GissOnline Manual Tecnico Servicos Prestados V1.6 + 2026 RTC homologation endpoint evidence + Santos municipal GISS/NFS-e portal',
   };
 }
