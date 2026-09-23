@@ -10,13 +10,13 @@ export class GissSignatureService {
   signRps(xml: string, material: CertificateMaterial): string {
     const match = xml.match(/<InfDeclaracaoPrestacaoServico\s+Id="([^"]+)"/);
     if (!match) throw new FiscalEngineError('TA_GISS_RPS_ID_REQUIRED', 'ABRASF RPS must contain InfDeclaracaoPrestacaoServico/@Id before XMLDSig signing', false);
-    return this.signatures.sign(xml, match[1], 'InfDeclaracaoPrestacaoServico', material);
+    return this.signatures.sign(xml, match[1], 'InfDeclaracaoPrestacaoServico', material, 'sha1');
   }
 
   signBatch(xml: string, material: CertificateMaterial): string {
     const match = xml.match(/<LoteRps\s+Id="([^"]+)"/);
     if (!match) throw new FiscalEngineError('TA_GISS_BATCH_ID_REQUIRED', 'ABRASF batch must contain LoteRps/@Id before XMLDSig signing', false);
-    return this.signatures.sign(xml, match[1], 'LoteRps', material);
+    return this.signatures.sign(xml, match[1], 'LoteRps', material, 'sha1');
   }
 
   signRpsAndBatch(xml: string, material: CertificateMaterial): string {
