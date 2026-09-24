@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MunicipalCapabilityService } from '../src/municipal-parameters/municipal-capability.service';
 
-test('Santos routes to municipal GISS and never direct SEFIN', async () => {
+test('Santos regular routes to municipal GISS and never direct SEFIN', async () => {
   const service = new MunicipalCapabilityService({} as any, {} as any);
-  const result = await service.resolve('3548500', 'test');
+  const result = await service.resolve('3548500', 'test', { taxRegime: 'regular', effectiveAt: '2026-09-24' });
   assert.equal(result.route, 'municipal-provider');
   assert.equal(result.provider, 'giss');
   assert.equal(result.nationalPublicIssuer, false);
@@ -14,24 +14,32 @@ test('unknown participating municipality fails closed without explicit public is
   const db = { query: async () => ({ rows: [] }) };
   const client = { getConvention: async () => ({ supported: true, status: 200, payload: { convenio: true } }) };
   const service = new MunicipalCapabilityService(db as any, client as any);
-  const result = await service.resolve('3550308', 'test');
+  const result = await service.resolve('3550308', 'test', { taxRegime: 'regular', effectiveAt: '2026-09-24' });
   assert.equal(result.route, 'unknown');
   assert.equal(result.nationalStandard, true);
   assert.equal(result.nationalPublicIssuer, false);
 });
 
-
-test('Simples Nacional routes national-direct from 2026-11-01', async () => {
+test('Simples Nacional routes national-direct from 2026-09-01', async () => {
   const service = new MunicipalCapabilityService({} as any, {} as any);
-  const result = await service.resolve('3530607', 'test', { taxRegime: 'simples_nacional', effectiveAt: '2026-11-01' });
+  const result = await service.resolve('3530607', 'test', { taxRegime: 'simples_nacional', effectiveAt: '2026-09-01' });
   assert.equal(result.route, 'national-direct');
   assert.equal(result.provider, 'nfse-national');
   assert.equal(result.source, 'official-regime-rule');
 });
 
-test('Santos regular taxpayer remains municipal-provider before national Simples rule', async () => {
+test('Simples Nacional remains under legacy routing before 2026-09-01', async () => {
+  const db = { query: async () => ({ rows: [] }) };
+  const client = { getConvention: async () => ({ supported: true, status: 200, payload: { convenio: true } }) };
+  const service = new MunicipalCapabilityService(db as any, client as any);
+  const result = await service.resolve('3530607', 'test', { taxRegime: 'simples_nacional', effectiveAt: '2026-08-31' });
+  assert.equal(result.route, 'unknown');
+});
+
+test('Santos Simples taxpayer routes national-direct on or after the mandatory national rule', async () => {
   const service = new MunicipalCapabilityService({} as any, {} as any);
-  const result = await service.resolve('3548500', 'test', { taxRegime: 'regular', effectiveAt: '2026-09-22' });
-  assert.equal(result.route, 'municipal-provider');
-  assert.equal(result.provider, 'giss');
+  const result = await service.resolve('3548500', 'test', { taxRegime: 'simples_nacional', effectiveAt: '2026-09-24' });
+  assert.equal(result.route, 'national-direct');
+  assert.equal(result.provider, 'nfse-national');
+  assert.equal(result.source, 'official-regime-rule');
 });
