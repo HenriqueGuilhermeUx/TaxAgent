@@ -71,7 +71,13 @@ function fixture() {
   const validation = { async validateWellFormed() {}, async validateStrict() {} };
   const signature = { sign(xml: string) { signatureInput = xml; return `<SIGNED>${xml}</SIGNED>`; } };
   const vault = { async getActiveMaterial() { vaultCalls += 1; return { fingerprint: 'fp_test' }; } };
-  const schemas = { active() { return { id: 'nfse-prodrest-v1.01-20260727' }; } };
+  const schemas = {
+    active() { return { id: 'nfse-prodrest-v1.01-20260727' }; },
+    dpsConformance(environment: string) {
+      assert.equal(environment, 'test');
+      return { verified: true, reason: 'CI image attested for active Produção Restrita schema' };
+    },
+  };
   const service = new PreparedDpsService(db as any, tenancy as any, taxEngine as any, builder as any, validation as any, signature as any, vault as any, schemas as any);
 
   const dto = {
@@ -95,6 +101,7 @@ test('Prepared DPS freezes one real sequence and returns the same artifact for t
   assert.equal(f.sequenceCount(), 1);
   assert.equal(first.status, 'prepared');
   assert.equal(first.signed, false);
+  assert.equal(first.builder_mode, 'verified');
   assert.equal(first.resume_payload.prepared_dps_id, first.id);
   assert.equal(first.resume_payload.tax_decision_id, 'taxdec_test');
   assert.equal(first.resume_payload.customer.tax_id, '12345678000199');
