@@ -15,14 +15,16 @@ export interface CancellationEventIdentity {
   eventId?: string;
 }
 
+const NATIONAL_ACCESS_KEY = /^[0-9]{8}(?:1[0-9]{14}|2[0-9A-Z]{14})[0-9]{27}$/;
+
 export function assertCancellationEventDocument(xml: string, metadata: unknown): CancellationEventIdentity {
   const meta = metadata && typeof metadata === 'object' ? metadata as CancellationEventMetadata : {};
-  const accessKey = typeof meta.accessKey === 'string' ? meta.accessKey : '';
+  const accessKey = typeof meta.accessKey === 'string' ? meta.accessKey.toUpperCase() : '';
   const eventType = typeof meta.eventType === 'string' ? meta.eventType : '';
   const eventSequence = typeof meta.eventSequence === 'number' ? meta.eventSequence : Number(meta.eventSequence);
   const errorCode = meta.reconciled === true ? 'NFSE_EVENT_RECONCILIATION_INCOMPLETE' : 'NFSE_EVENT_RESPONSE_INCOMPLETE';
 
-  if (!/^\d{50}$/.test(accessKey) || eventType !== '101101' || eventSequence !== 1) {
+  if (!NATIONAL_ACCESS_KEY.test(accessKey) || eventType !== '101101' || eventSequence !== 1) {
     throw new FiscalEngineError(
       errorCode,
       'Cancellation event document metadata is incomplete or does not identify the expected national event 101101/1.',
@@ -55,7 +57,7 @@ export function assertCancellationEventDocument(xml: string, metadata: unknown):
 
   const event = localChild(parsed, 'evento');
   const info = localChild(event, 'infEvento');
-  const returnedAccessKey = scalar(localChild(info, 'chNFSe'));
+  const returnedAccessKey = scalar(localChild(info, 'chNFSe'))?.toUpperCase();
   const specific = localChild(info, `e${eventType}`);
   const sequenceRaw = scalar(localChild(info, 'nSeqEvento'));
   const returnedSequence = sequenceRaw ? Number(sequenceRaw) : undefined;
@@ -71,11 +73,12 @@ export function assertCancellationEventDocument(xml: string, metadata: unknown):
     throw identityError(errorCode, 'SEFIN cancellation event sequence does not match the reconciled 101101/1 identity.');
   }
   if (eventId) {
+    const normalizedEventId = eventId.toUpperCase();
     const expectedPrefix = `EVT${accessKey}${eventType}`;
-    if (!eventId.startsWith(expectedPrefix)) {
+    if (!normalizedEventId.startsWith(expectedPrefix)) {
       throw identityError(errorCode, 'SEFIN cancellation event Id does not match the expected NFS-e/event identity.');
     }
-    const suffix = eventId.slice(expectedPrefix.length);
+    const suffix = normalizedEventId.slice(expectedPrefix.length);
     if (suffix && /^\d{3}$/.test(suffix) && Number(suffix) !== eventSequence) {
       throw identityError(errorCode, 'SEFIN cancellation event Id carries an unexpected event sequence.');
     }
