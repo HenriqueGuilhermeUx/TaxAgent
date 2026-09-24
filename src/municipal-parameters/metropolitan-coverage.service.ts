@@ -36,16 +36,26 @@ export class MetropolitanCoverageService {
       }
       return acc;
     }, { 'national-direct': 0, 'municipal-provider': 0, 'participation-only': 0, unknown: 0 } as Record<MetropolitanCoverageClass, number>);
-    return {
+    const result = {
       environment,
       tax_regime: taxRegime ?? null,
       effective_at: (effectiveAt ?? new Date().toISOString()).slice(0, 10),
       region_count: regions.length,
-      municipality_count: regions.reduce((sum, result) => sum + result.municipalities.length, 0),
+      municipality_count: regions.reduce((sum, region) => sum + region.municipalities.length, 0),
       totals,
       regions,
       checked_at: new Date().toISOString(),
     };
+    console.log(JSON.stringify({
+      event: 'metropolitan_coverage_aggregate_result',
+      environment,
+      tax_regime: taxRegime ?? null,
+      effective_at: result.effective_at,
+      region_count: result.region_count,
+      municipality_count: result.municipality_count,
+      totals,
+    }));
+    return result;
   }
 
   async inspect(slug: string, environment: FiscalEnvironment, taxRegime?: string, effectiveAt?: string) {
@@ -127,6 +137,15 @@ export class MetropolitanCoverageService {
       effective_at: result.effective_at,
       counts,
       municipality_count: rows.length,
+      municipalities: rows.map((row) => ({
+        municipality: row.municipality,
+        city_code: row.city_code,
+        classification: row.classification,
+        route: row.route,
+        provider: row.provider,
+        source: row.source,
+        error_code: 'error_code' in row ? row.error_code : undefined,
+      })),
     }));
     return result;
   }
