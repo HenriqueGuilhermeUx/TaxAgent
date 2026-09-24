@@ -7,6 +7,21 @@ export interface GissWsdlContractDocument {
   body: string;
 }
 
+export interface GissResolvedOperationShape {
+  operation: string;
+  operationPresent: boolean;
+  requestWrapper?: string;
+  requestNamespace?: string;
+  responseWrapper?: string;
+  responseNamespace?: string;
+  requestMessageParts: string[];
+  responseMessageParts: string[];
+  hasNfseCabecMsg: boolean;
+  hasNfseDadosMsg: boolean;
+  hasOutputXml: boolean;
+  shapePresent: boolean;
+}
+
 export interface GissResolvedWsdlShape {
   targetNamespace?: string;
   requestWrapper?: string;
@@ -113,6 +128,10 @@ function parseDocument(document: GissWsdlContractDocument): ParsedDocument | nul
   };
 }
 
+function parseDocuments(documents: GissWsdlContractDocument[]): ParsedDocument[] {
+  return documents.map(parseDocument).filter((value): value is ParsedDocument => Boolean(value));
+}
+
 function qnameNamespace(qname: string | undefined, owner: ParsedDocument): string | undefined {
   if (!qname) return undefined;
   const p = prefix(qname);
@@ -145,12 +164,12 @@ function collectElements(documents: ParsedDocument[]): ElementDescriptor[] {
   return result;
 }
 
-function findOperation(documents: ParsedDocument[]) {
+function findOperation(documents: ParsedDocument[], operationName: string) {
   for (const owner of documents) {
     if (!owner.definitions) continue;
     for (const portType of arr(owner.definitions.portType as XmlNode | XmlNode[] | undefined)) {
       for (const operation of arr(portType.operation as XmlNode | XmlNode[] | undefined)) {
-        if (attr(operation, 'name') !== 'ConsultarNfsePorRps') continue;
+        if (attr(operation, 'name') !== operationName) continue;
         const input = operation.input && typeof operation.input === 'object' ? operation.input as XmlNode : undefined;
         const output = operation.output && typeof operation.output === 'object' ? operation.output as XmlNode : undefined;
         return { owner, inputMessage: attr(input, 'message'), outputMessage: attr(output, 'message') };
@@ -235,18 +254,16 @@ function wrapperContentNode(wrapper: WrapperDescriptor | undefined, documents: P
   return wrapper.node;
 }
 
-export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument[]): GissResolvedWsdlShape {
-  const parsed = documents.map(parseDocument).filter((value): value is ParsedDocument => Boolean(value));
-  const main = parsed[0];
+function resolveOperationShape(parsed: ParsedDocument[], operationName: string): GissResolvedOperationShape {
   const messages = collectMessages(parsed);
   const elements = collectElements(parsed);
-  const operation = findOperation(parsed);
+  const operation = findOperation(parsed, operationName);
   const requestMessage = operation ? resolveMessage(operation.inputMessage, operation.owner, messages) : undefined;
   const responseMessage = operation ? resolveMessage(operation.outputMessage, operation.owner, messages) : undefined;
   const requestParts = messageParts(requestMessage);
   const responseParts = messageParts(responseMessage);
-  const request = resolveWrapper(requestParts, elements, 'ConsultarNfsePorRpsRequest');
-  const response = resolveWrapper(responseParts, elements, 'ConsultarNfsePorRpsResponse');
+  const request = resolveWrapper(requestParts, elements, `${operationName}Request`);
+  const response = resolveWrapper(responseParts, elements, `${operationName}Response`);
   const requestNames = nestedElementNames(wrapperContentNode(request, parsed));
   const responseNames = nestedElementNames(wrapperContentNode(response, parsed));
   const hasNfseCabecMsg = requestNames.includes('nfseCabecMsg') || requestParts.some((part) => part.name === 'nfseCabecMsg');
@@ -254,8 +271,9 @@ export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument
   const hasOutputXml = responseNames.includes('outputXML') || responseParts.some((part) => part.name === 'outputXML');
   const requestNamespaceVerified = normalizeNs(request?.namespace) === normalizeNs(GISS_SOAP_REQUEST_NAMESPACE);
   const responseNamespaceVerified = normalizeNs(response?.namespace) === normalizeNs(GISS_SOAP_REQUEST_NAMESPACE);
-  const reconciliationShapePresent = request?.name === 'ConsultarNfsePorRpsRequest'
-    && response?.name === 'ConsultarNfsePorRpsResponse'
+  const shapePresent = Boolean(operation)
+    && request?.name === `${operationName}Request`
+    && response?.name === `${operationName}Response`
     && requestNamespaceVerified
     && responseNamespaceVerified
     && hasNfseCabecMsg
@@ -263,18 +281,44 @@ export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument
     && hasOutputXml;
 
   return {
-    targetNamespace: main?.targetNamespace,
+    operation: operationName,
+    operationPresent: Boolean(operation),
     requestWrapper: request?.name,
     requestNamespace: request?.namespace,
     responseWrapper: response?.name,
     responseNamespace: response?.namespace,
     requestMessageParts: requestParts.map((part) => part.name).filter((value): value is string => Boolean(value)),
     responseMessageParts: responseParts.map((part) => part.name).filter((value): value is string => Boolean(value)),
-    requestWrappers: elements.map((element) => element.name).filter((name) => /Request$/i.test(name)).sort(),
     hasNfseCabecMsg,
     hasNfseDadosMsg,
     hasOutputXml,
-    reconciliationShapePresent,
+    shapePresent,
+  };
+}
+
+export function inspectResolvedGissOperationShape(documents: GissWsdlContractDocument[], operationName: string): GissResolvedOperationShape {
+  return resolveOperationShape(parseDocuments(documents), operationName);
+}
+
+export function inspectResolvedGissWsdlShape(documents: GissWsdlContractDocument[]): GissResolvedWsdlShape {
+  const parsed = parseDocuments(documents);
+  const main = parsed[0];
+  const elements = collectElements(parsed);
+  const reconciliation = resolveOperationShape(parsed, 'ConsultarNfsePorRps');
+
+  return {
+    targetNamespace: main?.targetNamespace,
+    requestWrapper: reconciliation.requestWrapper,
+    requestNamespace: reconciliation.requestNamespace,
+    responseWrapper: reconciliation.responseWrapper,
+    responseNamespace: reconciliation.responseNamespace,
+    requestMessageParts: reconciliation.requestMessageParts,
+    responseMessageParts: reconciliation.responseMessageParts,
+    requestWrappers: elements.map((element) => element.name).filter((name) => /Request$/i.test(name)).sort(),
+    hasNfseCabecMsg: reconciliation.hasNfseCabecMsg,
+    hasNfseDadosMsg: reconciliation.hasNfseDadosMsg,
+    hasOutputXml: reconciliation.hasOutputXml,
+    reconciliationShapePresent: reconciliation.shapePresent,
     supportingDocumentsInspected: Math.max(0, parsed.length - 1),
   };
 }
