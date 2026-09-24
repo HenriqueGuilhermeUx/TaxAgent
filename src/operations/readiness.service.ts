@@ -32,6 +32,7 @@ export class ReadinessService {
     const endpoint = nfseEndpointPolicy(environment);
     const schema = this.schemas.active(environment);
     const dpsConformance = this.schemas.dpsConformance(environment);
+    const eventConformance = this.schemas.eventConformance(environment);
     const gates: ReadinessGate[] = [];
     const capability = await this.capabilities.resolve(company.city_code, environment, { taxRegime: company.tax_regime ?? undefined });
     const resolvedProvider = capability.route === 'national-direct'
@@ -81,6 +82,21 @@ export class ReadinessService {
         detail: dpsConformance.verified ? dpsConformance.reason : `Builder sem atestado válido para o schema ativo: ${dpsConformance.reason}.`,
         data: dpsConformance.attestation,
       });
+      gates.push({
+        id: 'event_schema',
+        label: 'XSD oficial de eventos sincronizado',
+        status: this.schemas.localEventXsd(environment) ? 'pass' : 'fail',
+        blocking: true,
+        detail: this.schemas.localEventXsd(environment) ? `Schema de eventos do pacote ${schema.id} disponível no runtime.` : `Schema de eventos do pacote ${schema.id} não foi sincronizado no runtime.`,
+      });
+      gates.push({
+        id: 'cancellation_event_verified',
+        label: 'Evento 101101 homologado',
+        status: eventConformance.verified ? 'pass' : 'fail',
+        blocking: true,
+        detail: eventConformance.verified ? eventConformance.reason : `Cancelamento nacional sem atestado válido para o schema ativo: ${eventConformance.reason}.`,
+        data: eventConformance.attestation,
+      });
       gates.push({ id: 'nfse_endpoint', label: 'Endpoint SEFIN', status: endpoint.configured && (endpoint.official || endpoint.customAllowed) ? 'pass' : 'fail', blocking: true, detail: endpoint.official ? `Endpoint oficial: ${endpoint.url}` : endpoint.customAllowed ? `Endpoint custom explicitamente permitido: ${endpoint.url}` : `Endpoint deve ser o oficial ${endpoint.expectedHost}${endpoint.expectedPath}.` });
     } else if (resolvedProvider === 'giss') {
       const gissEndpoint = gissEndpointPolicy(company.city_code);
@@ -104,6 +120,7 @@ export class ReadinessService {
       route: capability,
       schema: { id: schema.id, status: schema.status },
       dps_conformance: dpsConformance,
+      event_conformance: eventConformance,
       endpoint,
       provider_endpoint: resolvedProvider === 'giss' ? gissEndpointPolicy(company.city_code) : endpoint,
       gates,
