@@ -14,6 +14,11 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoicesRepository } from './invoices.repository';
 
 const MAX_ATTEMPTS = 5;
+const UNCERTAIN_CANCELLATION_CODES = new Set([
+  'TA_NFSE_EVENT_RECONCILIATION_PENDING',
+  'NFSE_EVENT_RECONCILIATION_INCOMPLETE',
+  'NFSE_EVENT_RESPONSE_INCOMPLETE',
+]);
 
 type RoutingCompany = { city_code: string; tax_regime?: string };
 
@@ -188,6 +193,36 @@ export class InvoicesService {
     } catch (error) {
       const normalized = normalizeEngineError(error);
       const exhausted = attemptNumber >= MAX_ATTEMPTS;
+      const providerStateUncertain = UNCERTAIN_CANCELLATION_CODES.has(normalized.code);
+
+      if (providerStateUncertain) {
+        if (!exhausted) {
+          await this.ledger.append({
+            invoiceId: id,
+            type: 'invoice.cancellation_reconciliation_retry_scheduled',
+            payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message, fiscal_retransmission_attempted: false },
+          });
+          throw error;
+        }
+        await this.ledger.append({
+          invoiceId: id,
+          type: 'invoice.cancellation_reconciliation_required',
+          payload: {
+            attempt: attemptNumber,
+            code: normalized.code,
+            message: normalized.message,
+            status_preserved: 'cancelling',
+            fiscal_retransmission_attempted: false,
+          },
+        });
+        await this.webhooks.emit(invoice.company_id, 'invoice.cancellation_reconciliation_required', {
+          invoice_id: id,
+          error: normalized,
+          status: 'cancelling',
+        });
+        return;
+      }
+
       if (normalized.retryable && !exhausted) {
         await this.ledger.append({ invoiceId: id, type: 'invoice.cancellation_retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code } });
         throw error;
