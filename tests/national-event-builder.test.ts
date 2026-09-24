@@ -77,3 +77,27 @@ test('national cancellation accepts the alphanumeric-CNPJ segment allowed by the
   }, alphaCompany as any);
   assert.match(built.xml, /<CNPJAutor>12ABC34501DE35<\/CNPJAutor>/);
 });
+
+test('national cancellation accepts only active e101101 reason codes 1, 2 and 9', () => {
+  for (const reasonCode of ['1', '2', '9']) {
+    const built = new EventBuilderService().buildCancellation({
+      companyId: company.id,
+      environment: 'test',
+      accessKey,
+      reasonCode,
+      reason: 'Cancelamento sintetico para teste',
+    }, company as any);
+    assert.match(built.xml, new RegExp(`<cMotivo>${reasonCode}<\\/cMotivo>`));
+  }
+
+  assert.throws(
+    () => new EventBuilderService().buildCancellation({
+      companyId: company.id,
+      environment: 'test',
+      accessKey,
+      reasonCode: '3',
+      reason: 'Cancelamento sintetico para teste',
+    }, company as any),
+    (error: unknown) => error instanceof FiscalEngineError && error.code === 'TA_NFSE_CANCELLATION_REASON_INVALID',
+  );
+});
