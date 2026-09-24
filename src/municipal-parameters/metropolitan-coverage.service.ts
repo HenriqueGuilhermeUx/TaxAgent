@@ -11,6 +11,19 @@ function normalizeName(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+function coverageObservation(classification: MetropolitanCoverageClass): string {
+  switch (classification) {
+    case 'national-direct':
+      return 'Direct national issuance is backed by explicit public-issuer or taxpayer-regime evidence.';
+    case 'municipal-provider':
+      return 'TaxAgent has a municipality/provider route, but direct National Public Issuer capability is not claimed.';
+    case 'participation-only':
+      return 'National convention/ADN participation is visible, but that alone does not authorize direct SEFIN issuance.';
+    default:
+      return 'Insufficient current evidence for an issuance route; keep fail-closed.';
+  }
+}
+
 @Injectable()
 export class MetropolitanCoverageService {
   constructor(
@@ -78,32 +91,49 @@ export class MetropolitanCoverageService {
           ? 'national-direct'
           : capability.route === 'municipal-provider'
             ? 'municipal-provider'
-            : capability.nationalStandard
+            : capability.nationalStandard || capability.nationalAdnParticipant
               ? 'participation-only'
               : 'unknown';
         return {
           municipality: name,
+          state: region.state,
           city_code: ibge.cityCode,
+          metropolitan_region: region.name,
           classification,
           route: capability.route,
           provider: capability.provider,
-          national_standard: capability.nationalStandard,
+          national_convention_present: capability.nationalStandard,
+          adn_participation: capability.nationalAdnParticipant,
           national_public_issuer: capability.nationalPublicIssuer,
           source: capability.source,
+          source_url: capability.sourceUrl,
+          evidence_date: capability.evidenceDate,
+          effective_from: capability.effectiveFrom,
+          confidence: capability.confidence,
+          observation: coverageObservation(classification),
           checked_at: capability.checkedAt,
         };
       } catch (error) {
         const code = error instanceof FiscalEngineError ? error.code : 'TA_METRO_CAPABILITY_LOOKUP_FAILED';
+        const now = new Date().toISOString();
         return {
           municipality: name,
+          state: region.state,
           city_code: ibge.cityCode,
+          metropolitan_region: region.name,
           classification: 'unknown' as const,
           route: 'unknown' as const,
           provider: 'unknown' as const,
-          national_standard: false,
+          national_convention_present: false,
+          adn_participation: false,
           national_public_issuer: false,
           source: 'lookup-error',
-          checked_at: new Date().toISOString(),
+          source_url: null,
+          evidence_date: now.slice(0, 10),
+          effective_from: null,
+          confidence: 'low' as const,
+          observation: coverageObservation('unknown'),
+          checked_at: now,
           error_code: code,
         };
       }
@@ -120,8 +150,10 @@ export class MetropolitanCoverageService {
       tax_regime: taxRegime ?? null,
       effective_at: (effectiveAt ?? new Date().toISOString()).slice(0, 10),
       methodology: {
-        direct_rule: 'national-direct only when an explicit official national public issuer capability or applicable regime rule proves eligibility',
-        participation_rule: 'national platform participation alone never unlocks direct SEFIN issuance',
+        direct_rule: 'national-direct only when an explicit official national public issuer capability or applicable taxpayer-regime rule proves eligibility',
+        participation_rule: 'national convention or ADN participation alone never unlocks direct SEFIN issuance',
+        adn_rule: 'ADN participation is read only from the exact structured aderenteAmbienteNacional flag, or implied by an explicit National Public Issuer flag',
+        evidence_rule: 'commercial coverage remains fail-closed when evidence is missing, stale, ambiguous or lookup fails',
         city_codes: 'IBGE Localidades API',
       },
       counts,
@@ -143,6 +175,9 @@ export class MetropolitanCoverageService {
         classification: row.classification,
         route: row.route,
         provider: row.provider,
+        adn_participation: row.adn_participation,
+        national_public_issuer: row.national_public_issuer,
+        confidence: row.confidence,
         source: row.source,
         error_code: 'error_code' in row ? row.error_code : undefined,
       })),
