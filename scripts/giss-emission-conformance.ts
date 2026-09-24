@@ -88,7 +88,7 @@ function syntheticCertificate(): { material: CertificateMaterial; certificatePem
 }
 
 function verifySignature(xml: string, signatureXml: string, certificatePem: string, expectedUri: string): void {
-  if (!signatureXml.includes(`URI=\"#${expectedUri}\"`)) throw new Error(`XMLDSig does not reference #${expectedUri}`);
+  if (!signatureXml.includes(`URI="#${expectedUri}"`)) throw new Error(`XMLDSig does not reference #${expectedUri}`);
   if (!signatureXml.includes('http://www.w3.org/2000/09/xmldsig#rsa-sha1')) throw new Error(`XMLDSig for ${expectedUri} is not RSA-SHA1`);
   if (!signatureXml.includes('http://www.w3.org/2000/09/xmldsig#sha1')) throw new Error(`XMLDSig digest for ${expectedUri} is not SHA1`);
   const verifier = new SignedXml({ publicCert: certificatePem, getCertFromKeyInfo: () => null });
@@ -159,7 +159,7 @@ async function main() {
   const signedBatch = signatures.signRpsAndBatch(unsignedBatch, material);
   validateWithXmllint(signedBatch, schemaPath, 'giss-signed-batch');
 
-  const signatureXmls = [...signedBatch.matchAll(/<(?:\\w+:)?Signature\\b[\\s\\S]*?<\\/(?:\\w+:)?Signature>/g)].map((match) => match[0]);
+  const signatureXmls = [...signedBatch.matchAll(/<(?:\w+:)?Signature\b[\s\S]*?<\/(?:\w+:)?Signature>/g)].map((match) => match[0]);
   if (signatureXmls.length !== 2) throw new Error(`Expected exactly 2 GISS signatures, found ${signatureXmls.length}`);
   const rpsSignature = signatureXmls.find((value) => value.includes('URI="#RPS1"'));
   const batchSignature = signatureXmls.find((value) => value.includes('URI="#LOTE1"'));
