@@ -21,6 +21,9 @@ export interface DpsConformanceAttestation {
   fiscal_transmission_attempted: boolean;
   fiscal_emission_attempted: boolean;
 }
+export interface EventConformanceAttestation extends DpsConformanceAttestation {
+  event_code: string;
+}
 
 @Injectable()
 export class SchemaRegistryService {
@@ -62,6 +65,33 @@ export class SchemaRegistryService {
       ? { verified: true, reason: `DPS builder attested against active schema ${active.id}`, attestation }
       : { verified: false, reason: `DPS conformance attestation does not match active schema/profile ${active.id}`, attestation };
   }
+  eventConformance(environment: FiscalEnvironment): { verified: boolean; reason: string; attestation?: EventConformanceAttestation } {
+    const active = this.active(environment);
+    const path = join(process.cwd(), 'schemas', 'conformance', `national-event-${environment}.json`);
+    if (!existsSync(path)) return { verified: false, reason: 'build-time event conformance attestation is not present' };
+    let attestation: EventConformanceAttestation;
+    try {
+      attestation = JSON.parse(readFileSync(path, 'utf8')) as EventConformanceAttestation;
+    } catch {
+      return { verified: false, reason: 'build-time event conformance attestation is unreadable' };
+    }
+    const verified = attestation.version === 1
+      && attestation.environment === environment
+      && attestation.schema_id === active.id
+      && attestation.event_code === '101101'
+      && attestation.unsigned_xsd_valid === true
+      && attestation.signed_xsd_valid === true
+      && attestation.signature_verified === true
+      && attestation.signature_profile === 'xmldsig-rsa-sha256-id-reference'
+      && attestation.synthetic_fixture_only === true
+      && attestation.real_certificate_used === false
+      && attestation.network_attempted === false
+      && attestation.fiscal_transmission_attempted === false
+      && attestation.fiscal_emission_attempted === false;
+    return verified
+      ? { verified: true, reason: `National cancellation event builder attested against active schema ${active.id}`, attestation }
+      : { verified: false, reason: `Event conformance attestation does not match active schema/profile ${active.id}`, attestation };
+  }
   metadata() {
     return {
       ...this.registry,
@@ -72,6 +102,8 @@ export class SchemaRegistryService {
         testEventsSynced: Boolean(this.localEventXsd('test')),
         productionDpsConformance: this.dpsConformance('production'),
         testDpsConformance: this.dpsConformance('test'),
+        productionEventConformance: this.eventConformance('production'),
+        testEventConformance: this.eventConformance('test'),
       },
     };
   }
