@@ -18,6 +18,17 @@ export interface MunicipalCapability {
   evidence?: unknown;
 }
 
+function officialNationalIssuerEnabled(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const parametrosConvenio = (payload as Record<string, unknown>).parametrosConvenio;
+  if (!parametrosConvenio || typeof parametrosConvenio !== 'object' || Array.isArray(parametrosConvenio)) return false;
+  const value = (parametrosConvenio as Record<string, unknown>).aderenteEmissorNacional;
+
+  // Official PAM/ADN convention payload currently exposes the capability as a binary flag.
+  // Accept only exact structured affirmative values. Never infer from free text or nearby keys.
+  return value === 1 || value === '1' || value === true;
+}
+
 @Injectable()
 export class MunicipalCapabilityService {
   constructor(private readonly db: DatabaseService, private readonly client: MunicipalParametersClient) {}
@@ -78,11 +89,9 @@ export class MunicipalCapabilityService {
     if (!check.supported) return { cityCode, environment, nationalStandard: false, nationalPublicIssuer: false, route: 'unknown', provider: 'unknown', source: 'official-national-parameters', checkedAt: checkedAt.toISOString(), evidence: check.payload };
 
     // A successful convention lookup proves participation, but by itself does NOT prove
-    // that the municipality enabled the National Public Issuer. Fail closed until a
-    // product/capability flag can be established from the official payload.
-    const text = JSON.stringify(check.payload ?? {}).toLowerCase();
-    const explicitNationalIssuer = /emissor.{0,30}(publico|público).{0,30}(true|ativo|habilitado|1)/i.test(text)
-      || /(true|ativo|habilitado|1).{0,30}emissor.{0,30}(publico|público)/i.test(text);
+    // that the municipality enabled the National Public Issuer. Only the exact official
+    // parametrosConvenio.aderenteEmissorNacional flag can unlock national-direct here.
+    const explicitNationalIssuer = officialNationalIssuerEnabled(check.payload);
 
     return {
       cityCode, environment, nationalStandard: true, nationalPublicIssuer: explicitNationalIssuer,
