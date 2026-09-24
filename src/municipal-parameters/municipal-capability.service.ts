@@ -28,21 +28,22 @@ export class MunicipalCapabilityService {
     const regime = String(taxpayer.taxRegime ?? '').trim().toLowerCase();
     const effectiveDate = (taxpayer.effectiveAt ?? new Date().toISOString()).slice(0, 10);
 
-    // CGSN national rule: from 2026-09-01, ME/EPP optantes do Simples Nacional
-    // must use the National NFS-e Issuer. This is a taxpayer-regime rule, not a
-    // municipality-specific inference, so it takes precedence over legacy local routing.
-    if (['simples', 'simples_nacional'].includes(regime) && effectiveDate >= '2026-09-01') {
+    // Resolução CGSN 191/2026 revoked the earlier 2026-09-01 deadline and moved
+    // mandatory National NFS-e issuance for ME/EPP optantes do Simples Nacional
+    // to 2026-11-01. Keep this taxpayer-regime rule explicit and date-bound.
+    if (['simples', 'simples_nacional'].includes(regime) && effectiveDate >= '2026-11-01') {
       return {
         cityCode, environment, nationalStandard: true, nationalPublicIssuer: true,
         route: 'national-direct', provider: 'nfse-national',
         source: 'official-regime-rule', checkedAt: new Date().toISOString(),
-        evidence: { rule: 'simples_nacional_national_issuer', effective_from: '2026-09-01', tax_regime: regime },
+        evidence: { rule: 'simples_nacional_national_issuer', effective_from: '2026-11-01', tax_regime: regime, resolution: 'CGSN 191/2026' },
       };
     }
 
-    // E0039 was observed from SEFIN for Santos in Produção Restrita for a taxpayer
-    // not covered by the mandatory Simples national-issuer rule above. Santos participates
-    // in the national ecosystem but otherwise remains routed to its municipal provider.
+    // E0039 was observed from SEFIN for Santos in Produção Restrita: Santos participates
+    // in the national ecosystem but is not parametrized to use the National Public Issuer
+    // for the taxpayer profile tested. Keep this explicit safety override until an official
+    // capability or applicable regime rule proves otherwise.
     if (cityCode === '3548500') {
       return {
         cityCode, environment, nationalStandard: true, nationalPublicIssuer: false,
