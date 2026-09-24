@@ -13,16 +13,36 @@ export class EventBuilderService {
 
   buildCancellation(input: CancelFiscalInput, company: FiscalCompany): EventBuildResult {
     const eventCode = '101101';
-    const accessKey = String(input.accessKey ?? '').trim();
-    if (!/^\d{50}$/.test(accessKey)) {
-      throw new FiscalEngineError('TA_NFSE_ACCESS_KEY_INVALID', 'National NFS-e cancellation requires a 50-digit access key', false);
+    const accessKey = String(input.accessKey ?? '').trim().toUpperCase();
+    if (!/^[0-9]{8}(?:1[0-9]{14}|2[0-9A-Z]{14})[0-9]{27}$/.test(accessKey)) {
+      throw new FiscalEngineError(
+        'TA_NFSE_ACCESS_KEY_INVALID',
+        'National NFS-e cancellation requires an access key matching the active 50-position national key structure',
+        false,
+      );
     }
-    const id = `PRE${accessKey}${eventCode}`;
-    const taxIdDigits = String(company.tax_id ?? '').replace(/\D/g, '');
-    if (taxIdDigits.length !== 11 && taxIdDigits.length !== 14) {
+
+    const taxId = String(company.tax_id ?? '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const isCpf = /^[0-9]{11}$/.test(taxId);
+    const isCnpj = /^[0-9A-Z]{14}$/.test(taxId);
+    if (!isCpf && !isCnpj) {
       throw new FiscalEngineError('TA_EVENT_AUTHOR_TAX_ID_INVALID', 'National NFS-e event author must have a valid CPF/CNPJ-shaped tax identifier', false);
     }
-    const taxIdTag = taxIdDigits.length === 11 ? 'CPFAutor' : 'CNPJAutor';
+
+    const keyFederalType = accessKey[8];
+    const keyFederalId = accessKey.slice(9, 23);
+    const expectedFederalType = isCpf ? '1' : '2';
+    const expectedFederalId = isCpf ? taxId.padStart(14, '0') : taxId;
+    if (keyFederalType !== expectedFederalType || keyFederalId !== expectedFederalId) {
+      throw new FiscalEngineError(
+        'TA_NFSE_ACCESS_KEY_COMPANY_MISMATCH',
+        'National NFS-e access key does not belong to the Company federal tax identifier; cancellation is blocked',
+        false,
+      );
+    }
+
+    const id = `PRE${accessKey}${eventCode}`;
+    const taxIdTag = isCpf ? 'CPFAutor' : 'CNPJAutor';
     const dhEvento = this.brazilCivilTimestamp();
     const doc = {
       pedRegEvento: {
@@ -33,7 +53,7 @@ export class EventBuilderService {
           tpAmb: input.environment === 'production' ? 1 : 2,
           verAplic: 'TaxAgent_0.12',
           dhEvento,
-          [taxIdTag]: taxIdDigits,
+          [taxIdTag]: taxId,
           chNFSe: accessKey,
           e101101: { xDesc: 'Cancelamento de NFS-e', cMotivo: input.reasonCode, xMotivo: input.reason },
         },
