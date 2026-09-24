@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GissWsdlDiagnosticService } from '../src/operations/giss-wsdl-diagnostic.service';
 
-test('authenticated GISS WSDL diagnostic identifies RecepcionarLoteRps transport without fiscal POST', async () => {
+test('authenticated GISS WSDL diagnostic identifies RecepcionarLoteRps transport but keeps wrapper shape unverified without exact message mapping', async () => {
   const service = new GissWsdlDiagnosticService(
     { getActiveMaterial: async () => ({ fingerprint: 'fp_test', tlsCertificatePem: 'SECRET_CERT', tlsPrivateKeyPem: 'SECRET_KEY' }) } as any,
     {
@@ -35,10 +35,17 @@ test('authenticated GISS WSDL diagnostic identifies RecepcionarLoteRps transport
     operation: 'RecepcionarLoteRps',
     operation_present: true,
     transport_present: true,
+    shape_present: false,
     soap_address: 'https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws',
     soap_action: 'http://nfse.abrasf.org.br/RecepcionarLoteRps',
     soap_version: '1.1',
     request_wrapper_candidates: ['RecepcionarLoteRpsRequest'],
+    request_wrapper: undefined,
+    request_namespace: undefined,
+    response_wrapper: undefined,
+    response_namespace: undefined,
+    request_message_parts: [],
+    response_message_parts: [],
     wrapper_mapping_verified: false,
     fiscal_transmission_attempted: false,
     fiscal_emission_attempted: false,
@@ -68,6 +75,7 @@ test('GISS emission transport diagnostic fails closed when WSDL does not prove e
   const result = await service.inspect('comp_test', 'test', '3548500');
   assert.equal(result.emission_transport.operation_present, true);
   assert.equal(result.emission_transport.transport_present, false);
+  assert.equal(result.emission_transport.shape_present, false);
   assert.equal(result.emission_transport.wrapper_mapping_verified, false);
   assert.equal(result.fiscal_transmission_attempted, false);
 });
