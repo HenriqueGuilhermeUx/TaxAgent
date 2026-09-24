@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, Headers, Post, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Headers, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from './api-key.guard';
 import { ApiKeysService } from './api-keys.service';
@@ -11,6 +11,19 @@ import { CurrentTaxAgentAuth } from './current-auth.decorator';
 @Controller('api-keys')
 export class ApiKeyRotationController {
   constructor(private readonly keys: ApiKeysService) {}
+
+  @Get('current')
+  @ApiOperation({ summary: 'Inspect the authenticated API key context without exposing the key secret' })
+  current(@CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+    if (!auth) throw new ForbiddenException('API key authentication is required');
+    return {
+      key_id: auth.keyId,
+      company_id: auth.companyId,
+      environment: auth.environment,
+      scopes: auth.scopes,
+      key_secret_exposed: false,
+    };
+  }
 
   @Post('rotate-current')
   @ApiHeader({ name: 'X-TaxAgent-Key-Rotation-Confirmation', required: true, example: 'ROTATE-CURRENT-KEY' })
