@@ -20,6 +20,18 @@ export class MunicipalParametersController {
     return this.metroCoverage.listRegions();
   }
 
+  @Get('metros/coverage')
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'production' })
+  @ApiQuery({ name: 'tax_regime', required: false, example: 'regular' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-24' })
+  getAllMetropolitanCoverage(
+    @Query('environment') environment: FiscalEnvironment = 'production',
+    @Query('tax_regime') taxRegime?: string,
+    @Query('effective_at') effectiveAt?: string,
+  ) {
+    return this.metroCoverage.inspectAll(environment, taxRegime, effectiveAt);
+  }
+
   @Get('metros/:metro/coverage')
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'production' })
   @ApiQuery({ name: 'tax_regime', required: false, example: 'regular' })
