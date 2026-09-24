@@ -25,8 +25,8 @@ async function main() {
     tax_regime: 'regular',
   };
 
-  // 7 cMun + 1 ambiente gerador + 1 tipo CNPJ + 14 inscrição + 13 nNFSe + 4 AAMM + 9 cNum + 1 DV.
-  // It is synthetic and is used only to exercise the active XSD/XMLDSig contract; it is never transmitted.
+  // Synthetic key/identity: used only to exercise the active official XSD/XMLDSig contracts.
+  // No real certificate, taxpayer data, network call, provider POST or fiscal emission is involved.
   const syntheticAccessKey = '35306072200000000000000000000000000126090000000000';
   const input: CancelFiscalInput = {
     companyId: company.id,
@@ -37,7 +37,7 @@ async function main() {
   };
 
   const built = builder.buildCancellation(input, company);
-  if (built.id !== `PRE${syntheticAccessKey}101101`) throw new Error(`Unexpected cancellation event id: ${built.id}`);
+  if (built.id !== `PRE${syntheticAccessKey}101101`) throw new Error(`Unexpected cancellation request id: ${built.id}`);
   await validation.validateWellFormed(built.xml);
   await validation.validateEventStrict(built.xml, 'test');
 
@@ -52,26 +52,41 @@ async function main() {
   if (!signed.includes(`URI="#${built.id}"`)) throw new Error('Event XMLDSig does not reference the generated infPedReg Id');
 
   const signatureXml = signed.match(/<(?:\w+:)?Signature\b[\s\S]*?<\/(?:\w+:)?Signature>/)?.[0];
-  if (!signatureXml) throw new Error('Signed event does not contain an XMLDSig Signature element');
+  if (!signatureXml) throw new Error('Signed event request does not contain an XMLDSig Signature element');
 
-  const verifier = new SignedXml({
-    publicCert: certificatePem,
-    getCertFromKeyInfo: () => null,
-  });
+  const verifier = new SignedXml({ publicCert: certificatePem, getCertFromKeyInfo: () => null });
   verifier.loadSignature(signatureXml);
-  if (!verifier.checkSignature(signed)) throw new Error('Generated event XMLDSig failed cryptographic verification');
+  if (!verifier.checkSignature(signed)) throw new Error('Generated event request XMLDSig failed cryptographic verification');
   const references = verifier.getSignedReferences();
   if (references.length !== 1 || !references[0].includes('infPedReg')) throw new Error('XMLDSig authenticated reference is not the expected infPedReg element');
 
+  // The SEFIN registered event (EVT) wraps the original pedRegEvento. Prove that the response
+  // shape our runtime will trust is accepted by the same active official event XSD.
+  const embeddedRequest = signed.replace(/^<\?xml[^>]*\?>\s*/i, '');
+  const registeredEventId = `EVT${syntheticAccessKey}101101001`;
+  const registeredEvent = `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<evento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
+    `<infEvento Id="${registeredEventId}">` +
+    `<verAplic>TaxAgent_0.12</verAplic>` +
+    `<ambGer>2</ambGer>` +
+    `<nSeqEvento>001</nSeqEvento>` +
+    `<dhProc>2026-09-23T18:00:01-03:00</dhProc>` +
+    `<nDFe>1</nDFe>` +
+    embeddedRequest +
+    `</infEvento></evento>`;
+  await validation.validateWellFormed(registeredEvent);
+  await validation.validateEventStrict(registeredEvent, 'test');
+
   const active = schemas.active('test');
   const attestation = {
-    version: 1,
+    version: 2,
     environment: 'test',
     schema_id: active.id,
     xsd_label: active.xsdLabel,
     event_code: '101101',
     unsigned_xsd_valid: true,
     signed_xsd_valid: true,
+    registered_event_xsd_valid: true,
     signature_verified: true,
     signature_profile: 'xmldsig-rsa-sha256-id-reference',
     synthetic_fixture_only: true,
@@ -88,7 +103,8 @@ async function main() {
     event: 'national_event_conformance_ok',
     target_city_code: company.city_code,
     ...attestation,
-    event_xml_sha256: createHash('sha256').update(signed, 'utf8').digest('hex'),
+    request_xml_sha256: createHash('sha256').update(signed, 'utf8').digest('hex'),
+    registered_event_xml_sha256: createHash('sha256').update(registeredEvent, 'utf8').digest('hex'),
     attestation_persisted: true,
   }));
 }
