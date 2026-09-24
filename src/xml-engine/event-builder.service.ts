@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { XMLBuilder } from 'fast-xml-parser';
 import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
 import { CancelFiscalInput } from '../fiscal-core/fiscal.types';
+import { SchemaRegistryService } from '../schema-registry/schema-registry.service';
 import { FiscalCompany } from './dps-builder.service';
 
 export interface EventBuildResult { xml: string; id: string; verifiedLayout: boolean }
 
 @Injectable()
 export class EventBuilderService {
+  constructor(@Optional() private readonly schemas?: SchemaRegistryService) {}
+
   buildCancellation(input: CancelFiscalInput, company: FiscalCompany): EventBuildResult {
     const eventCode = '101101';
     const accessKey = String(input.accessKey ?? '').trim();
@@ -37,7 +40,12 @@ export class EventBuilderService {
       },
     };
     const builder = new XMLBuilder({ ignoreAttributes: false, format: false });
-    return { xml: `<?xml version="1.0" encoding="UTF-8"?>${builder.build(doc)}`, id, verifiedLayout: false };
+    const conformance = this.schemas?.eventConformance(input.environment);
+    return {
+      xml: `<?xml version="1.0" encoding="UTF-8"?>${builder.build(doc)}`,
+      id,
+      verifiedLayout: conformance?.verified === true,
+    };
   }
 
   private brazilCivilTimestamp(now = new Date()): string {
