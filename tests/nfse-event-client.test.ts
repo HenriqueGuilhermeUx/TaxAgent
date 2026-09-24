@@ -40,9 +40,9 @@ test('event reconciliation preserves transient provider failures instead of trea
   );
 });
 
-test('event reconciliation rejects malformed event identity before building a provider URL', async () => {
+test('event reconciliation rejects malformed event identity before building a provider URL', () => {
   const client = new NfseNationalClient();
-  await assert.rejects(
+  assert.throws(
     () => client.getEventByTypeAndSequence('test', accessKey, '1011', 0, certificate),
     (error: unknown) => error instanceof FiscalEngineError && error.code === 'TA_NFSE_EVENT_QUERY_INVALID',
   );
