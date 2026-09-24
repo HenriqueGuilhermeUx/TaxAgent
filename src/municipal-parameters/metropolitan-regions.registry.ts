@@ -39,7 +39,7 @@ export const METROPOLITAN_REGIONS: MetropolitanRegionDefinition[] = [
     slug: 'rio-de-janeiro',
     name: 'Região Metropolitana do Rio de Janeiro',
     state: 'RJ',
-    sourceUrl: 'https://www.rj.gov.br/irm/content/conn/UCMServer/uuid/dDocName%3AWCC42000005939',
+    sourceUrl: 'https://www.rj.gov.br/irm/formacao_rjrm',
     municipalities: [
       'Belford Roxo', 'Cachoeiras de Macacu', 'Duque de Caxias', 'Guapimirim', 'Itaboraí', 'Itaguaí', 'Japeri',
       'Magé', 'Maricá', 'Mesquita', 'Nilópolis', 'Niterói', 'Nova Iguaçu', 'Paracambi', 'Petrópolis', 'Queimados',
@@ -50,7 +50,7 @@ export const METROPOLITAN_REGIONS: MetropolitanRegionDefinition[] = [
     slug: 'curitiba',
     name: 'Região Metropolitana de Curitiba',
     state: 'PR',
-    sourceUrl: 'https://www.amep.pr.gov.br/Pagina/Regiao-Metropolitana-de-Curitiba',
+    sourceUrl: 'https://www.amep.pr.gov.br/Pagina/Sobre-RM-de-Curitiba',
     municipalities: [
       'Curitiba', 'Adrianópolis', 'Agudos do Sul', 'Almirante Tamandaré', 'Araucária', 'Balsa Nova',
       'Bocaiúva do Sul', 'Campina Grande do Sul', 'Campo do Tenente', 'Campo Largo', 'Campo Magro', 'Cerro Azul',
@@ -63,7 +63,7 @@ export const METROPOLITAN_REGIONS: MetropolitanRegionDefinition[] = [
     slug: 'porto-alegre',
     name: 'Região Metropolitana de Porto Alegre',
     state: 'RS',
-    sourceUrl: 'https://iede.rs.gov.br/portal/apps/sites/#/iede/pages/regioes-metropolitanas',
+    sourceUrl: 'https://iede.rs.gov.br/portal/home/item.html?id=f9d762cfe7584a1e9f6f999c9149b652',
     municipalities: [
       'Alvorada', 'Araricá', 'Arroio dos Ratos', 'Cachoeirinha', 'Campo Bom', 'Canoas', 'Capela de Santana',
       'Charqueadas', 'Dois Irmãos', 'Eldorado do Sul', 'Estância Velha', 'Esteio', 'Glorinha', 'Gravataí',
