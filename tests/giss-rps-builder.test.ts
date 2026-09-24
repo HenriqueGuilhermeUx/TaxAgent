@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildAbrasfRps } from '../src/providers/giss/abrasf-rps.builder';
+import { buildAbrasfRps, GISS_TYPES_NAMESPACE } from '../src/providers/giss/abrasf-rps.builder';
 
 const base = {
   number: '77',
@@ -21,21 +21,22 @@ const base = {
   serviceCityCode: '3548500',
 };
 
-test('builds current GISS RPS fields required by the ABRASF-derived schema', () => {
+test('builds current GISS 2.04 RPS fields in the official types namespace', () => {
   const xml = buildAbrasfRps(base);
-  assert.match(xml, /<DataEmissao>2026-09-22<\/DataEmissao>/);
-  assert.match(xml, /<ItemListaServico>17\.01<\/ItemListaServico>/);
-  assert.match(xml, /<CodigoNbs>114011900<\/CodigoNbs>/);
-  assert.match(xml, /<ExigibilidadeISS>1<\/ExigibilidadeISS>/);
-  assert.match(xml, /<IssRetido>2<\/IssRetido>/);
-  assert.match(xml, /<TomadorServico>/);
-  assert.match(xml, /<Uf>SP<\/Uf>/);
-  assert.match(xml, /<Cep>11010000<\/Cep>/);
+  assert.match(xml, new RegExp(`xmlns:tipos="${GISS_TYPES_NAMESPACE.replaceAll('.', '\\.')}`));
+  assert.match(xml, /<tipos:DataEmissao>2026-09-22<\/tipos:DataEmissao>/);
+  assert.match(xml, /<tipos:ItemListaServico>17\.01<\/tipos:ItemListaServico>/);
+  assert.match(xml, /<tipos:CodigoNbs>114011900<\/tipos:CodigoNbs>/);
+  assert.match(xml, /<tipos:ExigibilidadeISS>1<\/tipos:ExigibilidadeISS>/);
+  assert.match(xml, /<tipos:IssRetido>2<\/tipos:IssRetido>/);
+  assert.match(xml, /<tipos:TomadorServico>/);
+  assert.match(xml, /<tipos:Uf>SP<\/tipos:Uf>/);
+  assert.match(xml, /<tipos:Cep>11010000<\/tipos:Cep>/);
 });
 
-test('maps national ISS retention choices to GISS retention fields', () => {
+test('maps national ISS retention choices to GISS namespaced retention fields', () => {
   const tomador = buildAbrasfRps({ ...base, issWithholding: '2' });
-  assert.match(tomador, /<IssRetido>1<\/IssRetido><ResponsavelRetencao>1<\/ResponsavelRetencao>/);
+  assert.match(tomador, /<tipos:IssRetido>1<\/tipos:IssRetido><tipos:ResponsavelRetencao>1<\/tipos:ResponsavelRetencao>/);
   const intermediario = buildAbrasfRps({ ...base, issWithholding: '3' });
-  assert.match(intermediario, /<IssRetido>1<\/IssRetido><ResponsavelRetencao>2<\/ResponsavelRetencao>/);
+  assert.match(intermediario, /<tipos:IssRetido>1<\/tipos:IssRetido><tipos:ResponsavelRetencao>2<\/tipos:ResponsavelRetencao>/);
 });
