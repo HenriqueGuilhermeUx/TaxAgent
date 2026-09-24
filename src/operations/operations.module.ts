@@ -5,6 +5,7 @@ import { DocumentsModule } from '../documents/documents.module';
 import { FiscalLedgerService } from '../ledger/fiscal-ledger.service';
 import { MunicipalParametersModule } from '../municipal-parameters/municipal-parameters.module';
 import { PreparedDpsModule } from '../prepared-dps/prepared-dps.module';
+import { ProviderCredentialsModule } from '../provider-credentials/provider-credentials.module';
 import { GissArtifactsService } from '../providers/giss/giss-artifacts.service';
 import { GissClient } from '../providers/giss/giss.client';
 import { GissSignatureService } from '../providers/giss/giss-signature.service';
@@ -14,6 +15,8 @@ import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { XmlEngineModule } from '../xml-engine/xml-engine.module';
 import { DpsPreflightService } from './dps-preflight.service';
+import { FiscalOnboardingController } from './fiscal-onboarding.controller';
+import { FiscalOnboardingService } from './fiscal-onboarding.service';
 import { GissQueryExecutionService } from './giss-query-execution.service';
 import { GissWsdlDiagnosticService } from './giss-wsdl-diagnostic.service';
 import { IssuerReadinessController } from './issuer-readiness.controller';
@@ -27,9 +30,9 @@ import { OperationsController } from './operations.controller';
 import { ReadinessService } from './readiness.service';
 
 @Module({
-  imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
-  controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService],
-  exports: [ReadinessService, NoA1HomologationService],
+  imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, ProviderCredentialsModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
+  controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController, FiscalOnboardingController],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService],
+  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService],
 })
 export class OperationsModule {}
