@@ -27,7 +27,7 @@ async function main() {
 
   // 7 cMun + 1 ambiente gerador + 1 tipo CNPJ + 14 inscrição + 13 nNFSe + 4 AAMM + 9 cNum + 1 DV.
   // It is synthetic and is used only to exercise the active XSD/XMLDSig contract; it is never transmitted.
-  const syntheticAccessKey = '353060722000000000000000000000000000126090000000000';
+  const syntheticAccessKey = '35306072200000000000000000000000000126090000000000';
   const input: CancelFiscalInput = {
     companyId: company.id,
     environment: 'test',
