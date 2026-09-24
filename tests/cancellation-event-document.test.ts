@@ -12,7 +12,7 @@ function eventXml(accessKey = numericKey, eventTag = 'e101101', sequence = '001'
     `<evento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
     `<infEvento Id="EVT${accessKey}101101${sequence}">` +
     `<verAplic>TaxAgent_0.12</verAplic><ambGer>2</ambGer><nSeqEvento>${sequence}</nSeqEvento>` +
-    `<dhProc>2026-09-23T18:00:00-03:00</dhProc><nDFe>1</nDFe>` +
+    `<dhProc>2026-09-23T18:00:00-03:00</dhProc><nDFSe>1</nDFSe>` +
     `<pedRegEvento versao="1.01"><infPedReg Id="PRE${accessKey}101101">` +
     `<tpAmb>2</tpAmb><verAplic>TaxAgent_0.12</verAplic><dhEvento>2026-09-23T17:59:59-03:00</dhEvento>` +
     `<CNPJAutor>00000000000000</CNPJAutor><chNFSe>${accessKey}</chNFSe>` +
