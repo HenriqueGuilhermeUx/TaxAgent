@@ -119,7 +119,7 @@ async function main() {
     throw new Error(`Official GISS XSD archive checksum changed: expected ${EXPECTED_RAR_SHA256}, got ${archiveSha256}`);
   }
 
-  execFileSync('7z', ['x', '-y', `-o${schemaDir}`, archivePath], { stdio: 'pipe' });
+  execFileSync('unar', ['-f', '-o', schemaDir, archivePath], { stdio: 'pipe' });
   const schemaPath = schemaForRoot('EnviarLoteRpsEnvio');
 
   const rps = buildAbrasfRps({
