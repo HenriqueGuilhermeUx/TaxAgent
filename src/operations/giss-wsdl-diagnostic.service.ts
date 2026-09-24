@@ -39,15 +39,29 @@ export class GissWsdlDiagnosticService {
       const emissionSoapVersion = result.reconciliationSoapVersion;
       const emissionWrapperCandidates = requestWrappers.filter((wrapper) => /RecepcionarLoteRps/i.test(wrapper));
       const emissionTransportPresent = Boolean(emissionOperation?.soapAction && emissionSoapAddress && emissionSoapVersion);
+      const wrapperMappingVerified = Boolean(
+        result.emissionShapePresent
+        && result.emissionRequestWrapper === 'RecepcionarLoteRpsRequest'
+        && result.emissionResponseWrapper === 'RecepcionarLoteRpsResponse'
+        && result.emissionRequestNamespace === 'http://nfse.abrasf.org.br'
+        && result.emissionResponseNamespace === 'http://nfse.abrasf.org.br',
+      );
       const emissionTransport = {
         operation: 'RecepcionarLoteRps',
         operation_present: operations.includes('RecepcionarLoteRps'),
         transport_present: emissionTransportPresent,
+        shape_present: result.emissionShapePresent ?? false,
         soap_address: emissionSoapAddress,
         soap_action: emissionOperation?.soapAction,
         soap_version: emissionSoapVersion,
         request_wrapper_candidates: emissionWrapperCandidates,
-        wrapper_mapping_verified: false,
+        request_wrapper: result.emissionRequestWrapper,
+        request_namespace: result.emissionRequestNamespace,
+        response_wrapper: result.emissionResponseWrapper,
+        response_namespace: result.emissionResponseNamespace,
+        request_message_parts: result.emissionRequestMessageParts ?? [],
+        response_message_parts: result.emissionResponseMessageParts ?? [],
+        wrapper_mapping_verified: wrapperMappingVerified,
         fiscal_transmission_attempted: false,
         fiscal_emission_attempted: false,
       };
@@ -59,11 +73,18 @@ export class GissWsdlDiagnosticService {
         city_code: cityCode,
         operation_present: emissionTransport.operation_present,
         transport_present: emissionTransport.transport_present,
+        shape_present: emissionTransport.shape_present,
         soap_address_present: Boolean(emissionTransport.soap_address),
         soap_action: emissionTransport.soap_action,
         soap_version: emissionTransport.soap_version,
+        request_wrapper: emissionTransport.request_wrapper,
+        request_namespace: emissionTransport.request_namespace,
+        response_wrapper: emissionTransport.response_wrapper,
+        response_namespace: emissionTransport.response_namespace,
+        request_message_parts: emissionTransport.request_message_parts,
+        response_message_parts: emissionTransport.response_message_parts,
         request_wrapper_candidates: emissionTransport.request_wrapper_candidates,
-        wrapper_mapping_verified: false,
+        wrapper_mapping_verified: emissionTransport.wrapper_mapping_verified,
         fiscal_transmission_attempted: false,
         fiscal_emission_attempted: false,
       }));
