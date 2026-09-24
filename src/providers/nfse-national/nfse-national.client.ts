@@ -14,6 +14,7 @@ export interface NationalApiResponse {
   nfseXmlGZipB64?: string;
   eventoXmlGZipB64?: string;
   erros?: Array<{ Codigo?: string; Descricao?: string; Complemento?: string }>;
+  erro?: { codigo?: string; mensagem?: string; descricao?: string; complemento?: string; [key: string]: unknown };
   alertas?: unknown;
   [key: string]: unknown;
 }
@@ -37,6 +38,17 @@ export class NfseNationalClient {
   registerEvent(environment: FiscalEnvironment, accessKey: string, signedXml: string, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     const body = JSON.stringify({ pedidoRegistroEventoXmlGZipB64: gzipSync(Buffer.from(signedXml, 'utf8')).toString('base64') });
     return this.requestJson(new URL(`nfse/${encodeURIComponent(accessKey)}/eventos`, this.normalizedBase(environment)), 'POST', body, certificate);
+  }
+  getEventByTypeAndSequence(environment: FiscalEnvironment, accessKey: string, eventType: string, sequence: number, certificate: CertificateMaterial): Promise<NationalApiResponse> {
+    if (!/^\d{6}$/.test(eventType) || !Number.isInteger(sequence) || sequence < 1) {
+      throw new FiscalEngineError('TA_NFSE_EVENT_QUERY_INVALID', 'National NFS-e event reconciliation requires a 6-digit event type and a positive integer sequence', false);
+    }
+    const path = `nfse/${encodeURIComponent(accessKey)}/eventos/${encodeURIComponent(eventType)}/${sequence}`;
+    return this.requestJson(new URL(path, this.normalizedBase(environment)), 'GET', undefined, certificate);
+  }
+  async findEventByTypeAndSequence(environment: FiscalEnvironment, accessKey: string, eventType: string, sequence: number, certificate: CertificateMaterial): Promise<NationalApiResponse | null> {
+    try { return await this.getEventByTypeAndSequence(environment, accessKey, eventType, sequence, certificate); }
+    catch (error) { if (error instanceof FiscalEngineError && error.code === 'NFSE_NOT_FOUND') return null; throw error; }
   }
   probeMutualTls(environment: FiscalEnvironment, certificate: CertificateMaterial): Promise<{ host: string; protocol: string | null; cipher: string | null; authorized: boolean }> {
     const base = new URL(this.normalizedBase(environment));
@@ -64,7 +76,7 @@ export class NfseNationalClient {
   private normalizedBase(environment: FiscalEnvironment): string { return resolveNfseBase(environment); }
   private requestJson(url: URL, method: 'GET' | 'POST', body: string | undefined, certificate: CertificateMaterial): Promise<NationalApiResponse> {
     return new Promise((resolve, reject) => {
-      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, cert: certificate.tlsCertificatePem, key: certificate.tlsPrivateKeyPem, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.10' } }, (res) => {
+      const req = request({ protocol: url.protocol, hostname: url.hostname, port: url.port || undefined, path: `${url.pathname}${url.search}`, method, cert: certificate.tlsCertificatePem, key: certificate.tlsPrivateKeyPem, rejectUnauthorized: true, timeout: 30_000, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}), 'user-agent': 'TaxAgent/0.12' } }, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
@@ -73,9 +85,10 @@ export class NfseNationalClient {
           try { parsed = raw ? JSON.parse(raw) as NationalApiResponse : {}; }
           catch { return reject(new FiscalEngineError('NFSE_NON_JSON_RESPONSE', `NFS-e returned non-JSON response (${res.statusCode}): ${raw.slice(0, 500)}`, (res.statusCode ?? 500) >= 500)); }
           const status = res.statusCode ?? 500;
-          if (status === 404) return reject(new FiscalEngineError('NFSE_NOT_FOUND', 'DPS/NFS-e not found in SEFIN', false, parsed));
+          if (status === 404) return reject(new FiscalEngineError('NFSE_NOT_FOUND', 'DPS/NFS-e/event not found in SEFIN', false, parsed));
           if (status >= 500 || status === 408 || status === 429) return reject(new FiscalEngineError('NFSE_TRANSIENT_HTTP', `NFS-e HTTP ${status}`, true, parsed));
-          if (status >= 400 && !parsed.erros?.length) return reject(new FiscalEngineError('NFSE_HTTP_ERROR', `NFS-e HTTP ${status}: ${raw.slice(0, 1000)}`, false, parsed));
+          const hasStructuredError = Boolean(parsed.erros?.length || parsed.erro);
+          if (status >= 400 && !hasStructuredError) return reject(new FiscalEngineError('NFSE_HTTP_ERROR', `NFS-e HTTP ${status}: ${raw.slice(0, 1000)}`, false, parsed));
           resolve(parsed);
         });
       });
