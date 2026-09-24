@@ -60,8 +60,8 @@ async function main() {
   const references = verifier.getSignedReferences();
   if (references.length !== 1 || !references[0].includes('infPedReg')) throw new Error('XMLDSig authenticated reference is not the expected infPedReg element');
 
-  // The SEFIN registered event (EVT) wraps the original pedRegEvento. Prove that the response
-  // shape our runtime will trust is accepted by the same active official event XSD.
+  // The SEFIN registered event (EVT) wraps the original pedRegEvento and is governed by its
+  // own root XSD inside the same official archive. Prove the exact response shape separately.
   const embeddedRequest = signed.replace(/^<\?xml[^>]*\?>\s*/i, '');
   const registeredEventId = `EVT${syntheticAccessKey}101101001`;
   const registeredEvent = `<?xml version="1.0" encoding="UTF-8"?>` +
@@ -75,7 +75,7 @@ async function main() {
     embeddedRequest +
     `</infEvento></evento>`;
   await validation.validateWellFormed(registeredEvent);
-  await validation.validateEventStrict(registeredEvent, 'test');
+  await validation.validateRegisteredEventStrict(registeredEvent, 'test');
 
   const active = schemas.active('test');
   const attestation = {
