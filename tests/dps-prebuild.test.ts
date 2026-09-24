@@ -20,7 +20,7 @@ test('unsigned DPS prebuild validates the fiscal path without touching Certifica
       buildPreview(input: any) {
         assert.equal(input.service.nationalServiceCode, '170101');
         assert.equal(input.service.issRate, 4);
-        return { xml: '<DPS/>', id: 'DPS_TEST', sequence: 1, series: '1', verifiedLayout: true };
+        return { xml: '<DPS/>', id: 'DPS_TEST', sequence: 1, series: '1', verifiedLayout: false };
       },
     } as any,
     {
@@ -29,7 +29,13 @@ test('unsigned DPS prebuild validates the fiscal path without touching Certifica
     } as any,
     { sign() { signatureCalls += 1; throw new Error('signature must not run in prebuild'); } } as any,
     { async getActiveMaterial() { vaultCalls += 1; throw new Error('vault must not run in prebuild'); } } as any,
-    { active(environment: string) { assert.equal(environment, 'test'); return { id: 'schema-test' }; } } as any,
+    {
+      active(environment: string) { assert.equal(environment, 'test'); return { id: 'schema-test' }; },
+      dpsConformance(environment: string) {
+        assert.equal(environment, 'test');
+        return { verified: true, reason: 'synthetic fixture attested against schema-test' };
+      },
+    } as any,
   );
 
   const result = await service.prebuild({
@@ -43,6 +49,8 @@ test('unsigned DPS prebuild validates the fiscal path without touching Certifica
   assert.equal(result.transmitted, false);
   assert.equal(result.certificate_required, false);
   assert.equal(result.schema, 'schema-test');
+  assert.equal(result.builder_mode, 'verified');
+  assert.equal(result.builder_conformance.verified, true);
   assert.equal(result.fiscal_summary.national_service_code, '170101');
   assert.equal(result.fiscal_summary.iss_rate, 4);
   assert.equal(strictCalls, 1);
