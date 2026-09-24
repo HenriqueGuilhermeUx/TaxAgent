@@ -20,7 +20,10 @@ export class XmlValidationService {
     return this.validateAgainst(xml, this.schemas.localDpsXsd(environment), `Official ${environment} DPS XSD is not synced`);
   }
   async validateEventStrict(xml: string, environment: FiscalEnvironment): Promise<void> {
-    return this.validateAgainst(xml, this.schemas.localEventXsd(environment), `Official ${environment} event XSD is not synced`);
+    return this.validateAgainst(xml, this.schemas.localEventXsd(environment), `Official ${environment} event-request XSD is not synced`);
+  }
+  async validateRegisteredEventStrict(xml: string, environment: FiscalEnvironment): Promise<void> {
+    return this.validateAgainst(xml, this.schemas.localRegisteredEventXsd(environment), `Official ${environment} registered-event XSD is not synced`);
   }
   private async validateAgainst(xml: string, schema: string | undefined, missingMessage: string): Promise<void> {
     if (!schema) throw new FiscalEngineError('TA_SCHEMA_NOT_SYNCED', `${missingMessage}. Run npm run schemas:sync.`, false);
