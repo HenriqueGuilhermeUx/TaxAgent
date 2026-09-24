@@ -25,8 +25,9 @@ export class IssuerReadinessController {
     @Query('effectiveAt') effectiveAt: string | undefined,
     @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
   ) {
-    const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
-    if (auth?.companyId !== companyId) throw new ForbiddenException('API key cannot inspect another company');
+    if (!auth) throw new ForbiddenException('API key authentication is required');
+    const environment = this.environment(rawEnvironment ?? auth.environment);
+    if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot inspect another company');
     if (auth.environment !== environment) throw new ForbiddenException('API key environment does not match requested environment');
     if (effectiveAt && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveAt)) throw new BadRequestException('effectiveAt must use YYYY-MM-DD');
     return this.readiness.inspect(companyId, environment, effectiveAt);
