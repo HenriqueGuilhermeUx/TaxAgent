@@ -41,7 +41,14 @@ export function assertCancellationEventDocument(xml: string, metadata: unknown):
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' }).parse(xml) as Record<string, unknown>;
+    // Fiscal identifiers such as chNFSe can be 50 numeric positions long. They must never be
+    // coerced to JavaScript Number or precision would be lost before identity reconciliation.
+    parsed = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+      parseTagValue: false,
+      parseAttributeValue: false,
+    }).parse(xml) as Record<string, unknown>;
   } catch {
     throw uncertainty(errorCode, 'SEFIN cancellation event XML could not be parsed.');
   }
