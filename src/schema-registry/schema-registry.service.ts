@@ -24,6 +24,7 @@ export interface DpsConformanceAttestation {
 export interface EventConformanceAttestation extends DpsConformanceAttestation {
   event_code: string;
   registered_event_xsd_valid: boolean;
+  registered_event_signature_verified: boolean;
 }
 
 @Injectable()
@@ -87,6 +88,7 @@ export class SchemaRegistryService {
       && attestation.signed_xsd_valid === true
       && attestation.registered_event_xsd_valid === true
       && attestation.signature_verified === true
+      && attestation.registered_event_signature_verified === true
       && attestation.signature_profile === 'xmldsig-rsa-sha256-id-reference'
       && attestation.synthetic_fixture_only === true
       && attestation.real_certificate_used === false
