@@ -13,6 +13,15 @@ export class EventBuilderService {
 
   buildCancellation(input: CancelFiscalInput, company: FiscalCompany): EventBuildResult {
     const eventCode = '101101';
+    const reasonCode = String(input.reasonCode ?? '').trim();
+    if (!['1', '2', '9'].includes(reasonCode)) {
+      throw new FiscalEngineError(
+        'TA_NFSE_CANCELLATION_REASON_INVALID',
+        'National NFS-e cancellation reason code must be one of the active e101101 values: 1, 2 or 9',
+        false,
+      );
+    }
+
     const accessKey = String(input.accessKey ?? '').trim().toUpperCase();
     if (!/^[0-9]{8}(?:1[0-9]{14}|2[0-9A-Z]{14})[0-9]{27}$/.test(accessKey)) {
       throw new FiscalEngineError(
@@ -55,7 +64,7 @@ export class EventBuilderService {
           dhEvento,
           [taxIdTag]: taxId,
           chNFSe: accessKey,
-          e101101: { xDesc: 'Cancelamento de NFS-e', cMotivo: input.reasonCode, xMotivo: input.reason },
+          e101101: { xDesc: 'Cancelamento de NFS-e', cMotivo: reasonCode, xMotivo: input.reason },
         },
       },
     };
