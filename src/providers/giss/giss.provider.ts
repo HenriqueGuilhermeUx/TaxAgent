@@ -78,17 +78,17 @@ export class GissProvider implements FiscalProvider {
     await this.artifacts.save(operation.invoiceId, 'giss_batch_signed_xml', signedBatch, { batch_number: batchNumber, rps_number: rpsNumber, series });
     await this.reconciliation.beforeIssue({ cityCode: '3548500', providerTaxId: company.tax_id, municipalRegistration, number: rpsNumber, series });
     throw new FiscalEngineError(
-      'TA_GISS_INTEGRATION_NOT_CONFIGURED',
-      'Santos requires the municipal GISS route. TaxAgent has resolved the provider, but live transmission remains blocked until the WSDL operation, SOAP contract and reconciliation transport are validated end-to-end.',
+      'TA_GISS_EMISSION_LOCKED',
+      'Santos query/reconciliation is verified, but RecepcionarLoteRps emission remains deliberately locked. TaxAgent will not send the fiscal batch until the exact emission wrapper, SOAPAction, signature profile and provider response semantics are validated separately in homologation.',
       false,
-      { provider: this.name, city_code: '3548500', endpoint: gissEndpointPolicy('3548500'), transmission_attempted: false },
+      { provider: this.name, city_code: '3548500', endpoint: gissEndpointPolicy('3548500'), query_reconciliation_verified: true, transmission_attempted: false, fiscal_emission_attempted: false },
     );
   }
 
   async cancel(_input: CancelFiscalInput, _operation: FiscalOperationContext): Promise<EventResult> {
     throw new FiscalEngineError(
-      'TA_GISS_INTEGRATION_NOT_CONFIGURED',
-      'Santos cancellation requires the municipal GISS integration. No external request was sent.',
+      'TA_GISS_CANCELLATION_LOCKED',
+      'Santos cancellation remains deliberately locked until the exact GISS cancellation contract is validated independently. No external request was sent.',
       false,
       { provider: this.name, city_code: '3548500', endpoint: gissEndpointPolicy('3548500'), transmission_attempted: false },
     );
