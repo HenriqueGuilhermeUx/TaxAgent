@@ -5,6 +5,7 @@ import { TaxAgentAuthContext } from '../auth/auth.types';
 import { CurrentTaxAgentAuth } from '../auth/current-auth.decorator';
 import { RequireScope } from '../auth/require-scope.decorator';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { FiscalOnboardingAuditService } from './fiscal-onboarding-audit.service';
 import { FiscalOnboardingPreflightService } from './fiscal-onboarding-preflight.service';
 import { FiscalOnboardingService } from './fiscal-onboarding.service';
 
@@ -16,6 +17,7 @@ export class FiscalOnboardingController {
   constructor(
     private readonly onboarding: FiscalOnboardingService,
     private readonly preflight: FiscalOnboardingPreflightService,
+    private readonly audit: FiscalOnboardingAuditService,
   ) {}
 
   @Get(':companyId')
@@ -34,12 +36,12 @@ export class FiscalOnboardingController {
     return this.onboarding.inspect(companyId, environment, effectiveAt);
   }
 
-  @Post(':companyId/preflight')
+  @Post(':companyId/assess')
   @RequireScope('operations:read')
-  @ApiOperation({ summary: 'Run the resolved provider preflight using only safe non-emitting network methods' })
+  @ApiOperation({ summary: 'Create an immutable onboarding assessment attestation without fiscal transmission' })
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-24' })
-  runPreflight(
+  async assess(
     @Param('companyId') companyId: string,
     @Query('environment') rawEnvironment: string | undefined,
     @Query('effective_at') effectiveAt: string | undefined,
@@ -47,7 +49,43 @@ export class FiscalOnboardingController {
   ) {
     const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
     this.assertAccess(companyId, environment, auth);
-    return this.preflight.run(companyId, environment, effectiveAt);
+    const result = await this.onboarding.inspect(companyId, environment, effectiveAt);
+    const attestation = await this.audit.record(companyId, 'onboarding', result);
+    return { ...result, attestation };
+  }
+
+  @Post(':companyId/preflight')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Run the resolved provider preflight using only safe non-emitting network methods and persist its attestation' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-24' })
+  async runPreflight(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment: string | undefined,
+    @Query('effective_at') effectiveAt: string | undefined,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
+    this.assertAccess(companyId, environment, auth);
+    const result = await this.preflight.run(companyId, environment, effectiveAt);
+    const attestation = await this.audit.record(companyId, 'preflight', result);
+    return { ...result, attestation };
+  }
+
+  @Get(':companyId/history')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'List immutable onboarding and preflight attestations for the company' })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  history(
+    @Param('companyId') companyId: string,
+    @Query('limit') rawLimit: string | undefined,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    const environment = auth?.environment ?? 'test';
+    this.assertAccess(companyId, environment, auth);
+    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new BadRequestException('limit must be an integer between 1 and 100');
+    return this.audit.list(companyId, limit);
   }
 
   private environment(value: string): FiscalEnvironment {

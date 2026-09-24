@@ -15,6 +15,7 @@ import { TaxEngineModule } from '../tax-engine/tax-engine.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { XmlEngineModule } from '../xml-engine/xml-engine.module';
 import { DpsPreflightService } from './dps-preflight.service';
+import { FiscalOnboardingAuditService } from './fiscal-onboarding-audit.service';
 import { FiscalOnboardingController } from './fiscal-onboarding.controller';
 import { FiscalOnboardingPreflightService } from './fiscal-onboarding-preflight.service';
 import { FiscalOnboardingService } from './fiscal-onboarding.service';
@@ -33,7 +34,7 @@ import { ReadinessService } from './readiness.service';
 @Module({
   imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, ProviderCredentialsModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
   controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController, FiscalOnboardingController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService],
-  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService],
+  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService],
 })
 export class OperationsModule {}
