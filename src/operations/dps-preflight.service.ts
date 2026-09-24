@@ -31,6 +31,7 @@ export class DpsPreflightService {
 
   async prebuild(dto: CreateInvoiceDto) {
     const prepared = await this.prepareUnsigned(dto);
+    const conformance = this.schemas.dpsConformance('test');
     return {
       valid: true,
       signed: false,
@@ -42,7 +43,8 @@ export class DpsPreflightService {
       preview_sequence: prepared.built.sequence,
       schema: this.schemas.active('test').id,
       unsigned_xml_sha256: this.hash(prepared.built.xml),
-      builder_mode: process.env.TAXAGENT_DPS_BUILDER_MODE ?? 'draft',
+      builder_mode: conformance.verified ? 'verified' : 'draft',
+      builder_conformance: { verified: conformance.verified, reason: conformance.reason },
       fiscal_summary: {
         national_service_code: prepared.service.nationalServiceCode,
         nbs: prepared.service.nbsCode,
@@ -65,6 +67,7 @@ export class DpsPreflightService {
     const signed = this.signature.sign(prepared.built.xml, prepared.built.id, 'infDPS', certificate);
     await this.validation.validateWellFormed(signed);
     await this.validation.validateStrict(signed, 'test');
+    const conformance = this.schemas.dpsConformance('test');
     return {
       valid: true,
       signed: true,
@@ -77,7 +80,8 @@ export class DpsPreflightService {
       unsigned_xml_sha256: this.hash(prepared.built.xml),
       signed_xml_sha256: this.hash(signed),
       certificate_fingerprint: certificate.fingerprint,
-      builder_mode: process.env.TAXAGENT_DPS_BUILDER_MODE ?? 'draft',
+      builder_mode: conformance.verified ? 'verified' : 'draft',
+      builder_conformance: { verified: conformance.verified, reason: conformance.reason },
       checked_at: new Date().toISOString(),
       note: 'The DPS was built from a persisted tax decision, XSD-validated, signed with the active A1 and XSD-validated again. No request was sent to SEFIN.',
     };
