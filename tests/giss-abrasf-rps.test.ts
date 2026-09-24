@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildAbrasfRps } from '../src/providers/giss/abrasf-rps.builder';
+import { buildAbrasfRps, GISS_TYPES_NAMESPACE } from '../src/providers/giss/abrasf-rps.builder';
 
-test('builds deterministic ABRASF RPS without network side effects', () => {
+test('builds deterministic GISS 2.04 RPS in the official types namespace without network side effects', () => {
   const xml = buildAbrasfRps({
     number: '1', series: 'TA', issuedAt: '2026-09-22T18:30:00-03:00',
     providerTaxId: '12345678000190', customerTaxId: '12345678901',
@@ -12,12 +12,13 @@ test('builds deterministic ABRASF RPS without network side effects', () => {
     description: 'Consultoria <empresarial>', amount: 100, issRate: 3,
     issWithholding: '1', issExigibility: '1', serviceCityCode: '3548500',
   });
-  assert.match(xml, /<Numero>1<\/Numero>/);
-  assert.match(xml, /<ItemListaServico>17.01<\/ItemListaServico>/);
-  assert.match(xml, /<CodigoNbs>114011900<\/CodigoNbs>/);
-  assert.match(xml, /<ValorServicos>100.00<\/ValorServicos>/);
-  assert.match(xml, /<Aliquota>0.0300<\/Aliquota>/);
+  assert.match(xml, new RegExp(`<tipos:Rps xmlns:tipos="${GISS_TYPES_NAMESPACE.replaceAll('.', '\\.')}">`));
+  assert.match(xml, /<tipos:Numero>1<\/tipos:Numero>/);
+  assert.match(xml, /<tipos:ItemListaServico>17.01<\/tipos:ItemListaServico>/);
+  assert.match(xml, /<tipos:CodigoNbs>114011900<\/tipos:CodigoNbs>/);
+  assert.match(xml, /<tipos:ValorServicos>100.00<\/tipos:ValorServicos>/);
+  assert.match(xml, /<tipos:Aliquota>0.0300<\/tipos:Aliquota>/);
   assert.match(xml, /Cliente &amp; Teste/);
   assert.match(xml, /Consultoria &lt;empresarial&gt;/);
-  assert.match(xml, /<CodigoMunicipio>3548500<\/CodigoMunicipio>/);
+  assert.match(xml, /<tipos:CodigoMunicipio>3548500<\/tipos:CodigoMunicipio>/);
 });
