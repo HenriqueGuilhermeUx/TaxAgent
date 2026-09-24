@@ -6,7 +6,7 @@ import * as forge from 'node-forge';
 import { SignedXml } from 'xml-crypto';
 import { CertificateMaterial } from '../src/certificates/certificate-vault.service';
 import { buildAbrasfRps } from '../src/providers/giss/abrasf-rps.builder';
-import { buildAbrasfLoteRps } from '../src/providers/giss/giss-batch.builder';
+import { buildAbrasfLoteRps, GISS_SEND_BATCH_NAMESPACE } from '../src/providers/giss/giss-batch.builder';
 import { buildGissEmissionSoapEnvelope } from '../src/providers/giss/giss-emission-soap.builder';
 import { buildGissCabecalho } from '../src/providers/giss/giss-header.builder';
 import { GissSignatureService } from '../src/providers/giss/giss-signature.service';
@@ -30,13 +30,18 @@ function listFiles(dir: string, suffix: string): string[] {
   return out;
 }
 
-function schemaForRoot(rootName: string): string {
+function schemaForRoot(rootName: string, targetNamespace: string): string {
+  const candidates: Array<{ file: string; targetNamespace: string | null }> = [];
   for (const file of listFiles(schemaDir, '.xsd')) {
     const body = readFileSync(file, 'utf8');
-    const pattern = new RegExp(`<(?:(?:\\w+):)?element\\b[^>]*\\bname=["']${rootName}["']`, 'i');
-    if (pattern.test(body)) return file;
+    const rootPattern = new RegExp(`<(?:(?:\\w+):)?element\\b[^>]*\\bname=["']${rootName}["']`, 'i');
+    if (!rootPattern.test(body)) continue;
+    const namespaceMatch = body.match(/\btargetNamespace=["']([^"']+)["']/i);
+    const candidateNamespace = namespaceMatch?.[1] ?? null;
+    candidates.push({ file, targetNamespace: candidateNamespace });
+    if (candidateNamespace === targetNamespace) return file;
   }
-  throw new Error(`Official GISS XSD package does not expose root element ${rootName}`);
+  throw new Error(`Official GISS XSD package has no exact ${rootName} schema for ${targetNamespace}; candidates=${JSON.stringify(candidates.map((candidate) => ({ file: relative(schemaDir, candidate.file), targetNamespace: candidate.targetNamespace })))}`);
 }
 
 function validateWithXmllint(xml: string, schemaPath: string, label: string): void {
@@ -120,7 +125,7 @@ async function main() {
   }
 
   execFileSync('unar', ['-f', '-o', schemaDir, archivePath], { stdio: 'pipe' });
-  const schemaPath = schemaForRoot('EnviarLoteRpsEnvio');
+  const schemaPath = schemaForRoot('EnviarLoteRpsEnvio', GISS_SEND_BATCH_NAMESPACE);
 
   const rps = buildAbrasfRps({
     number: '1',
@@ -184,10 +189,11 @@ async function main() {
     environment: 'test',
     city_code: '3548500',
     provider: 'giss',
-    layout: 'abrasf-2.04',
+    layout: 'giss-2.04',
     source_url: OFFICIAL_XSD_URL,
     source_sha256: archiveSha256,
     xsd_entrypoint: relative(schemaDir, schemaPath),
+    fiscal_root_namespace: GISS_SEND_BATCH_NAMESPACE,
     unsigned_batch_xsd_valid: true,
     signed_batch_xsd_valid: true,
     rps_signature_verified: true,
