@@ -8,14 +8,14 @@ export class GissSignatureService {
   constructor(private readonly signatures: XmlSignatureService) {}
 
   signRps(xml: string, material: CertificateMaterial): string {
-    const match = xml.match(/<InfDeclaracaoPrestacaoServico\s+Id="([^"]+)"/);
-    if (!match) throw new FiscalEngineError('TA_GISS_RPS_ID_REQUIRED', 'ABRASF RPS must contain InfDeclaracaoPrestacaoServico/@Id before XMLDSig signing', false);
+    const match = xml.match(/<(?:\w+:)?InfDeclaracaoPrestacaoServico\s+Id="([^"]+)"/);
+    if (!match) throw new FiscalEngineError('TA_GISS_RPS_ID_REQUIRED', 'GISS RPS must contain InfDeclaracaoPrestacaoServico/@Id before XMLDSig signing', false);
     return this.signatures.sign(xml, match[1], 'InfDeclaracaoPrestacaoServico', material, 'sha1');
   }
 
   signBatch(xml: string, material: CertificateMaterial): string {
-    const match = xml.match(/<LoteRps\s+Id="([^"]+)"/);
-    if (!match) throw new FiscalEngineError('TA_GISS_BATCH_ID_REQUIRED', 'ABRASF batch must contain LoteRps/@Id before XMLDSig signing', false);
+    const match = xml.match(/<(?:\w+:)?LoteRps\s+Id="([^"]+)"/);
+    if (!match) throw new FiscalEngineError('TA_GISS_BATCH_ID_REQUIRED', 'GISS batch must contain LoteRps/@Id before XMLDSig signing', false);
     return this.signatures.sign(xml, match[1], 'LoteRps', material, 'sha1');
   }
 
