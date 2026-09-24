@@ -30,14 +30,18 @@ export class GissWsdlDiagnosticService {
     const material = await this.vault.getActiveMaterial(companyId);
     try {
       const result = await this.giss.inspectWsdl(cityCode, material);
-      const emissionOperation = result.operationBindings.find((binding) => binding.operation === 'RecepcionarLoteRps' && Boolean(binding.soapAction));
-      const emissionSoapAddress = result.soapAddresses[0];
+      const operationBindings = result.operationBindings ?? [];
+      const soapAddresses = result.soapAddresses ?? [];
+      const requestWrappers = result.requestWrappers ?? [];
+      const operations = result.operations ?? [];
+      const emissionOperation = operationBindings.find((binding) => binding.operation === 'RecepcionarLoteRps' && Boolean(binding.soapAction));
+      const emissionSoapAddress = soapAddresses[0];
       const emissionSoapVersion = result.reconciliationSoapVersion;
-      const emissionWrapperCandidates = result.requestWrappers.filter((wrapper) => /RecepcionarLoteRps/i.test(wrapper));
+      const emissionWrapperCandidates = requestWrappers.filter((wrapper) => /RecepcionarLoteRps/i.test(wrapper));
       const emissionTransportPresent = Boolean(emissionOperation?.soapAction && emissionSoapAddress && emissionSoapVersion);
       const emissionTransport = {
         operation: 'RecepcionarLoteRps',
-        operation_present: result.operations.includes('RecepcionarLoteRps'),
+        operation_present: operations.includes('RecepcionarLoteRps'),
         transport_present: emissionTransportPresent,
         soap_address: emissionSoapAddress,
         soap_action: emissionOperation?.soapAction,
