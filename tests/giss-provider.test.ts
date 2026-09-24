@@ -70,6 +70,21 @@ test('Santos GISS adapter refuses an issuer without Municipal Registration befor
   assert.equal(reserveCalls, 0);
 });
 
+test('Santos GISS emission stays locked even after reconciliation allows the flow to continue', async () => {
+  const d = deps();
+  d.reconciliation.beforeIssue = async () => undefined;
+  const provider = providerFrom(d);
+
+  await assert.rejects(
+    provider.issue(validInput, { invoiceId: 'inv_emission_locked' }),
+    (error: unknown) => error instanceof FiscalEngineError
+      && error.code === 'TA_GISS_EMISSION_LOCKED'
+      && error.retryable === false
+      && error.details?.transmission_attempted === false
+      && error.details?.fiscal_emission_attempted === false,
+  );
+});
+
 test('GISS adapter does not claim municipalities other than Santos', async () => {
   const d = deps();
   const provider = providerFrom(d);
