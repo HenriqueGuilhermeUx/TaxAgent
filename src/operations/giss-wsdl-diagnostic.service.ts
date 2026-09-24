@@ -30,11 +30,46 @@ export class GissWsdlDiagnosticService {
     const material = await this.vault.getActiveMaterial(companyId);
     try {
       const result = await this.giss.inspectWsdl(cityCode, material);
+      const emissionOperation = result.operationBindings.find((binding) => binding.operation === 'RecepcionarLoteRps' && Boolean(binding.soapAction));
+      const emissionSoapAddress = result.soapAddresses[0];
+      const emissionSoapVersion = result.reconciliationSoapVersion;
+      const emissionWrapperCandidates = result.requestWrappers.filter((wrapper) => /RecepcionarLoteRps/i.test(wrapper));
+      const emissionTransportPresent = Boolean(emissionOperation?.soapAction && emissionSoapAddress && emissionSoapVersion);
+      const emissionTransport = {
+        operation: 'RecepcionarLoteRps',
+        operation_present: result.operations.includes('RecepcionarLoteRps'),
+        transport_present: emissionTransportPresent,
+        soap_address: emissionSoapAddress,
+        soap_action: emissionOperation?.soapAction,
+        soap_version: emissionSoapVersion,
+        request_wrapper_candidates: emissionWrapperCandidates,
+        wrapper_mapping_verified: false,
+        fiscal_transmission_attempted: false,
+        fiscal_emission_attempted: false,
+      };
+
+      console.log(JSON.stringify({
+        event: 'giss_emission_wsdl_contract_result',
+        company_id: companyId,
+        environment,
+        city_code: cityCode,
+        operation_present: emissionTransport.operation_present,
+        transport_present: emissionTransport.transport_present,
+        soap_address_present: Boolean(emissionTransport.soap_address),
+        soap_action: emissionTransport.soap_action,
+        soap_version: emissionTransport.soap_version,
+        request_wrapper_candidates: emissionTransport.request_wrapper_candidates,
+        wrapper_mapping_verified: false,
+        fiscal_transmission_attempted: false,
+        fiscal_emission_attempted: false,
+      }));
+
       return {
         ...result,
         environment,
         city_code: cityCode,
         certificate_fingerprint: material.fingerprint,
+        emission_transport: emissionTransport,
         network_method: 'GET',
         fiscal_transmission_attempted: false,
         query_attempted: false,
