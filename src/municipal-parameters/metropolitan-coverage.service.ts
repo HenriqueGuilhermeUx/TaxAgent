@@ -28,6 +28,26 @@ export class MetropolitanCoverageService {
     }));
   }
 
+  async inspectAll(environment: FiscalEnvironment, taxRegime?: string, effectiveAt?: string) {
+    const regions = await Promise.all(METROPOLITAN_REGIONS.map((region) => this.inspect(region.slug, environment, taxRegime, effectiveAt)));
+    const totals = regions.reduce((acc, result) => {
+      for (const key of ['national-direct', 'municipal-provider', 'participation-only', 'unknown'] as MetropolitanCoverageClass[]) {
+        acc[key] += result.counts[key];
+      }
+      return acc;
+    }, { 'national-direct': 0, 'municipal-provider': 0, 'participation-only': 0, unknown: 0 } as Record<MetropolitanCoverageClass, number>);
+    return {
+      environment,
+      tax_regime: taxRegime ?? null,
+      effective_at: (effectiveAt ?? new Date().toISOString()).slice(0, 10),
+      region_count: regions.length,
+      municipality_count: regions.reduce((sum, result) => sum + result.municipalities.length, 0),
+      totals,
+      regions,
+      checked_at: new Date().toISOString(),
+    };
+  }
+
   async inspect(slug: string, environment: FiscalEnvironment, taxRegime?: string, effectiveAt?: string) {
     const region = metropolitanRegion(slug);
     if (!region) throw new FiscalEngineError('TA_METRO_REGION_UNKNOWN', `Unknown metropolitan region: ${slug}`, false);
