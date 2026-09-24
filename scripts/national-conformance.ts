@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as forge from 'node-forge';
 import { SignedXml } from 'xml-crypto';
 import { CertificateMaterial } from '../src/certificates/certificate-vault.service';
@@ -81,21 +83,31 @@ async function main() {
   if (references.length !== 1 || !references[0].includes('infDPS')) throw new Error('XMLDSig authenticated reference is not the expected infDPS element');
 
   const active = schemas.active('test');
-  console.log(JSON.stringify({
-    event: 'national_dps_conformance_ok',
-    target_city_code: '3530607',
+  const attestation = {
+    version: 1,
+    environment: 'test',
     schema_id: active.id,
     xsd_label: active.xsdLabel,
     unsigned_xsd_valid: true,
     signed_xsd_valid: true,
     signature_verified: true,
     signature_profile: 'xmldsig-rsa-sha256-id-reference',
-    dps_sha256: createHash('sha256').update(signed, 'utf8').digest('hex'),
     synthetic_fixture_only: true,
     real_certificate_used: false,
     network_attempted: false,
     fiscal_transmission_attempted: false,
     fiscal_emission_attempted: false,
+  } as const;
+  const conformanceDir = join(process.cwd(), 'schemas', 'conformance');
+  mkdirSync(conformanceDir, { recursive: true });
+  writeFileSync(join(conformanceDir, 'national-dps-test.json'), `${JSON.stringify(attestation, null, 2)}\n`, 'utf8');
+
+  console.log(JSON.stringify({
+    event: 'national_dps_conformance_ok',
+    target_city_code: '3530607',
+    ...attestation,
+    dps_sha256: createHash('sha256').update(signed, 'utf8').digest('hex'),
+    attestation_persisted: true,
   }));
 }
 
