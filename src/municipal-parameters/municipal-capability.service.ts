@@ -27,21 +27,22 @@ export class MunicipalCapabilityService {
 
     const regime = String(taxpayer.taxRegime ?? '').trim().toLowerCase();
     const effectiveDate = (taxpayer.effectiveAt ?? new Date().toISOString()).slice(0, 10);
-    // Regime transitions are municipality/profile specific. Never generalize a local
-    // migration rule to every Brazilian municipality; ME/EPP are company sizes, not tax regimes.
-    if (cityCode === '3530607' && ['simples', 'simples_nacional'].includes(regime) && effectiveDate >= '2026-11-01') {
+
+    // CGSN national rule: from 2026-09-01, ME/EPP optantes do Simples Nacional
+    // must use the National NFS-e Issuer. This is a taxpayer-regime rule, not a
+    // municipality-specific inference, so it takes precedence over legacy local routing.
+    if (['simples', 'simples_nacional'].includes(regime) && effectiveDate >= '2026-09-01') {
       return {
         cityCode, environment, nationalStandard: true, nationalPublicIssuer: true,
         route: 'national-direct', provider: 'nfse-national',
         source: 'official-regime-rule', checkedAt: new Date().toISOString(),
-        evidence: { rule: 'mogi_simples_nacional_national_issuer', effective_from: '2026-11-01', tax_regime: regime },
+        evidence: { rule: 'simples_nacional_national_issuer', effective_from: '2026-09-01', tax_regime: regime },
       };
     }
 
-    // E0039 was observed from SEFIN for Santos in Produção Restrita: Santos participates
-    // in the national ecosystem but is not parametrized to use the National Public Issuer.
-    // Keep this as an explicit safety override until the official convention payload is
-    // parsed into product-level capabilities below.
+    // E0039 was observed from SEFIN for Santos in Produção Restrita for a taxpayer
+    // not covered by the mandatory Simples national-issuer rule above. Santos participates
+    // in the national ecosystem but otherwise remains routed to its municipal provider.
     if (cityCode === '3548500') {
       return {
         cityCode, environment, nationalStandard: true, nationalPublicIssuer: false,
