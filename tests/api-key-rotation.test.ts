@@ -38,6 +38,20 @@ test('rotates current API key atomically with same company, environment and scop
   assert.equal(txQueries[2].params[0], 'key_old');
 });
 
+test('current key context exposes only safe authentication metadata', () => {
+  const controller = new ApiKeyRotationController({} as any);
+  const result = controller.current(auth);
+  assert.deepEqual(result, {
+    key_id: 'key_old',
+    company_id: 'comp_1',
+    environment: 'test',
+    scopes: auth.scopes,
+    key_secret_exposed: false,
+  });
+  assert.equal(JSON.stringify(result).includes('ta_test_'), false);
+  assert.throws(() => controller.current(undefined), ForbiddenException);
+});
+
 test('rotation controller requires explicit confirmation and authenticated current key', async () => {
   let calls = 0;
   const controller = new ApiKeyRotationController({
