@@ -27,7 +27,13 @@ function fixture(reconciled: any) {
   const provider = new NfseNationalProvider(
     { async getCompany() { return { city_code: '3530607', tax_regime: 'regular' }; } } as any,
     { async getActiveMaterial() { return { fingerprint: 'fp' }; } } as any,
-    { active() { return { id: 'nfse-prodrest-v1.01-20260727' }; } } as any,
+    {
+      active() { return { id: 'nfse-prodrest-v1.01-20260727' }; },
+      dpsConformance(environment: string) {
+        assert.equal(environment, 'test');
+        return { verified: true, reason: 'CI image attested for active Produção Restrita schema' };
+      },
+    } as any,
     {} as any,
     { async build() { builderCalls += 1; throw new Error('builder must not run for Prepared DPS'); } } as any,
     {} as any,
@@ -53,13 +59,12 @@ function fixture(reconciled: any) {
 async function withLive<T>(fn: () => Promise<T>): Promise<T> {
   const priorMode = process.env.TAXAGENT_NFSE_MODE;
   const priorLive = process.env.TAXAGENT_LIVE_ENABLED;
-  const priorBuilder = process.env.TAXAGENT_DPS_BUILDER_MODE;
-  process.env.TAXAGENT_NFSE_MODE = 'live'; process.env.TAXAGENT_LIVE_ENABLED = 'true'; process.env.TAXAGENT_DPS_BUILDER_MODE = 'verified';
+  process.env.TAXAGENT_NFSE_MODE = 'live';
+  process.env.TAXAGENT_LIVE_ENABLED = 'true';
   try { return await fn(); }
   finally {
     if (priorMode === undefined) delete process.env.TAXAGENT_NFSE_MODE; else process.env.TAXAGENT_NFSE_MODE = priorMode;
     if (priorLive === undefined) delete process.env.TAXAGENT_LIVE_ENABLED; else process.env.TAXAGENT_LIVE_ENABLED = priorLive;
-    if (priorBuilder === undefined) delete process.env.TAXAGENT_DPS_BUILDER_MODE; else process.env.TAXAGENT_DPS_BUILDER_MODE = priorBuilder;
   }
 }
 
