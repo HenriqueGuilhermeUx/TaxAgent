@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { assertCancellationEventDocument } from '../src/documents/cancellation-event-document.validator';
 import { FiscalDocumentsService } from '../src/documents/fiscal-documents.service';
 import { FiscalEngineError } from '../src/fiscal-core/fiscal-engine.error';
-import { assertCancellationEventDocument } from '../src/documents/cancellation-event-document.validator';
 
 const numericKey = '35306072200000000000000000000000000126090000000000';
 const alphaKey = '35306072212ABC34501DE35000000000000126090000000000';
@@ -11,10 +11,13 @@ function eventXml(accessKey = numericKey, eventTag = 'e101101', sequence = '001'
   return `<?xml version="1.0" encoding="UTF-8"?>` +
     `<evento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
     `<infEvento Id="EVT${accessKey}101101${sequence}">` +
-    `<chNFSe>${accessKey}</chNFSe>` +
-    `<nSeqEvento>${sequence}</nSeqEvento>` +
+    `<verAplic>TaxAgent_0.12</verAplic><ambGer>2</ambGer><nSeqEvento>${sequence}</nSeqEvento>` +
+    `<dhProc>2026-09-23T18:00:00-03:00</dhProc><nDFe>1</nDFe>` +
+    `<pedRegEvento versao="1.01"><infPedReg Id="PRE${accessKey}101101">` +
+    `<tpAmb>2</tpAmb><verAplic>TaxAgent_0.12</verAplic><dhEvento>2026-09-23T17:59:59-03:00</dhEvento>` +
+    `<CNPJAutor>00000000000000</CNPJAutor><chNFSe>${accessKey}</chNFSe>` +
     `<${eventTag}><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>1</cMotivo><xMotivo>Cancelamento de teste</xMotivo></${eventTag}>` +
-    `</infEvento></evento>`;
+    `</infPedReg></pedRegEvento></infEvento></evento>`;
 }
 
 const metadata = (accessKey = numericKey, reconciled = false) => ({
@@ -24,12 +27,13 @@ const metadata = (accessKey = numericKey, reconciled = false) => ({
   reconciled,
 });
 
-test('accepts a registered national 101101 cancellation event for the exact NFS-e key', () => {
+test('accepts a registered national 101101 cancellation event with the exact nested request identity', () => {
   const identity = assertCancellationEventDocument(eventXml(), metadata());
   assert.equal(identity.accessKey, numericKey);
   assert.equal(identity.eventType, '101101');
   assert.equal(identity.eventSequence, 1);
   assert.equal(identity.eventId, `EVT${numericKey}101101001`);
+  assert.equal(identity.requestId, `PRE${numericKey}101101`);
 });
 
 test('accepts the alphanumeric-CNPJ segment allowed by the active national access-key layout', () => {
@@ -37,7 +41,7 @@ test('accepts the alphanumeric-CNPJ segment allowed by the active national acces
   assert.equal(identity.accessKey, alphaKey);
 });
 
-test('rejects cancellation event XML that references another NFS-e key', () => {
+test('rejects cancellation event XML whose nested request references another NFS-e key', () => {
   const anotherKey = '35306072200000000000000000000000000226090000000000';
   assert.throws(
     () => assertCancellationEventDocument(eventXml(anotherKey), metadata()),
@@ -59,6 +63,15 @@ test('reconciled invalid event keeps the reconciliation-specific uncertainty cod
 test('rejects an unexpected event sequence before cancellation can be confirmed', () => {
   assert.throws(
     () => assertCancellationEventDocument(eventXml(numericKey, 'e101101', '002'), metadata()),
+    (error: unknown) => error instanceof FiscalEngineError
+      && error.code === 'NFSE_EVENT_RESPONSE_INCOMPLETE',
+  );
+});
+
+test('rejects an event whose nested PRE identity is not the same request', () => {
+  const xml = eventXml().replace(`PRE${numericKey}101101`, `PRE${numericKey}105102`);
+  assert.throws(
+    () => assertCancellationEventDocument(xml, metadata()),
     (error: unknown) => error instanceof FiscalEngineError
       && error.code === 'NFSE_EVENT_RESPONSE_INCOMPLETE',
   );
