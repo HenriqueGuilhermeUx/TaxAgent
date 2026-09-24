@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { RequireScope } from '../auth/require-scope.decorator';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { GatewayCapabilityService } from './gateway-capability.service';
 import { MetropolitanCoverageService } from './metropolitan-coverage.service';
 import { MunicipalCapabilityService } from './municipal-capability.service';
 import { MunicipalParametersClient } from './municipal-parameters.client';
@@ -13,6 +14,7 @@ export class MunicipalParametersController {
     private readonly client: MunicipalParametersClient,
     private readonly capabilities: MunicipalCapabilityService,
     private readonly metroCoverage: MetropolitanCoverageService,
+    private readonly gatewayCapabilities: GatewayCapabilityService,
   ) {}
 
   @Get('metros')
@@ -53,5 +55,10 @@ export class MunicipalParametersController {
   @Get(':cityCode/capabilities')
   getCapabilities(@Param('cityCode') cityCode: string, @Query('environment') environment: FiscalEnvironment = 'test', @Query('tax_regime') taxRegime?: string, @Query('effective_at') effectiveAt?: string) {
     return this.capabilities.resolve(cityCode, environment, { taxRegime, effectiveAt });
+  }
+
+  @Get(':cityCode/gateway-capabilities')
+  getGatewayCapabilities(@Param('cityCode') cityCode: string, @Query('environment') environment: FiscalEnvironment = 'test') {
+    return this.gatewayCapabilities.resolve(cityCode, environment);
   }
 }

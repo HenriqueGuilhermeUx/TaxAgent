@@ -13,11 +13,12 @@ import { FiscalInboxModule } from './inbox/fiscal-inbox.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { MunicipalParametersModule } from './municipal-parameters/municipal-parameters.module';
 import { OperationsModule } from './operations/operations.module';
+import { ProviderCredentialsModule } from './provider-credentials/provider-credentials.module';
 import { SchemaRegistryModule } from './schema-registry/schema-registry.module';
 import { SecurityModule } from './security/security.module';
 import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, TenancyModule, CustomersModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
 export class AppModule {}
