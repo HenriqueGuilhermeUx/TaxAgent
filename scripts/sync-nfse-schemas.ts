@@ -39,6 +39,7 @@ async function main() {
     const xsdFiles: string[] = [];
     let dpsXsd: string | undefined;
     let eventXsd: string | undefined;
+    let registeredEventXsd: string | undefined;
     for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
       const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -52,11 +53,24 @@ async function main() {
       const text = data.toString('utf8');
       if (!dpsXsd && /<(?:xs|xsd):element\s+name=["']DPS["']/.test(text)) dpsXsd = clean;
       if (!eventXsd && /<(?:xs|xsd):element\s+name=["']pedRegEvento["']/.test(text)) eventXsd = clean;
+      if (!registeredEventXsd && /<(?:xs|xsd):element\s+name=["']evento["']/.test(text)) registeredEventXsd = clean;
     }
     if (!dpsXsd) throw new Error(`Could not locate DPS root XSD in official ${key} archive`);
-    const manifest = { sourceId: source.id, sourceUrl: source.officialUrl, downloadedAt: new Date().toISOString(), archiveSha256: zipSha256, expectedArchiveSha256: source.expectedArchiveSha256 ?? null, dpsXsd, eventXsd, xsdFiles };
+    if (!eventXsd) throw new Error(`Could not locate pedRegEvento root XSD in official ${key} archive`);
+    if (!registeredEventXsd) throw new Error(`Could not locate registered evento root XSD in official ${key} archive`);
+    const manifest = {
+      sourceId: source.id,
+      sourceUrl: source.officialUrl,
+      downloadedAt: new Date().toISOString(),
+      archiveSha256: zipSha256,
+      expectedArchiveSha256: source.expectedArchiveSha256 ?? null,
+      dpsXsd,
+      eventXsd,
+      registeredEventXsd,
+      xsdFiles,
+    };
     await writeFile(join(target, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256})`);
+    console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256}; dps=${dpsXsd}; event_request=${eventXsd}; event_registered=${registeredEventXsd})`);
   }
 }
 
