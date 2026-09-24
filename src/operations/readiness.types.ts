@@ -20,7 +20,7 @@ export interface ReadinessSummary {
 
 const RUNTIME_ACTIVATION_GATES = new Set(['nfse_mode_live', 'live_enabled']);
 const CERTIFICATE_GATES = new Set(['certificate_a1', 'certificate_company_binding']);
-const POST_CERTIFICATE_GATES = new Set(['dps_builder_verified']);
+const POST_CERTIFICATE_GATES = new Set(['dps_builder_verified', 'cancellation_event_verified']);
 
 export function summarizeReadiness(gates: ReadinessGate[]): ReadinessSummary {
   const failedBlocking = gates.filter((gate) => gate.blocking && gate.status !== 'pass');
