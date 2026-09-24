@@ -93,7 +93,7 @@ export class PreparedDpsService {
 
       const id = createId('pdps');
       const schemaId = this.schemas.active(dto.environment).id;
-      const builderMode = process.env.TAXAGENT_DPS_BUILDER_MODE ?? 'draft';
+      const builderMode = this.schemas.dpsConformance(dto.environment).verified ? 'verified' : 'draft';
       const unsignedHash = this.hashText(built.xml);
       const inserted = await client.query<PreparedDpsRecord>(
         `INSERT INTO prepared_dps(
