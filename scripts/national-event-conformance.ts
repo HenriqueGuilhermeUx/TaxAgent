@@ -42,40 +42,38 @@ async function main() {
   await validation.validateEventStrict(built.xml, 'test');
 
   const { material, certificatePem } = syntheticCertificate();
-  const signed = signature.sign(built.xml, built.id, 'infPedReg', material, 'sha256');
+  const signedRequest = signature.sign(built.xml, built.id, 'infPedReg', material, 'sha256');
 
-  await validation.validateWellFormed(signed);
-  await validation.validateEventStrict(signed, 'test');
+  await validation.validateWellFormed(signedRequest);
+  await validation.validateEventStrict(signedRequest, 'test');
+  assertSignatureProfile(signedRequest, built.id, 'request');
+  verifySignature(signedRequest, certificatePem, 0, 'infPedReg', 'request');
 
-  if (!signed.includes('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256')) throw new Error('Event XMLDSig is not RSA-SHA256');
-  if (!signed.includes('http://www.w3.org/2001/04/xmlenc#sha256')) throw new Error('Event XMLDSig digest is not SHA-256');
-  if (!signed.includes(`URI="#${built.id}"`)) throw new Error('Event XMLDSig does not reference the generated infPedReg Id');
-
-  const signatureXml = signed.match(/<(?:\w+:)?Signature\b[\s\S]*?<\/(?:\w+:)?Signature>/)?.[0];
-  if (!signatureXml) throw new Error('Signed event request does not contain an XMLDSig Signature element');
-
-  const verifier = new SignedXml({ publicCert: certificatePem, getCertFromKeyInfo: () => null });
-  verifier.loadSignature(signatureXml);
-  if (!verifier.checkSignature(signed)) throw new Error('Generated event request XMLDSig failed cryptographic verification');
-  const references = verifier.getSignedReferences();
-  if (references.length !== 1 || !references[0].includes('infPedReg')) throw new Error('XMLDSig authenticated reference is not the expected infPedReg element');
-
-  // The SEFIN registered event (EVT) wraps the original pedRegEvento and is governed by its
-  // own root XSD inside the same official archive. Prove the exact response shape separately.
-  const embeddedRequest = signed.replace(/^<\?xml[^>]*\?>\s*/i, '');
+  // The SEFIN registered event (EVT) wraps the original signed pedRegEvento, carries nDFSe,
+  // and has its own XMLDSig over infEvento. It is governed by evento_v1.01.xsd, not by the
+  // request pedRegEvento_v1.01.xsd.
+  const embeddedRequest = signedRequest.replace(/^<\?xml[^>]*\?>\s*/i, '');
   const registeredEventId = `EVT${syntheticAccessKey}101101001`;
-  const registeredEvent = `<?xml version="1.0" encoding="UTF-8"?>` +
+  const registeredEventUnsigned = `<?xml version="1.0" encoding="UTF-8"?>` +
     `<evento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">` +
     `<infEvento Id="${registeredEventId}">` +
     `<verAplic>TaxAgent_0.12</verAplic>` +
     `<ambGer>2</ambGer>` +
     `<nSeqEvento>001</nSeqEvento>` +
     `<dhProc>2026-09-23T18:00:01-03:00</dhProc>` +
-    `<nDFe>1</nDFe>` +
+    `<nDFSe>1</nDFSe>` +
     embeddedRequest +
     `</infEvento></evento>`;
-  await validation.validateWellFormed(registeredEvent);
-  await validation.validateRegisteredEventStrict(registeredEvent, 'test');
+
+  await validation.validateWellFormed(registeredEventUnsigned);
+  const signedRegisteredEvent = signature.sign(registeredEventUnsigned, registeredEventId, 'infEvento', material, 'sha256');
+  await validation.validateWellFormed(signedRegisteredEvent);
+  await validation.validateRegisteredEventStrict(signedRegisteredEvent, 'test');
+  assertSignatureProfile(signedRegisteredEvent, registeredEventId, 'registered-event');
+
+  const signatures = signatureElements(signedRegisteredEvent);
+  if (signatures.length !== 2) throw new Error(`Registered EVT must contain nested PRE signature and outer EVT signature; found ${signatures.length}`);
+  verifySignature(signedRegisteredEvent, certificatePem, signatures.length - 1, 'infEvento', 'registered-event');
 
   const active = schemas.active('test');
   const attestation = {
@@ -88,6 +86,7 @@ async function main() {
     signed_xsd_valid: true,
     registered_event_xsd_valid: true,
     signature_verified: true,
+    registered_event_signature_verified: true,
     signature_profile: 'xmldsig-rsa-sha256-id-reference',
     synthetic_fixture_only: true,
     real_certificate_used: false,
@@ -103,10 +102,33 @@ async function main() {
     event: 'national_event_conformance_ok',
     target_city_code: company.city_code,
     ...attestation,
-    request_xml_sha256: createHash('sha256').update(signed, 'utf8').digest('hex'),
-    registered_event_xml_sha256: createHash('sha256').update(registeredEvent, 'utf8').digest('hex'),
+    request_xml_sha256: createHash('sha256').update(signedRequest, 'utf8').digest('hex'),
+    registered_event_xml_sha256: createHash('sha256').update(signedRegisteredEvent, 'utf8').digest('hex'),
     attestation_persisted: true,
   }));
+}
+
+function assertSignatureProfile(xml: string, elementId: string, label: string) {
+  if (!xml.includes('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256')) throw new Error(`${label} XMLDSig is not RSA-SHA256`);
+  if (!xml.includes('http://www.w3.org/2001/04/xmlenc#sha256')) throw new Error(`${label} XMLDSig digest is not SHA-256`);
+  if (!xml.includes(`URI="#${elementId}"`)) throw new Error(`${label} XMLDSig does not reference ${elementId}`);
+}
+
+function signatureElements(xml: string): string[] {
+  return [...xml.matchAll(/<(?:\w+:)?Signature\b[\s\S]*?<\/(?:\w+:)?Signature>/g)].map((match) => match[0]);
+}
+
+function verifySignature(xml: string, certificatePem: string, signatureIndex: number, signedLocalName: string, label: string) {
+  const signatures = signatureElements(xml);
+  const signatureXml = signatures[signatureIndex];
+  if (!signatureXml) throw new Error(`${label} XML does not contain the expected XMLDSig Signature element`);
+  const verifier = new SignedXml({ publicCert: certificatePem, getCertFromKeyInfo: () => null });
+  verifier.loadSignature(signatureXml);
+  if (!verifier.checkSignature(xml)) throw new Error(`${label} XMLDSig failed cryptographic verification`);
+  const references = verifier.getSignedReferences();
+  if (references.length !== 1 || !references[0].includes(signedLocalName)) {
+    throw new Error(`${label} XMLDSig authenticated reference is not the expected ${signedLocalName} element`);
+  }
 }
 
 function syntheticCertificate(): { material: CertificateMaterial; certificatePem: string } {
@@ -134,14 +156,12 @@ function syntheticCertificate(): { material: CertificateMaterial; certificatePem
       pfx,
       password,
       fingerprint: createHash('sha256').update(certDer).digest('hex'),
-      subjectTaxId: companyTaxId(),
+      subjectTaxId: '00000000000000',
       tlsCertificatePem: certificatePem,
       tlsPrivateKeyPem: privateKeyPem,
     },
   };
 }
-
-function companyTaxId(): string { return '00000000000000'; }
 
 main().catch((error) => {
   console.error(error);
