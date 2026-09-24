@@ -12,7 +12,8 @@ export interface CancellationEventIdentity {
   accessKey: string;
   eventType: string;
   eventSequence: number;
-  eventId?: string;
+  eventId: string;
+  requestId: string;
 }
 
 const NATIONAL_ACCESS_KEY = /^[0-9]{8}(?:1[0-9]{14}|2[0-9A-Z]{14})[0-9]{27}$/;
@@ -35,56 +36,48 @@ export function assertCancellationEventDocument(xml: string, metadata: unknown):
 
   const validation = XMLValidator.validate(xml);
   if (validation !== true) {
-    throw new FiscalEngineError(
-      errorCode,
-      'SEFIN returned a malformed cancellation event XML. TaxAgent will preserve reconciliation state instead of marking the invoice cancelled.',
-      true,
-      { fiscal_retransmission_attempted: false, cancellation_state_confirmed: false },
-    );
+    throw uncertainty(errorCode, 'SEFIN returned a malformed cancellation event XML.');
   }
 
   let parsed: Record<string, unknown>;
   try {
     parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' }).parse(xml) as Record<string, unknown>;
   } catch {
-    throw new FiscalEngineError(
-      errorCode,
-      'SEFIN cancellation event XML could not be parsed. TaxAgent will preserve reconciliation state.',
-      true,
-      { fiscal_retransmission_attempted: false, cancellation_state_confirmed: false },
-    );
+    throw uncertainty(errorCode, 'SEFIN cancellation event XML could not be parsed.');
   }
 
   const event = localChild(parsed, 'evento');
   const info = localChild(event, 'infEvento');
-  const returnedAccessKey = scalar(localChild(info, 'chNFSe'))?.toUpperCase();
-  const specific = localChild(info, `e${eventType}`);
+  const request = localChild(info, 'pedRegEvento');
+  const requestInfo = localChild(request, 'infPedReg');
+  const returnedAccessKey = scalar(localChild(requestInfo, 'chNFSe'))?.toUpperCase();
+  const specific = localChild(requestInfo, `e${eventType}`);
   const sequenceRaw = scalar(localChild(info, 'nSeqEvento'));
   const returnedSequence = sequenceRaw ? Number(sequenceRaw) : undefined;
   const eventId = attribute(info, 'Id') ?? attribute(info, 'id');
+  const requestId = attribute(requestInfo, 'Id') ?? attribute(requestInfo, 'id');
 
-  if (!event || !info || !specific) {
-    throw identityError(errorCode, 'SEFIN response is not a registered cancellation event 101101 document.');
+  if (!event || !info || !request || !requestInfo || !specific) {
+    throw uncertainty(errorCode, 'SEFIN response is not a registered national cancellation event containing the original 101101 request.');
   }
   if (returnedAccessKey !== accessKey) {
-    throw identityError(errorCode, 'SEFIN cancellation event references a different NFS-e access key.');
+    throw uncertainty(errorCode, 'SEFIN cancellation event references a different NFS-e access key.');
   }
-  if (returnedSequence !== undefined && returnedSequence !== eventSequence) {
-    throw identityError(errorCode, 'SEFIN cancellation event sequence does not match the reconciled 101101/1 identity.');
-  }
-  if (eventId) {
-    const normalizedEventId = eventId.toUpperCase();
-    const expectedPrefix = `EVT${accessKey}${eventType}`;
-    if (!normalizedEventId.startsWith(expectedPrefix)) {
-      throw identityError(errorCode, 'SEFIN cancellation event Id does not match the expected NFS-e/event identity.');
-    }
-    const suffix = normalizedEventId.slice(expectedPrefix.length);
-    if (suffix && /^\d{3}$/.test(suffix) && Number(suffix) !== eventSequence) {
-      throw identityError(errorCode, 'SEFIN cancellation event Id carries an unexpected event sequence.');
-    }
+  if (returnedSequence !== eventSequence) {
+    throw uncertainty(errorCode, 'SEFIN cancellation event sequence does not match the reconciled 101101/1 identity.');
   }
 
-  return { accessKey, eventType, eventSequence, eventId };
+  const expectedRequestId = `PRE${accessKey}${eventType}`;
+  if (requestId?.toUpperCase() !== expectedRequestId) {
+    throw uncertainty(errorCode, 'SEFIN cancellation event embeds a request Id different from the expected PRE identity.');
+  }
+
+  const expectedEventId = `EVT${accessKey}${eventType}${String(eventSequence).padStart(3, '0')}`;
+  if (eventId?.toUpperCase() !== expectedEventId) {
+    throw uncertainty(errorCode, 'SEFIN cancellation event Id does not match the expected EVT identity.');
+  }
+
+  return { accessKey, eventType, eventSequence, eventId, requestId };
 }
 
 function localChild(value: unknown, localName: string): any {
@@ -111,7 +104,7 @@ function attribute(value: unknown, name: string): string | undefined {
   return undefined;
 }
 
-function identityError(code: string, message: string): FiscalEngineError {
+function uncertainty(code: string, message: string): FiscalEngineError {
   return new FiscalEngineError(
     code,
     `${message} TaxAgent will preserve cancellation reconciliation state and will not confirm cancellation from this document.`,
