@@ -137,10 +137,33 @@ export class NfseNationalProvider implements FiscalProvider {
     await this.validation.validateWellFormed(built.xml);
     await this.validation.validateEventStrict(built.xml, input.environment);
     const certificate = await this.vault.getActiveMaterial(input.companyId);
+    const existingRequest = await this.documents.latestContent(operation.invoiceId, 'cancellation-request-xml');
 
-    // Cancellation event 101101 uses the first provider sequence for the first cancellation event.
+    // Cancellation event 101101 uses provider sequence 1 for the first cancellation event.
     // Every attempt reconciles this exact event before any POST so a lost HTTP response cannot trigger a blind duplicate.
-    const reconciled = await this.client.findEventByTypeAndSequence(input.environment, input.accessKey, '101101', 1, certificate);
+    let reconciled: NationalApiResponse | null;
+    try {
+      reconciled = await this.client.findEventByTypeAndSequence(input.environment, input.accessKey, '101101', 1, certificate);
+    } catch (error) {
+      if (existingRequest && error instanceof FiscalEngineError && error.retryable) {
+        throw new FiscalEngineError(
+          'TA_NFSE_EVENT_RECONCILIATION_PENDING',
+          'A previous cancellation request may already have reached SEFIN and the reconciliation query is temporarily unavailable. TaxAgent will not POST the event again blindly.',
+          true,
+          {
+            event_id: built.id,
+            event_type: '101101',
+            event_sequence: 1,
+            request_sha256: existingRequest.sha256,
+            reconciliation_error_code: error.code,
+            fiscal_transmission_attempted_previously: true,
+            fiscal_retransmission_attempted: false,
+          },
+        );
+      }
+      throw error;
+    }
+
     if (reconciled) {
       if (this.hasRejection(reconciled)) {
         throw new FiscalEngineError(
@@ -169,7 +192,6 @@ export class NfseNationalProvider implements FiscalProvider {
       return { status: 'registered', provider: this.name, providerReference: built.id, raw: this.client.sanitize(reconciled) };
     }
 
-    const existingRequest = await this.documents.latestContent(operation.invoiceId, 'cancellation-request-xml');
     if (existingRequest) {
       const rejectionEvidence = await this.documents.latestContent(operation.invoiceId, 'cancellation-rejection-json');
       const rejectionMetadata = (rejectionEvidence?.metadata && typeof rejectionEvidence.metadata === 'object'
