@@ -58,7 +58,18 @@ export class ReadinessService {
     gates.push({ id: 'company_tax_id', label: 'CNPJ do prestador', status: /^[A-Z0-9]{14}$/.test(taxId) ? 'pass' : 'fail', blocking: true, detail: /^[A-Z0-9]{14}$/.test(taxId) ? 'Identificador de 14 posições compatível com CNPJ numérico/alfanumérico.' : 'CNPJ deve possuir 14 posições alfanuméricas.' });
     gates.push({ id: 'company_city_code', label: 'Código IBGE do município emissor', status: /^\d{7}$/.test(String(company.city_code ?? '')) ? 'pass' : 'fail', blocking: true, detail: /^\d{7}$/.test(String(company.city_code ?? '')) ? `Município emissor ${company.city_code}.` : 'Código IBGE municipal deve possuir 7 dígitos.' });
     gates.push({ id: 'tax_regime', label: 'Regime tributário suportado pelo builder live atual', status: String(company.tax_regime ?? '').toLowerCase() === 'regular' ? 'pass' : 'fail', blocking: true, detail: String(company.tax_regime ?? '').toLowerCase() === 'regular' ? 'Regime regular habilitado para o primeiro ciclo de homologação.' : 'Primeiro ciclo live está deliberadamente limitado a tax_regime=regular; Simples e regimes especiais serão liberados após regras específicas.' });
-    gates.push({ id: 'municipal_registration', label: 'Inscrição municipal', status: company.municipal_registration ? 'pass' : 'warn', blocking: false, detail: company.municipal_registration ? 'Inscrição municipal cadastrada.' : 'Não cadastrada; algumas operações/municípios podem exigir IM.' });
+    const municipalRegistrationRequired = resolvedProvider === 'giss';
+    gates.push({
+      id: 'municipal_registration',
+      label: 'Inscrição municipal',
+      status: company.municipal_registration ? 'pass' : municipalRegistrationRequired ? 'fail' : 'warn',
+      blocking: municipalRegistrationRequired,
+      detail: company.municipal_registration
+        ? 'Inscrição municipal cadastrada.'
+        : municipalRegistrationRequired
+          ? 'Santos GISS exige a Inscrição Municipal real do prestador antes de montar/reservar RPS ou consultar o RPS. TaxAgent não inventa nem substitui este cadastro.'
+          : 'Não cadastrada; algumas operações/municípios podem exigir IM.',
+    });
 
     if (!activeCertificate) {
       gates.push({ id: 'certificate_a1', label: 'Certificado A1', status: 'fail', blocking: true, detail: 'Nenhum certificado A1 ativo no Certificate Vault.' });
@@ -101,12 +112,39 @@ export class ReadinessService {
     } else if (resolvedProvider === 'giss') {
       const gissEndpoint = gissEndpointPolicy(company.city_code);
       gates.push({
-        id: 'giss_transport_contract',
-        label: 'Contrato SOAP GISS homologado',
+        id: 'giss_reconciliation_contract',
+        label: 'Consulta/reconciliação SOAP GISS homologada',
+        status: 'pass',
+        blocking: true,
+        detail: 'WSDL autenticado com A1/mTLS comprovou ConsultarNfsePorRps, wrapper, namespace, SOAP 1.1, endereço HTTPS e SOAPAction; a consulta assinada alcançou o provedor e avançou até a validação cadastral da Inscrição Municipal.',
+        data: gissEndpoint ? {
+          protocol: gissEndpoint.protocol,
+          layout: gissEndpoint.layout,
+          homologation_wsdl: gissEndpoint.homologationWsdl,
+          operation: 'ConsultarNfsePorRps',
+          request_wrapper: 'ConsultarNfsePorRpsRequest',
+          response_wrapper: 'ConsultarNfsePorRpsResponse',
+          request_namespace: 'http://nfse.abrasf.org.br',
+          soap_version: '1.1',
+          soap_action: 'http://nfse.abrasf.org.br/ConsultarNfsePorRps',
+          authenticated_wsdl_verified: true,
+          signed_query_verified: true,
+        } : undefined,
+      });
+      gates.push({
+        id: 'giss_emission_transport',
+        label: 'Emissão GISS RecepcionarLoteRps',
         status: 'fail',
         blocking: true,
-        detail: 'Rota, assinatura SHA-1 e builders GISS estão montados, mas o transporte SOAP continua deliberadamente bloqueado até o WSDL autenticado confirmar wrapper, namespace, versão SOAP, endereço HTTPS, SOAPAction e a reconciliação ConsultarNfsePorRps ser validada ponta a ponta.',
-        data: gissEndpoint ? { protocol: gissEndpoint.protocol, layout: gissEndpoint.layout, homologation_wsdl: gissEndpoint.homologationWsdl } : undefined,
+        detail: 'Emissão permanece deliberadamente bloqueada. A homologação da consulta/reconciliação não autoriza RecepcionarLoteRps; o contrato de emissão, assinatura e resposta deve ser validado separadamente antes de qualquer POST fiscal.',
+        data: gissEndpoint ? {
+          protocol: gissEndpoint.protocol,
+          layout: gissEndpoint.layout,
+          homologation_wsdl: gissEndpoint.homologationWsdl,
+          operation: 'RecepcionarLoteRps',
+          fiscal_transmission_attempted: false,
+          fiscal_emission_attempted: false,
+        } : undefined,
       });
     }
 
