@@ -9,6 +9,7 @@ COPY . .
 RUN npm run schemas:sync -- --environment=test
 RUN npx tsx scripts/national-conformance.ts
 RUN npx tsx scripts/national-event-conformance.ts
+ENV TAXAGENT_GISS_XSD_SHA256=c0e2b81b93faea908b70d42e827b44acc34b634153aa006cd35851e77ebad0e6
 RUN npx tsx scripts/giss-emission-conformance.ts
 RUN npm run build
 
