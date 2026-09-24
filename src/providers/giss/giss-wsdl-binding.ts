@@ -40,8 +40,8 @@ export function inspectGissWsdlTransport(body: string): GissWsdlTransportBinding
   };
 }
 
-export function reconciliationTransportBinding(binding: GissWsdlTransportBinding) {
-  const operation = binding.operationBindings.find((candidate) => candidate.operation === 'ConsultarNfsePorRps' && candidate.soapAction);
+export function operationTransportBinding(binding: GissWsdlTransportBinding, operationName: string) {
+  const operation = binding.operationBindings.find((candidate) => candidate.operation === operationName && candidate.soapAction);
   const soapAddress = binding.soapAddresses[0];
   return {
     proven: Boolean(operation?.soapAction && soapAddress && binding.soapVersion),
@@ -50,4 +50,12 @@ export function reconciliationTransportBinding(binding: GissWsdlTransportBinding
     soapVersion: binding.soapVersion,
     operation: operation?.operation,
   };
+}
+
+export function reconciliationTransportBinding(binding: GissWsdlTransportBinding) {
+  return operationTransportBinding(binding, 'ConsultarNfsePorRps');
+}
+
+export function emissionTransportBinding(binding: GissWsdlTransportBinding) {
+  return operationTransportBinding(binding, 'RecepcionarLoteRps');
 }
