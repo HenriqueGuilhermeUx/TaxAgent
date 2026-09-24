@@ -6,6 +6,21 @@ import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 interface SchemaSource { id: string; status: string; xsdLabel?: string; officialUrl?: string; rtc: string; notes: string }
 interface RegistryFile { updatedAt: string; sources: { production: SchemaSource; test: SchemaSource; nt009Preview: SchemaSource } }
 interface LocalManifest { dpsXsd: string; eventXsd?: string; archiveSha256: string; downloadedAt: string }
+export interface DpsConformanceAttestation {
+  version: number;
+  environment: FiscalEnvironment;
+  schema_id: string;
+  xsd_label?: string;
+  unsigned_xsd_valid: boolean;
+  signed_xsd_valid: boolean;
+  signature_verified: boolean;
+  signature_profile: string;
+  synthetic_fixture_only: boolean;
+  real_certificate_used: boolean;
+  network_attempted: boolean;
+  fiscal_transmission_attempted: boolean;
+  fiscal_emission_attempted: boolean;
+}
 
 @Injectable()
 export class SchemaRegistryService {
@@ -21,8 +36,44 @@ export class SchemaRegistryService {
   localEventXsd(environment: FiscalEnvironment): string | undefined {
     return process.env.TAXAGENT_NFSE_EVENT_XSD || this.localSchema(environment, 'eventXsd');
   }
+  dpsConformance(environment: FiscalEnvironment): { verified: boolean; reason: string; attestation?: DpsConformanceAttestation } {
+    const active = this.active(environment);
+    const path = join(process.cwd(), 'schemas', 'conformance', `national-dps-${environment}.json`);
+    if (!existsSync(path)) return { verified: false, reason: 'build-time DPS conformance attestation is not present' };
+    let attestation: DpsConformanceAttestation;
+    try {
+      attestation = JSON.parse(readFileSync(path, 'utf8')) as DpsConformanceAttestation;
+    } catch {
+      return { verified: false, reason: 'build-time DPS conformance attestation is unreadable' };
+    }
+    const verified = attestation.version === 1
+      && attestation.environment === environment
+      && attestation.schema_id === active.id
+      && attestation.unsigned_xsd_valid === true
+      && attestation.signed_xsd_valid === true
+      && attestation.signature_verified === true
+      && attestation.signature_profile === 'xmldsig-rsa-sha256-id-reference'
+      && attestation.synthetic_fixture_only === true
+      && attestation.real_certificate_used === false
+      && attestation.network_attempted === false
+      && attestation.fiscal_transmission_attempted === false
+      && attestation.fiscal_emission_attempted === false;
+    return verified
+      ? { verified: true, reason: `DPS builder attested against active schema ${active.id}`, attestation }
+      : { verified: false, reason: `DPS conformance attestation does not match active schema/profile ${active.id}`, attestation };
+  }
   metadata() {
-    return { ...this.registry, runtime: { productionSynced: Boolean(this.localDpsXsd('production')), testSynced: Boolean(this.localDpsXsd('test')), productionEventsSynced: Boolean(this.localEventXsd('production')), testEventsSynced: Boolean(this.localEventXsd('test')) } };
+    return {
+      ...this.registry,
+      runtime: {
+        productionSynced: Boolean(this.localDpsXsd('production')),
+        testSynced: Boolean(this.localDpsXsd('test')),
+        productionEventsSynced: Boolean(this.localEventXsd('production')),
+        testEventsSynced: Boolean(this.localEventXsd('test')),
+        productionDpsConformance: this.dpsConformance('production'),
+        testDpsConformance: this.dpsConformance('test'),
+      },
+    };
   }
   private localSchema(environment: FiscalEnvironment, field: 'dpsXsd' | 'eventXsd'): string | undefined {
     const source = this.active(environment);
