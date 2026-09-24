@@ -82,7 +82,7 @@ export class FiscalOnboardingService {
     ];
 
     let resolvedRoute: 'national-direct' | 'municipal-provider' | 'gateway' | 'unresolved' = 'unresolved';
-    let resolvedProvider = route.provider;
+    let resolvedProvider: string = route.provider;
     let gateway: GatewayCapability | null = null;
 
     if (route.route === 'national-direct' && route.provider === 'nfse-national' && route.nationalPublicIssuer) {
@@ -133,17 +133,20 @@ export class FiscalOnboardingService {
           const keys = new Set((credential?.credential_keys ?? []).map((item) => item.toLowerCase()));
           const loginPresent = !requiredCredentialKeys.includes('login') || hasAny(keys, ['login', 'usuario', 'username', 'user']);
           const passwordPresent = !requiredCredentialKeys.includes('password') || hasAny(keys, ['password', 'senha']);
+          const credentialsSatisfied = Boolean(verified && loginPresent && passwordPresent);
           requirements.push(requirement(
             'provider_credentials',
             'Credenciais municipais do emissor',
             true,
-            Boolean(verified && loginPresent && passwordPresent),
+            credentialsSatisfied,
             'gateway-capability',
-            credential
-              ? credential.status === 'verified'
-                ? 'Credenciais verificadas, mas faltam campos exigidos pelo município.'
-                : `Credenciais cadastradas com status ${credential.status}; verificação ainda necessária.`
-              : 'Credenciais exigidas pelo município ainda não foram cadastradas.',
+            credentialsSatisfied
+              ? undefined
+              : credential
+                ? credential.status === 'verified'
+                  ? 'Credenciais verificadas, mas faltam campos exigidos pelo município.'
+                  : `Credenciais cadastradas com status ${credential.status}; verificação ainda necessária.`
+                : 'Credenciais exigidas pelo município ainda não foram cadastradas.',
           ));
         }
       } else {
