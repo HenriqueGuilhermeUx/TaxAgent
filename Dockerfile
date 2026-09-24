@@ -8,6 +8,7 @@ RUN npm install --no-audit --no-fund
 COPY . .
 RUN npm run schemas:sync -- --environment=test
 RUN npx tsx scripts/national-conformance.ts
+RUN npx tsx scripts/national-event-conformance.ts
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime
