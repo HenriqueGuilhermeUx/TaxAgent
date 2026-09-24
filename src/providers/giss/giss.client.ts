@@ -10,7 +10,7 @@ import { buildGissQuerySoapEnvelope } from './giss-query-soap.builder';
 import { requireVerifiedGissReconciliationTransport } from './giss-query-transport.guard';
 import { GissSignatureService } from './giss-signature.service';
 import { inspectGissWsdlTransport, reconciliationTransportBinding, GissSoapVersion, GissWsdlOperationBinding } from './giss-wsdl-binding';
-import { GissWsdlContractDocument, inspectResolvedGissWsdlShape } from './giss-wsdl-contract';
+import { GissWsdlContractDocument, inspectResolvedGissOperationShape, inspectResolvedGissWsdlShape } from './giss-wsdl-contract';
 
 export interface GissProbeResult { host: string; path: string; status: number; reachable: boolean }
 export interface GissWsdlInspection extends GissProbeResult {
@@ -39,6 +39,13 @@ export interface GissWsdlInspection extends GissProbeResult {
   reconciliationResponseNamespace?: string;
   requestMessageParts: string[];
   responseMessageParts: string[];
+  emissionShapePresent: boolean;
+  emissionRequestWrapper?: string;
+  emissionRequestNamespace?: string;
+  emissionResponseWrapper?: string;
+  emissionResponseNamespace?: string;
+  emissionRequestMessageParts: string[];
+  emissionResponseMessageParts: string[];
   supportingDocumentsInspected: number;
   sameHostImportsDiscovered: number;
   missingRequiredOperations: string[];
@@ -83,6 +90,7 @@ const MAX_GISS_QUERY_RESPONSE_BYTES = 2 * 1024 * 1024;
 export function inspectGissWsdlContract(body: string, supportingDocuments: GissWsdlContractDocument[] = []) {
   const documents: GissWsdlContractDocument[] = [{ url: 'memory://root.wsdl', body }, ...supportingDocuments];
   const resolved = inspectResolvedGissWsdlShape(documents);
+  const emission = inspectResolvedGissOperationShape(documents, 'RecepcionarLoteRps');
   const combined = documents.map((document) => document.body).join('\n');
   const operations = [...combined.matchAll(/<(?:\w+:)?operation\b[^>]*\bname\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
   const soapActions = [...combined.matchAll(/\bsoapAction\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
@@ -115,6 +123,13 @@ export function inspectGissWsdlContract(body: string, supportingDocuments: GissW
     reconciliationResponseNamespace: resolved.responseNamespace,
     requestMessageParts: resolved.requestMessageParts,
     responseMessageParts: resolved.responseMessageParts,
+    emissionShapePresent: emission.shapePresent,
+    emissionRequestWrapper: emission.requestWrapper,
+    emissionRequestNamespace: emission.requestNamespace,
+    emissionResponseWrapper: emission.responseWrapper,
+    emissionResponseNamespace: emission.responseNamespace,
+    emissionRequestMessageParts: emission.requestMessageParts,
+    emissionResponseMessageParts: emission.responseMessageParts,
     supportingDocumentsInspected: resolved.supportingDocumentsInspected,
     missingRequiredOperations,
   };
