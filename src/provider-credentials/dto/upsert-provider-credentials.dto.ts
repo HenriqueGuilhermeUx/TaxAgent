@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsObject, IsString, Matches, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class UpsertProviderCredentialsDto {
   @ApiProperty({ example: 'giss' })
@@ -20,7 +20,8 @@ export class UpsertProviderCredentialsDto {
   @IsObject()
   credentials!: Record<string, string>;
 
-  @ApiProperty({ required: false, example: 'Credentials supplied by taxpayer during fiscal onboarding.' })
+  @ApiPropertyOptional({ example: 'Credentials supplied by taxpayer during fiscal onboarding.' })
+  @IsOptional()
   @IsString()
   @MaxLength(500)
   note?: string;
