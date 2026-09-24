@@ -25,16 +25,19 @@ async function main() {
     tax_regime: 'regular',
   };
 
+  // 7 cMun + 1 ambiente gerador + 1 tipo CNPJ + 14 inscrição + 13 nNFSe + 4 AAMM + 9 cNum + 1 DV.
+  // It is synthetic and is used only to exercise the active XSD/XMLDSig contract; it is never transmitted.
+  const syntheticAccessKey = '353060722000000000000000000000000000126090000000000';
   const input: CancelFiscalInput = {
     companyId: company.id,
     environment: 'test',
-    accessKey: '35000000000000000000000000000000000000000000000001',
+    accessKey: syntheticAccessKey,
     reasonCode: '1',
     reason: 'Cancelamento sintetico para prova de conformidade TaxAgent CI',
   };
 
   const built = builder.buildCancellation(input, company);
-  if (!built.id.startsWith(`PRE${input.accessKey}101101`)) throw new Error(`Unexpected cancellation event id: ${built.id}`);
+  if (built.id !== `PRE${syntheticAccessKey}101101`) throw new Error(`Unexpected cancellation event id: ${built.id}`);
   await validation.validateWellFormed(built.xml);
   await validation.validateEventStrict(built.xml, 'test');
 
