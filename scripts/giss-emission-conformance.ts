@@ -159,7 +159,8 @@ async function main() {
   const signedBatch = signatures.signRpsAndBatch(unsignedBatch, material);
   validateWithXmllint(signedBatch, schemaPath, 'giss-signed-batch');
 
-  const signatureXmls = [...signedBatch.matchAll(/<(?:\w+:)?Signature\b[\s\S]*?<\/(?:\w+:)?Signature>/g)].map((match) => match[0]);
+  const signaturePattern = new RegExp('<(?:\\w+:)?Signature\\b[\\s\\S]*?</(?:\\w+:)?Signature>', 'g');
+  const signatureXmls = [...signedBatch.matchAll(signaturePattern)].map((match) => match[0]);
   if (signatureXmls.length !== 2) throw new Error(`Expected exactly 2 GISS signatures, found ${signatureXmls.length}`);
   const rpsSignature = signatureXmls.find((value) => value.includes('URI="#RPS1"'));
   const batchSignature = signatureXmls.find((value) => value.includes('URI="#LOTE1"'));
