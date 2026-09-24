@@ -77,11 +77,14 @@ test('Santos GISS emission stays locked even after reconciliation allows the flo
 
   await assert.rejects(
     provider.issue(validInput, { invoiceId: 'inv_emission_locked' }),
-    (error: unknown) => error instanceof FiscalEngineError
-      && error.code === 'TA_GISS_EMISSION_LOCKED'
-      && error.retryable === false
-      && error.details?.transmission_attempted === false
-      && error.details?.fiscal_emission_attempted === false,
+    (error: unknown) => {
+      if (!(error instanceof FiscalEngineError)) return false;
+      const details = error.details as { transmission_attempted?: boolean; fiscal_emission_attempted?: boolean } | undefined;
+      return error.code === 'TA_GISS_EMISSION_LOCKED'
+        && error.retryable === false
+        && details?.transmission_attempted === false
+        && details?.fiscal_emission_attempted === false;
+    },
   );
 });
 
