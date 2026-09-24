@@ -17,14 +17,34 @@ function requestedEnvironments(): EnvironmentKey[] {
   return [value];
 }
 
+async function fetchOfficialSchema(url: string, environment: EnvironmentKey, attempts = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
+      if (response.ok) return response;
+      if (response.status < 500 || attempt === attempts) {
+        throw new Error(`Schema download failed for ${environment}: HTTP ${response.status}`);
+      }
+      lastError = new Error(`Schema download transient failure for ${environment}: HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+    }
+    const delayMs = 2_000 * attempt;
+    console.warn(`Official schema download attempt ${attempt}/${attempts} failed for ${environment}; retrying in ${delayMs}ms.`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Schema download failed for ${environment}`);
+}
+
 async function main() {
   const registryPath = join(process.cwd(), 'schemas', 'registry.json');
   const registry = JSON.parse(await readFile(registryPath, 'utf8')) as Registry;
   for (const key of requestedEnvironments()) {
     const source = registry.sources[key];
     if (!source?.officialUrl) throw new Error(`No officialUrl configured for ${key}`);
-    const response = await fetch(source.officialUrl, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
-    if (!response.ok) throw new Error(`Schema download failed for ${key}: HTTP ${response.status}`);
+    const response = await fetchOfficialSchema(source.officialUrl, key);
     const zipBuffer = Buffer.from(await response.arrayBuffer());
     const zipSha256 = createHash('sha256').update(zipBuffer).digest('hex');
     if (source.expectedArchiveSha256 && source.expectedArchiveSha256 !== zipSha256) {
