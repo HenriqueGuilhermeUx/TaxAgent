@@ -67,7 +67,7 @@ export class FiscalOnboardingPreflightService {
         provider_preflight: {
           provider: 'giss',
           reachable,
-          is_wsdl: result.isWsdl ?? result.is_wsdl ?? null,
+          is_wsdl: result.isWsdl ?? null,
           transport_present: transportPresent,
           shape_present: shapePresent,
           wrapper_mapping_verified: wrapperMappingVerified,
