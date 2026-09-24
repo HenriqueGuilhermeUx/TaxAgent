@@ -5,7 +5,7 @@ import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 
 interface SchemaSource { id: string; status: string; xsdLabel?: string; officialUrl?: string; rtc: string; notes: string }
 interface RegistryFile { updatedAt: string; sources: { production: SchemaSource; test: SchemaSource; nt009Preview: SchemaSource } }
-interface LocalManifest { dpsXsd: string; eventXsd?: string; archiveSha256: string; downloadedAt: string }
+interface LocalManifest { dpsXsd: string; eventXsd?: string; registeredEventXsd?: string; archiveSha256: string; downloadedAt: string }
 export interface DpsConformanceAttestation {
   version: number;
   environment: FiscalEnvironment;
@@ -39,6 +39,9 @@ export class SchemaRegistryService {
   }
   localEventXsd(environment: FiscalEnvironment): string | undefined {
     return process.env.TAXAGENT_NFSE_EVENT_XSD || this.localSchema(environment, 'eventXsd');
+  }
+  localRegisteredEventXsd(environment: FiscalEnvironment): string | undefined {
+    return process.env.TAXAGENT_NFSE_REGISTERED_EVENT_XSD || this.localSchema(environment, 'registeredEventXsd');
   }
   dpsConformance(environment: FiscalEnvironment): { verified: boolean; reason: string; attestation?: DpsConformanceAttestation } {
     const active = this.active(environment);
@@ -102,6 +105,8 @@ export class SchemaRegistryService {
         testSynced: Boolean(this.localDpsXsd('test')),
         productionEventsSynced: Boolean(this.localEventXsd('production')),
         testEventsSynced: Boolean(this.localEventXsd('test')),
+        productionRegisteredEventsSynced: Boolean(this.localRegisteredEventXsd('production')),
+        testRegisteredEventsSynced: Boolean(this.localRegisteredEventXsd('test')),
         productionDpsConformance: this.dpsConformance('production'),
         testDpsConformance: this.dpsConformance('test'),
         productionEventConformance: this.eventConformance('production'),
@@ -109,7 +114,7 @@ export class SchemaRegistryService {
       },
     };
   }
-  private localSchema(environment: FiscalEnvironment, field: 'dpsXsd' | 'eventXsd'): string | undefined {
+  private localSchema(environment: FiscalEnvironment, field: 'dpsXsd' | 'eventXsd' | 'registeredEventXsd'): string | undefined {
     const source = this.active(environment);
     const dir = join(process.cwd(), 'schemas', 'vendor', source.id);
     const manifestPath = join(dir, 'manifest.json');
