@@ -17,6 +17,7 @@ interface RequirementLike {
 }
 
 interface OnboardingLike {
+  [key: string]: unknown;
   company: { id: string; name?: string; city_code: string; tax_regime?: string };
   environment: FiscalEnvironment;
   effective_at?: string;
