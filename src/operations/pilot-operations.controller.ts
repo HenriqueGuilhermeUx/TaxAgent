@@ -3,7 +3,9 @@ import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BootstrapGuard } from '../auth/bootstrap.guard';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { EnrollPilotDto } from './dto/enroll-pilot.dto';
+import { UpdatePilotIntakeProfileDto } from './dto/update-pilot-intake-profile.dto';
 import { PilotEnrollmentService } from './pilot-enrollment.service';
+import { PilotIntakeService } from './pilot-intake.service';
 import { PILOT_OPERATION_STATUSES, PilotOperationStatus, PilotOperationsService } from './pilot-operations.service';
 
 @ApiTags('pilot-operations')
@@ -14,6 +16,7 @@ export class PilotOperationsController {
   constructor(
     private readonly pilots: PilotOperationsService,
     private readonly enrollment: PilotEnrollmentService,
+    private readonly intake: PilotIntakeService,
   ) {}
 
   @Post('enroll')
@@ -33,6 +36,43 @@ export class PilotOperationsController {
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   getEnrollment(@Param('companyId') companyId: string, @Query('environment') rawEnvironment?: string) {
     return this.enrollment.get(companyId, this.environment(rawEnvironment ?? 'test'));
+  }
+
+  @Get(':companyId/intake')
+  @ApiOperation({ summary: 'Get the secure pilot intake checklist and the correct secret/non-secret channel for every blocker; never exposes credentials' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  intakeStatus(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment?: string,
+    @Query('effective_at') effectiveAt?: string,
+  ) {
+    return this.intake.status(companyId, this.environment(rawEnvironment ?? 'test'), effectiveAt);
+  }
+
+  @Post(':companyId/intake/profile')
+  @ApiOperation({ summary: 'Update only non-secret pilot fiscal profile fields, then reassess and safely advance; password/token/PFX fields are rejected globally' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  updateIntakeProfile(
+    @Param('companyId') companyId: string,
+    @Body() dto: UpdatePilotIntakeProfileDto,
+    @Query('environment') rawEnvironment?: string,
+    @Query('effective_at') effectiveAt?: string,
+  ) {
+    return this.intake.updateProfile(companyId, this.environment(rawEnvironment ?? 'test'), dto, effectiveAt);
+  }
+
+  @Post(':companyId/intake/advance')
+  @ApiOperation({ summary: 'Reassess the pilot, persist immutable evidence and run only the existing non-emitting preflight when all local requirements are satisfied' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  advanceIntake(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment?: string,
+    @Query('effective_at') effectiveAt?: string,
+  ) {
+    return this.intake.advance(companyId, this.environment(rawEnvironment ?? 'test'), effectiveAt);
   }
 
   @Get()
