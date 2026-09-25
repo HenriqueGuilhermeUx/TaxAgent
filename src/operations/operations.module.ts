@@ -30,12 +30,14 @@ import { NationalPreflightService } from './national-preflight.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { OperationsController } from './operations.controller';
 import { PilotOnboardingService } from './pilot-onboarding.service';
+import { PilotOperationsController } from './pilot-operations.controller';
+import { PilotOperationsService } from './pilot-operations.service';
 import { ReadinessService } from './readiness.service';
 
 @Module({
   imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, ProviderCredentialsModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
-  controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController, FiscalOnboardingController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService],
-  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService],
+  controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController, FiscalOnboardingController, PilotOperationsController],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService, PilotOperationsService],
+  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService, PilotOperationsService],
 })
 export class OperationsModule {}
