@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { FiscalAutopilotModule } from './autopilot/fiscal-autopilot.module';
 import { AuthModule } from './auth/auth.module';
 import { CertificatesModule } from './certificates/certificates.module';
+import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 import { CustomersModule } from './customers/customers.module';
 import { DanfseModule } from './danfse/danfse.module';
 import { DatabaseModule } from './database/database.module';
@@ -20,5 +21,5 @@ import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, CustomerPortalModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
 export class AppModule {}
