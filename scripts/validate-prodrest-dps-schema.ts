@@ -21,6 +21,7 @@ async function main() {
       description: 'Servico de software para validacao estrutural do TaxAgent',
       amount: 100,
       nationalServiceCode: '010201',
+      nbsCode: '114011900',
       serviceLocationCityCode: '3550308',
       issTaxation: '1',
       issWithholding: '1',
