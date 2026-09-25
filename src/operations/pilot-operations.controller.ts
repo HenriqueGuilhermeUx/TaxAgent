@@ -1,7 +1,9 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BootstrapGuard } from '../auth/bootstrap.guard';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { EnrollPilotDto } from './dto/enroll-pilot.dto';
+import { PilotEnrollmentService } from './pilot-enrollment.service';
 import { PILOT_OPERATION_STATUSES, PilotOperationStatus, PilotOperationsService } from './pilot-operations.service';
 
 @ApiTags('pilot-operations')
@@ -9,10 +11,32 @@ import { PILOT_OPERATION_STATUSES, PilotOperationStatus, PilotOperationsService 
 @UseGuards(BootstrapGuard)
 @Controller('operations/pilots')
 export class PilotOperationsController {
-  constructor(private readonly pilots: PilotOperationsService) {}
+  constructor(
+    private readonly pilots: PilotOperationsService,
+    private readonly enrollment: PilotEnrollmentService,
+  ) {}
+
+  @Post('enroll')
+  @ApiOperation({ summary: 'Enroll a new or existing company into the fiscal pilot and immediately create a safe onboarding assessment; never runs preflight or fiscal transmission' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  enroll(
+    @Body() dto: EnrollPilotDto,
+    @Query('environment') rawEnvironment?: string,
+    @Query('effective_at') effectiveAt?: string,
+  ) {
+    return this.enrollment.enroll(dto, this.environment(rawEnvironment ?? 'test'), effectiveAt);
+  }
+
+  @Get(':companyId/enrollment')
+  @ApiOperation({ summary: 'Get one company pilot enrollment without exposing credentials or certificate material' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  getEnrollment(@Param('companyId') companyId: string, @Query('environment') rawEnvironment?: string) {
+    return this.enrollment.get(companyId, this.environment(rawEnvironment ?? 'test'));
+  }
 
   @Get()
-  @ApiOperation({ summary: 'List the cross-company fiscal pilot operations queue from persisted evidence only; never contacts providers or transmits fiscal data' })
+  @ApiOperation({ summary: 'List active enrolled fiscal pilots from persisted evidence only; never contacts providers or transmits fiscal data' })
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   @ApiQuery({ name: 'organization_id', required: false })
   @ApiQuery({ name: 'status', required: false, enum: PILOT_OPERATION_STATUSES })

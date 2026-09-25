@@ -26,6 +26,10 @@ export interface PilotOperationsFilters {
 }
 
 interface QueueRow {
+  enrollment_id: string;
+  enrollment_label: string | null;
+  enrollment_source: string | null;
+  enrolled_at: Date | string;
   company_id: string;
   organization_id: string;
   company_name: string;
@@ -53,6 +57,7 @@ interface QueueRow {
 }
 
 interface QueueItem {
+  enrollment: { id: string; label: string | null; source: string | null; enrolled_at: Date | string };
   company: {
     id: string;
     organization_id: string;
@@ -108,6 +113,10 @@ export class PilotOperationsService {
          ORDER BY company_id, created_at DESC
        )
        SELECT
+         e.id AS enrollment_id,
+         e.label AS enrollment_label,
+         e.source AS enrollment_source,
+         e.enrolled_at,
          c.id AS company_id,
          c.organization_id,
          c.name AS company_name,
@@ -132,11 +141,13 @@ export class PilotOperationsService {
          p.blockers AS preflight_blockers,
          p.snapshot_sha256 AS preflight_sha256,
          p.created_at AS preflight_created_at
-       FROM companies c
+       FROM pilot_enrollments e
+       JOIN companies c ON c.id=e.company_id
        LEFT JOIN latest_onboarding o ON o.company_id=c.id
        LEFT JOIN latest_preflight p ON p.company_id=c.id
-       WHERE ($2::text IS NULL OR c.organization_id=$2)
-       ORDER BY COALESCE(c.updated_at, c.created_at) DESC, c.id
+       WHERE e.environment=$1 AND e.status='active'
+         AND ($2::text IS NULL OR c.organization_id=$2)
+       ORDER BY e.updated_at DESC, c.id
        LIMIT ${MAX_SCAN + 1}`,
       [filters.environment, filters.organizationId ?? null],
     );
@@ -147,7 +158,7 @@ export class PilotOperationsService {
 
     if (filters.q) {
       const q = filters.q.trim().toLowerCase();
-      items = items.filter((item) => [item.company.name, item.company.tax_id, item.company.city_code]
+      items = items.filter((item) => [item.company.name, item.company.tax_id, item.company.city_code, item.enrollment.label ?? '']
         .some((value) => String(value).toLowerCase().includes(q)));
     }
 
@@ -168,7 +179,7 @@ export class PilotOperationsService {
       generated_at: new Date().toISOString(),
       summary,
       coverage: {
-        scanned_companies: scannedRows.length,
+        scanned_pilots: scannedRows.length,
         base_total: baseTotal,
         scan_limit: MAX_SCAN,
         scan_truncated: scanTruncated,
@@ -189,7 +200,7 @@ export class PilotOperationsService {
       },
       items: page,
       safeguards: {
-        source: 'persisted_attestations_only',
+        source: 'active_pilot_enrollments_plus_persisted_attestations',
         provider_network_attempted: false,
         fiscal_post_attempted: false,
         fiscal_transmission_attempted: false,
@@ -210,9 +221,15 @@ export function toQueueItem(row: QueueRow): QueueItem {
 
   const pilotStatus = derivePilotStatus(row, onboardingFresh, preflightFresh);
   const blockers = activeBlockers(row, pilotStatus, companyChanged);
-  const lastActivity = Math.max(companyReferenceTime, onboardingTime, preflightTime);
+  const lastActivity = Math.max(companyReferenceTime, onboardingTime, preflightTime, timestamp(row.enrolled_at));
 
   return {
+    enrollment: {
+      id: row.enrollment_id,
+      label: row.enrollment_label,
+      source: row.enrollment_source,
+      enrolled_at: row.enrolled_at,
+    },
     company: {
       id: row.company_id,
       organization_id: row.organization_id,
@@ -325,7 +342,7 @@ function summarize(items: QueueItem[]) {
   const counts = Object.fromEntries(PILOT_OPERATION_STATUSES.map((status) => [status.toLowerCase(), 0])) as Record<string, number>;
   for (const item of items) counts[item.pilot_status.toLowerCase()] += 1;
   return {
-    total_companies: items.length,
+    total_pilots: items.length,
     action_required: counts.action_required,
     ready_for_assessment: counts.ready_for_assessment,
     ready_for_preflight: counts.ready_for_preflight,

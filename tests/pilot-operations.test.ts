@@ -4,6 +4,10 @@ import { PilotOperationsService, toQueueItem } from '../src/operations/pilot-ope
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
+    enrollment_id: 'pilot_1',
+    enrollment_label: 'Piloto Santos',
+    enrollment_source: 'partner',
+    enrolled_at: '2026-09-24T09:00:00Z',
     company_id: 'comp_1',
     organization_id: 'org_1',
     company_name: 'Empresa Piloto',
@@ -35,6 +39,7 @@ function row(overrides: Record<string, unknown> = {}) {
 test('current successful evidence is homologation ready while transmission stays closed', () => {
   const item = toQueueItem(row());
   assert.equal(item.pilot_status, 'HOMOLOGATION_READY');
+  assert.equal(item.enrollment.id, 'pilot_1');
   assert.deepEqual(item.blockers, []);
   assert.equal(item.transmission.allowed, false);
   assert.equal(item.transmission.fiscal_transmission_attempted, false);
@@ -73,12 +78,12 @@ test('blocked onboarding surfaces persisted blockers and snapshot next action', 
   assert.equal(item.next_action.requirement, 'active_a1');
 });
 
-test('queue reads persisted attestations only and supports status filtering', async () => {
+test('queue reads active enrollments plus persisted attestations only and supports status filtering', async () => {
   let sql = '';
   const service = new PilotOperationsService({
     query: async (statement: string) => {
       sql = statement;
-      return { rows: [row(), row({ company_id: 'comp_2', company_name: 'Empresa Sem Avaliacao', onboarding_id: null, onboarding_created_at: null, preflight_id: null, preflight_created_at: null })] };
+      return { rows: [row(), row({ company_id: 'comp_2', enrollment_id: 'pilot_2', company_name: 'Empresa Sem Avaliacao', onboarding_id: null, onboarding_created_at: null, preflight_id: null, preflight_created_at: null })] };
     },
   } as any);
 
@@ -89,6 +94,7 @@ test('queue reads persisted attestations only and supports status filtering', as
     offset: 0,
   });
 
+  assert.match(sql, /pilot_enrollments/);
   assert.match(sql, /fiscal_onboarding_attestations/);
   assert.equal(result.safeguards.provider_network_attempted, false);
   assert.equal(result.pagination.filtered_total, 1);
