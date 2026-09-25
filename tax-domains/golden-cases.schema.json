@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taxagent.local/schemas/golden-cases.schema.json",
+  "title": "TaxAgent Fiscal Golden Case Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "description", "cases"],
+  "properties": {
+    "version": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "description": { "type": "string", "minLength": 1 },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "profile", "input", "expected"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "profile": { "const": "business_consulting" },
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issuerCityCode"],
+            "properties": {
+              "issuerCityCode": { "type": "string", "pattern": "^\\d{7}$" },
+              "destinationCityCode": { "type": "string", "pattern": "^\\d{7}$" },
+              "issWithholding": { "enum": ["1", "2", "3"] }
+            }
+          },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["classification", "municipal_tax", "missing"],
+            "properties": {
+              "classification": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["national_service_code", "cIndOp", "cst", "cClassTrib", "tax_treatment"],
+                "properties": {
+                  "national_service_code": { "type": "string", "minLength": 1 },
+                  "cIndOp": { "type": "string", "minLength": 1 },
+                  "cst": { "type": "string", "minLength": 1 },
+                  "cClassTrib": { "type": "string", "minLength": 1 },
+                  "tax_treatment": { "type": "string", "minLength": 1 }
+                }
+              },
+              "municipal_tax": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["iss_item", "incidence_city_code", "iss_taxation", "iss_rate"],
+                    "properties": {
+                      "iss_item": { "type": "string", "minLength": 1 },
+                      "incidence_city_code": { "type": "string", "pattern": "^\\d{7}$" },
+                      "iss_taxation": { "type": "string", "minLength": 1 },
+                      "iss_withholding": { "enum": ["1", "2", "3"] },
+                      "iss_rate": { "type": "number", "minimum": 0 }
+                    }
+                  }
+                ]
+              },
+              "missing": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
