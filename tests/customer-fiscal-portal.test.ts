@@ -58,6 +58,7 @@ test('customer portal is product-facing and keeps credentials memory-only', () =
   assert.doesNotMatch(portal, /localStorage\.setItem|sessionStorage\.setItem/i);
   assert.match(portal, /certificates\/upload/);
   assert.match(portal, /provider-credentials/);
-  assert.match(portal, /fiscal\/advance/);
+  assert.match(portal, /endpoint\('\/advance'\)/);
+  assert.match(portal, /window\.advance=async/);
   assert.match(portal, /nunca habilita transmissão fiscal automaticamente/i);
 });
