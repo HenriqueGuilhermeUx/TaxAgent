@@ -33,16 +33,7 @@ export class NexOfficePartnerController {
   async provision(@Body() dto: EnrollPilotDto, @Query('environment') rawEnvironment?: string) {
     const environment = this.environment(rawEnvironment ?? 'test');
     const result = await this.enrollment.enroll({ ...dto, pilot_label: dto.pilot_label ?? 'NexOffice', source: dto.source ?? 'nexoffice' }, environment);
-    return {
-      company: result.company,
-      environment,
-      fiscal_status: result.pilot_status,
-      route: result.route,
-      blockers: result.blockers,
-      checklist: result.checklist,
-      next_actions: result.next_actions,
-      safeguards: result.safeguards,
-    };
+    return { company: result.company, environment, fiscal_status: result.pilot_status, route: result.route, blockers: result.blockers, checklist: result.checklist, next_actions: result.next_actions, safeguards: result.safeguards };
   }
 
   @Get('companies/:companyId/fiscal')
@@ -75,8 +66,14 @@ export class NexOfficePartnerController {
 
   @Post('companies/:companyId/provider-credentials')
   @ApiOperation({ summary: 'Store provider credentials in the encrypted TaxAgent credential vault for a NexOffice company' })
-  async providerCredentials(@Param('companyId') companyId: string, @Body() dto: UpsertProviderCredentialsDto) {
+  providerCredentials(@Param('companyId') companyId: string, @Body() dto: UpsertProviderCredentialsDto) {
     return this.credentials.store(companyId, dto.provider, dto.environment, dto.credentials, dto.note);
+  }
+
+  @Post('invoices')
+  @ApiOperation({ summary: 'Partner invoice endpoint compatible with the NexOffice governed outbox; TaxAgent safety gates remain authoritative' })
+  createPartnerInvoice(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey?: string) {
+    return this.invoices.create(dto, idempotencyKey);
   }
 
   @Post('companies/:companyId/invoices')
