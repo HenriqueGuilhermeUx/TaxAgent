@@ -8,6 +8,7 @@ import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { FiscalOnboardingAuditService } from './fiscal-onboarding-audit.service';
 import { FiscalOnboardingPreflightService } from './fiscal-onboarding-preflight.service';
 import { FiscalOnboardingService } from './fiscal-onboarding.service';
+import { PilotOnboardingService } from './pilot-onboarding.service';
 
 @ApiTags('operations')
 @ApiBearerAuth()
@@ -18,6 +19,7 @@ export class FiscalOnboardingController {
     private readonly onboarding: FiscalOnboardingService,
     private readonly preflight: FiscalOnboardingPreflightService,
     private readonly audit: FiscalOnboardingAuditService,
+    private readonly pilot: PilotOnboardingService,
   ) {}
 
   @Get(':companyId')
@@ -34,6 +36,38 @@ export class FiscalOnboardingController {
     const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
     this.assertAccess(companyId, environment, auth);
     return this.onboarding.inspect(companyId, environment, effectiveAt);
+  }
+
+  @Get(':companyId/pilot')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Return the complete pilot onboarding journey, evidence and next action without transmitting fiscal documents' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  pilotStatus(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment: string | undefined,
+    @Query('effective_at') effectiveAt: string | undefined,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
+    this.assertAccess(companyId, environment, auth);
+    return this.pilot.status(companyId, environment, effectiveAt);
+  }
+
+  @Post(':companyId/pilot/run')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Run assessment and, only when locally ready, the safe non-emitting provider preflight; persist immutable evidence for both' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  pilotRun(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment: string | undefined,
+    @Query('effective_at') effectiveAt: string | undefined,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
+    this.assertAccess(companyId, environment, auth);
+    return this.pilot.run(companyId, environment, effectiveAt);
   }
 
   @Post(':companyId/assess')

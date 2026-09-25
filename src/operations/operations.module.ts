@@ -29,12 +29,13 @@ import { NationalDpsEligibilityService } from './national-dps-eligibility.servic
 import { NationalPreflightService } from './national-preflight.service';
 import { NoA1HomologationService } from './no-a1-homologation.service';
 import { OperationsController } from './operations.controller';
+import { PilotOnboardingService } from './pilot-onboarding.service';
 import { ReadinessService } from './readiness.service';
 
 @Module({
   imports: [AuthModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, ProviderCredentialsModule, TaxEngineModule, XmlEngineModule, PreparedDpsModule, DocumentsModule],
   controllers: [OperationsController, MunicipalityScenarioController, IssuerReadinessController, FiscalOnboardingController],
-  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService],
-  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService],
+  providers: [ReadinessService, DpsPreflightService, NoA1HomologationService, NfseNationalClient, GissClient, GissSignatureService, GissWsdlDiagnosticService, GissQueryExecutionService, GissArtifactsService, FiscalLedgerService, MunicipalityScenarioService, NationalPreflightService, NationalDpsEligibilityService, IssuerReadinessService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService],
+  exports: [ReadinessService, NoA1HomologationService, FiscalOnboardingService, FiscalOnboardingPreflightService, FiscalOnboardingAuditService, PilotOnboardingService],
 })
 export class OperationsModule {}
