@@ -28,6 +28,12 @@ export class UploadEvidenceDocumentDto {
   @IsOptional() @IsObject() source_context?: Record<string, unknown>;
 }
 
+export class RegulatorySourceDocumentDto {
+  @ApiProperty() @IsString() @MaxLength(255) filename!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) mime_type?: string;
+  @ApiProperty() @IsString() @IsBase64() data_base64!: string;
+}
+
 export class CreateRegulatoryChangeDto {
   @ApiProperty() @IsString() @MaxLength(240) title!: string;
   @ApiProperty() @IsString() @MaxLength(5000) summary!: string;
@@ -48,10 +54,4 @@ export class CreateRegulatoryChangeDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() requires_action?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsObject() metadata?: Record<string, unknown>;
   @ApiPropertyOptional() @IsOptional() source_document?: RegulatorySourceDocumentDto;
-}
-
-export class RegulatorySourceDocumentDto {
-  @ApiProperty() @IsString() @MaxLength(255) filename!: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) mime_type?: string;
-  @ApiProperty() @IsString() @IsBase64() data_base64!: string;
 }
