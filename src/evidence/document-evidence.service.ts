@@ -7,6 +7,21 @@ import { DocWalletEvidenceClient } from './docwallet-evidence.client';
 
 export type EvidenceKind = 'customer_document' | 'fiscal_document' | 'regulatory_source' | 'operation_dossier';
 
+type EvidenceRefRow = {
+  id: string;
+  company_id: string;
+  environment: FiscalEnvironment;
+  docwallet_document_id: string;
+  evidence_kind: EvidenceKind;
+  title: string;
+  document_type: string | null;
+  sha256: string;
+  intelligence_status: string | null;
+  source_context: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 @Injectable()
 export class DocumentEvidenceService {
   constructor(
@@ -15,9 +30,7 @@ export class DocumentEvidenceService {
     private readonly docWallet: DocWalletEvidenceClient,
   ) {}
 
-  configured() {
-    return this.docWallet.configured();
-  }
+  configured() { return this.docWallet.configured(); }
 
   async overview(companyId: string, environment: FiscalEnvironment) {
     const company = await this.tenancy.getCompany(companyId);
@@ -28,8 +41,7 @@ export class DocumentEvidenceService {
     if (this.configured()) {
       try {
         await this.docWallet.provision(companyId, String(company.name ?? companyId));
-        const result = await this.docWallet.summary(companyId);
-        remoteSummary = result?.summary ?? null;
+        remoteSummary = (await this.docWallet.summary(companyId))?.summary ?? null;
         evidenceEngineStatus = 'ok';
       } catch {
         evidenceEngineStatus = 'unavailable';
@@ -77,8 +89,7 @@ export class DocumentEvidenceService {
     });
     const document = uploaded?.document;
     if (!document?.id || !document?.sha256) throw new NotFoundException('Document evidence engine did not return a document reference');
-    const id = createId('evid');
-    const { rows } = await this.db.query(
+    const { rows } = await this.db.query<EvidenceRefRow>(
       `INSERT INTO document_evidence_refs(
          id, company_id, environment, docwallet_document_id, evidence_kind, title, document_type, sha256, intelligence_status, source_context
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
@@ -86,61 +97,43 @@ export class DocumentEvidenceService {
        DO UPDATE SET title=EXCLUDED.title, document_type=EXCLUDED.document_type, source_context=EXCLUDED.source_context, updated_at=NOW()
        RETURNING id, company_id, environment, docwallet_document_id, evidence_kind, title, document_type, sha256, intelligence_status, source_context, created_at, updated_at`,
       [
-        id,
-        companyId,
-        environment,
-        String(document.id),
-        input.evidence_kind ?? 'customer_document',
-        String(document.name ?? input.title ?? input.filename),
-        String(document.type ?? input.document_type ?? 'other'),
-        String(document.sha256),
-        null,
-        JSON.stringify(input.source_context ?? {}),
+        createId('evid'), companyId, environment, String(document.id), input.evidence_kind ?? 'customer_document',
+        String(document.name ?? input.title ?? input.filename), String(document.type ?? input.document_type ?? 'other'),
+        String(document.sha256), null, JSON.stringify(input.source_context ?? {}),
       ],
     );
-    return {
-      evidence: rows[0],
-      reused: Boolean(uploaded?.reused),
-      safeguards: this.safeguards(),
-    };
+    return { evidence: this.presentRef(rows[0]), reused: Boolean(uploaded?.reused), safeguards: this.safeguards() };
   }
 
   async list(companyId: string, environment: FiscalEnvironment, limit = 50) {
     await this.tenancy.getCompany(companyId);
-    return {
-      documents: await this.localRefs(companyId, environment, limit),
-      safeguards: this.safeguards(),
-    };
+    return { documents: await this.localRefs(companyId, environment, limit), safeguards: this.safeguards() };
   }
 
   async analyze(companyId: string, environment: FiscalEnvironment, documentId: string) {
     const existing = await this.findRef(companyId, environment, documentId);
-    const result = await this.docWallet.analyzeDocument(companyId, documentId);
-    const intelligence = result?.intelligence ?? null;
+    const intelligence = (await this.docWallet.analyzeDocument(companyId, existing.docwallet_document_id))?.intelligence ?? null;
     const status = String(intelligence?.status ?? 'analyzed');
     const docType = intelligence?.documentType ? String(intelligence.documentType) : existing.document_type;
     const title = intelligence?.title ? String(intelligence.title) : existing.title;
-    await this.db.query(
+    const { rows } = await this.db.query<EvidenceRefRow>(
       `UPDATE document_evidence_refs SET intelligence_status=$4, document_type=$5, title=$6, updated_at=NOW()
-       WHERE company_id=$1 AND environment=$2 AND docwallet_document_id=$3`,
+       WHERE company_id=$1 AND environment=$2 AND id=$3
+       RETURNING id, company_id, environment, docwallet_document_id, evidence_kind, title, document_type, sha256, intelligence_status, source_context, created_at, updated_at`,
       [companyId, environment, documentId, status, docType, title],
     );
-    return {
-      document: { ...existing, intelligence_status: status, document_type: docType, title },
-      intelligence,
-      safeguards: this.safeguards(),
-    };
+    return { document: this.presentRef(rows[0]), intelligence, safeguards: this.safeguards() };
   }
 
   async intelligence(companyId: string, environment: FiscalEnvironment, documentId: string) {
-    await this.findRef(companyId, environment, documentId);
-    const result = await this.docWallet.intelligence(companyId, documentId);
+    const existing = await this.findRef(companyId, environment, documentId);
+    const result = await this.docWallet.intelligence(companyId, existing.docwallet_document_id);
     return { intelligence: result?.intelligence ?? null, safeguards: this.safeguards() };
   }
 
   async audit(companyId: string, environment: FiscalEnvironment, documentId: string) {
-    await this.findRef(companyId, environment, documentId);
-    const result = await this.docWallet.audit(companyId, documentId);
+    const existing = await this.findRef(companyId, environment, documentId);
+    const result = await this.docWallet.audit(companyId, existing.docwallet_document_id);
     return { events: result?.events ?? [], safeguards: this.safeguards() };
   }
 
@@ -149,7 +142,7 @@ export class DocumentEvidenceService {
     const cityCode = String(company.city_code ?? '');
     const taxRegime = String(company.tax_regime ?? '');
     const { rows } = await this.db.query<any>(
-      `SELECT id, title, summary, source_url, published_at, effective_at, source_sha256, docwallet_document_id,
+      `SELECT id, title, summary, source_url, published_at, effective_at, source_sha256,
               affected_city_codes, affected_tax_regimes, affected_routes, requires_action, metadata, created_at
        FROM fiscal_regulatory_changes
        WHERE status='published'
@@ -159,24 +152,17 @@ export class DocumentEvidenceService {
        LIMIT 100`,
       [cityCode, taxRegime],
     );
-    return rows.map((row) => ({ ...row, source_verified_by_hash: Boolean(row.source_sha256), raw_source_returned: false }));
+    return rows.map((row) => ({ ...row, source_verified_by_hash: Boolean(row.source_sha256), source_evidence_preserved: Boolean(row.source_sha256), raw_source_returned: false }));
   }
 
   async createRegulatoryChange(input: {
-    title: string;
-    summary: string;
-    source_url: string;
-    published_at?: string;
-    effective_at?: string;
-    affected_city_codes?: string[];
-    affected_tax_regimes?: string[];
-    affected_routes?: string[];
-    requires_action?: boolean;
-    metadata?: Record<string, unknown>;
+    title: string; summary: string; source_url: string; published_at?: string; effective_at?: string;
+    affected_city_codes?: string[]; affected_tax_regimes?: string[]; affected_routes?: string[];
+    requires_action?: boolean; metadata?: Record<string, unknown>;
     source_document?: { filename: string; mime_type?: string; data_base64: string };
   }) {
     let sourceSha: string | null = null;
-    let docWalletDocumentId: string | null = null;
+    let internalDocumentId: string | null = null;
     if (input.source_document && this.configured()) {
       const vaultId = 'taxagent-regulatory-sources';
       await this.docWallet.provision(vaultId, 'TaxAgent Regulatory Sources');
@@ -189,23 +175,22 @@ export class DocumentEvidenceService {
         dataBase64: input.source_document.data_base64,
       });
       sourceSha = uploaded?.document?.sha256 ? String(uploaded.document.sha256) : null;
-      docWalletDocumentId = uploaded?.document?.id ? String(uploaded.document.id) : null;
+      internalDocumentId = uploaded?.document?.id ? String(uploaded.document.id) : null;
     }
-    const id = createId('rule');
-    const { rows } = await this.db.query(
+    const { rows } = await this.db.query<any>(
       `INSERT INTO fiscal_regulatory_changes(
         id,title,summary,source_url,published_at,effective_at,source_sha256,docwallet_document_id,
         affected_city_codes,affected_tax_regimes,affected_routes,requires_action,metadata
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
-       RETURNING id,title,summary,source_url,published_at,effective_at,source_sha256,docwallet_document_id,
+       RETURNING id,title,summary,source_url,published_at,effective_at,source_sha256,
                  affected_city_codes,affected_tax_regimes,affected_routes,requires_action,status,metadata,created_at`,
       [
-        id, input.title, input.summary, input.source_url, input.published_at ?? null, input.effective_at ?? null,
-        sourceSha, docWalletDocumentId, input.affected_city_codes ?? [], input.affected_tax_regimes ?? [],
+        createId('rule'), input.title, input.summary, input.source_url, input.published_at ?? null, input.effective_at ?? null,
+        sourceSha, internalDocumentId, input.affected_city_codes ?? [], input.affected_tax_regimes ?? [],
         input.affected_routes ?? [], Boolean(input.requires_action), JSON.stringify(input.metadata ?? {}),
       ],
     );
-    return { change: rows[0], source_evidence_persisted: Boolean(docWalletDocumentId), raw_source_returned: false };
+    return { change: { ...rows[0], source_evidence_preserved: Boolean(internalDocumentId) }, source_evidence_persisted: Boolean(internalDocumentId), raw_source_returned: false };
   }
 
   async dossier(companyId: string, environment: FiscalEnvironment, period: string) {
@@ -224,13 +209,13 @@ export class DocumentEvidenceService {
         [companyId, environment, start, next],
       ),
       this.db.query<any>(
-        `SELECT COUNT(*)::int total FROM fiscal_documents fd
-         JOIN invoices i ON i.id=fd.invoice_id
+        `SELECT COUNT(*)::int total FROM fiscal_documents fd JOIN invoices i ON i.id=fd.invoice_id
          WHERE i.company_id=$1 AND i.environment=$2 AND fd.created_at >= $3 AND fd.created_at < $4`,
         [companyId, environment, start, next],
       ),
       this.db.query<any>(
-        `SELECT COUNT(*)::int total FROM inbox_documents WHERE company_id=$1 AND environment=$2 AND received_at >= $3 AND received_at < $4`,
+        `SELECT COUNT(*)::int total FROM inbox_documents
+         WHERE company_id=$1 AND environment=$2 AND received_at >= $3 AND received_at < $4`,
         [companyId, environment, start, next],
       ),
       this.db.query<any>(
@@ -241,7 +226,8 @@ export class DocumentEvidenceService {
       this.db.query<any>(
         `SELECT COUNT(*) FILTER (WHERE status IN ('open','investigating'))::int open_total,
                 COUNT(*) FILTER (WHERE status IN ('open','investigating') AND severity='high')::int high_open
-         FROM reconciliation_cases WHERE company_id=$1 AND environment=$2 AND last_seen_at < $4`,
+         FROM reconciliation_cases
+         WHERE company_id=$1 AND environment=$2 AND last_seen_at >= $3 AND last_seen_at < $4`,
         [companyId, environment, start, next],
       ),
       this.db.query<any>(
@@ -264,9 +250,7 @@ export class DocumentEvidenceService {
     const complete = applicable.filter((item) => item.status === 'complete').length;
     const completeness = applicable.length ? Math.round((complete / applicable.length) * 100) : 100;
     return {
-      company: this.safeCompany(company),
-      environment,
-      period,
+      company: this.safeCompany(company), environment, period,
       operational_evidence_completeness: completeness,
       methodology: 'Deterministic operational evidence coverage. This is not a legal or accounting compliance certification.',
       components,
@@ -290,24 +274,41 @@ export class DocumentEvidenceService {
   }
 
   private async localRefs(companyId: string, environment: FiscalEnvironment, limit: number) {
-    const { rows } = await this.db.query<any>(
+    const { rows } = await this.db.query<EvidenceRefRow>(
       `SELECT id, company_id, environment, docwallet_document_id, evidence_kind, title, document_type, sha256,
               intelligence_status, source_context, created_at, updated_at
        FROM document_evidence_refs WHERE company_id=$1 AND environment=$2 ORDER BY created_at DESC LIMIT $3`,
       [companyId, environment, Math.max(1, Math.min(200, limit))],
     );
-    return rows;
+    return rows.map((row) => this.presentRef(row));
   }
 
   private async findRef(companyId: string, environment: FiscalEnvironment, documentId: string) {
-    const { rows } = await this.db.query<any>(
+    const { rows } = await this.db.query<EvidenceRefRow>(
       `SELECT id, company_id, environment, docwallet_document_id, evidence_kind, title, document_type, sha256,
               intelligence_status, source_context, created_at, updated_at
-       FROM document_evidence_refs WHERE company_id=$1 AND environment=$2 AND docwallet_document_id=$3 LIMIT 1`,
+       FROM document_evidence_refs WHERE company_id=$1 AND environment=$2 AND id=$3 LIMIT 1`,
       [companyId, environment, documentId],
     );
     if (!rows[0]) throw new NotFoundException('Document evidence reference not found');
     return rows[0];
+  }
+
+  private presentRef(row?: EvidenceRefRow) {
+    if (!row) return null;
+    return {
+      document_id: row.id,
+      company_id: row.company_id,
+      environment: row.environment,
+      evidence_kind: row.evidence_kind,
+      title: row.title,
+      document_type: row.document_type,
+      sha256: row.sha256,
+      intelligence_status: row.intelligence_status,
+      source_context: row.source_context,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
   }
 
   private safeCompany(company: any) {
