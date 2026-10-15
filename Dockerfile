@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates curl unar \
+  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates curl unar openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
 RUN npm install --no-audit --no-fund
@@ -17,7 +17,7 @@ FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates \
+  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund \
