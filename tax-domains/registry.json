@@ -1,0 +1,51 @@
+{
+  "updatedAt": "2026-08-14",
+  "sources": {
+    "rtcOpenData": {
+      "authority": "runtime-reference",
+      "status": "beta",
+      "url": "https://piloto-cbs.tributos.gov.br/servico/calculadora-consumo/api/swagger-ui/index.html",
+      "notes": "Official Calculadora de Tributos sobre o Consumo open-data API. Use runtime version endpoint and preserve source payloads."
+    },
+    "nfseAnnexB": {
+      "authority": "official-domain",
+      "status": "active",
+      "version": "v1.01-20260122",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+      "notes": "NBS2 / Lista de Serviço Nacional domain annex published by Portal NFS-e."
+    },
+    "nfseAnnexC": {
+      "authority": "official-domain",
+      "status": "active",
+      "version": "v1.01-20260122",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+      "notes": "INDOP IBS/CBS domain annex published by Portal NFS-e."
+    },
+    "nfseAnnexVIII": {
+      "authority": "advisory-only",
+      "status": "development",
+      "version": "1.01.00",
+      "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/rtc",
+      "notes": "Official portal explicitly states there are no business rules based on this correlation annex in Production or Production Restricted. Never auto-promote its correlations to authoritative tax decisions."
+    },
+    "transition2026": {
+      "authority": "official-law-guidance",
+      "status": "active",
+      "effectiveFrom": "2026-01-01",
+      "effectiveTo": "2026-12-31",
+      "ibsReferenceRate": "0.001",
+      "cbsReferenceRate": "0.009",
+      "url": "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/programas-e-atividades/reforma-tributaria-do-consumo/entenda",
+      "notes": "2026 test-year reference rates. Do not apply blindly to differentiated/special operations."
+    },
+    "mogiIss": {
+      "authority": "official-municipal-domain",
+      "status": "active",
+      "municipalityCode": "3530607",
+      "url": "https://www.mogidascruzes.sp.gov.br/servico/impostos-e-taxas/cadastro-ccm-consulta-ao-cnae-item-da-lei",
+      "rateTableUrl": "https://www.mogidascruzes.sp.gov.br/public/site/doc/201804040846525ac4bb2c9a512.pdf",
+      "legalBasis": ["LC Municipal 26/2003", "LC Municipal 134/2017", "IN SMF 02/2025", "LC Federal 116/2003"],
+      "notes": "Current municipal reference page points to the service/item tables. TaxAgent's vetted business_consulting rule uses item 17.01 at 4.00% for Mogi and the LC 116 art. 3 general provider-establishment incidence rule. Withholding is never inferred."
+    }
+  }
+}

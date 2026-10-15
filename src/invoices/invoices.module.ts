@@ -1,0 +1,36 @@
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { CertificatesModule } from '../certificates/certificates.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { FiscalRouterService } from '../fiscal-core/fiscal-router.service';
+import { JobsModule } from '../jobs/jobs.module';
+import { FiscalLedgerService } from '../ledger/fiscal-ledger.service';
+import { MunicipalParametersModule } from '../municipal-parameters/municipal-parameters.module';
+import { PreparedDpsModule } from '../prepared-dps/prepared-dps.module';
+import { NfseNationalClient } from '../providers/nfse-national/nfse-national.client';
+import { NfseNationalProvider } from '../providers/nfse-national/nfse-national.provider';
+import { GissProvider } from '../providers/giss/giss.provider';
+import { GissClient } from '../providers/giss/giss.client';
+import { GissSignatureService } from '../providers/giss/giss-signature.service';
+import { GissReconciliationService } from '../providers/giss/giss-reconciliation.service';
+import { GissArtifactsService } from '../providers/giss/giss-artifacts.service';
+import { GissRpsSequenceService } from '../providers/giss/giss-rps-sequence.service';
+import { PlugNotasProvider } from '../providers/plugnotas/plugnotas.provider';
+import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
+import { TaxEngineModule } from '../tax-engine/tax-engine.module';
+import { TenancyModule } from '../tenancy/tenancy.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
+import { XmlEngineModule } from '../xml-engine/xml-engine.module';
+import { CancellationWorkerService } from './cancellation-worker.service';
+import { InvoiceWorkerService } from './invoice-worker.service';
+import { InvoicesController } from './invoices.controller';
+import { InvoicesRepository } from './invoices.repository';
+import { InvoicesService } from './invoices.service';
+
+@Module({
+  imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
+  controllers: [InvoicesController],
+  providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient, GissSignatureService, GissReconciliationService, GissArtifactsService, GissRpsSequenceService, PlugNotasProvider],
+  exports: [InvoicesService],
+})
+export class InvoicesModule {}
