@@ -24,6 +24,7 @@ function row(overrides: Record<string, unknown> = {}) {
     onboarding_blockers: [],
     onboarding_snapshot: { next_actions: [] },
     onboarding_sha256: 'a'.repeat(64),
+    onboarding_readiness_fingerprint: 'c'.repeat(64),
     onboarding_created_at: '2026-09-24T11:00:00Z',
     preflight_id: 'pre_1',
     preflight_status: 'PREFLIGHT_OK',
@@ -31,6 +32,7 @@ function row(overrides: Record<string, unknown> = {}) {
     preflight_provider: 'giss',
     preflight_blockers: [],
     preflight_sha256: 'b'.repeat(64),
+    preflight_readiness_fingerprint: 'c'.repeat(64),
     preflight_created_at: '2026-09-24T12:00:00Z',
     ...overrides,
   } as any;
@@ -101,4 +103,17 @@ test('queue reads active enrollments plus persisted attestations only and suppor
   assert.equal(result.items[0]?.company.id, 'comp_2');
   assert.equal(result.summary.homologation_ready, 1);
   assert.equal(result.summary.ready_for_assessment, 1);
+});
+
+
+test('legacy onboarding evidence without readiness fingerprint is stale by default', () => {
+  const item = toQueueItem(row({ onboarding_readiness_fingerprint: null }));
+  assert.equal(item.pilot_status, 'READY_FOR_ASSESSMENT');
+  assert.equal(item.freshness.onboarding, 'STALE');
+});
+
+test('legacy preflight evidence without readiness fingerprint must be rerun', () => {
+  const item = toQueueItem(row({ preflight_readiness_fingerprint: null }));
+  assert.equal(item.pilot_status, 'READY_FOR_PREFLIGHT');
+  assert.equal(item.freshness.preflight, 'STALE');
 });

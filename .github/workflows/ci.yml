@@ -63,6 +63,53 @@ jobs:
             }
             const allocationConstraints = await client.query("SELECT COUNT(*)::int AS count FROM pg_constraint WHERE conrelid='economic_operation_payment_allocations'::regclass AND contype IN ('p','f','u','c')");
             if (allocationConstraints.rows[0].count < 6) throw new Error('economic_operation_payment_allocations constraints incomplete');
+
+            const fingerprintColumn = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name='fiscal_onboarding_attestations' AND column_name='readiness_fingerprint_sha256'");
+            if (fingerprintColumn.rowCount !== 1) throw new Error('fiscal_onboarding_attestations.readiness_fingerprint_sha256 missing');
+
+            for (const trigger of ['certificates_touch_company_fiscal_configuration_trg','provider_credentials_touch_company_fiscal_configuration_trg','fiscal_onboarding_attestations_immutable_trg']) {
+              const result = await client.query("SELECT 1 FROM pg_trigger WHERE tgname=$1 AND NOT tgisinternal", [trigger]);
+              if (result.rowCount !== 1) throw new Error(`${trigger} missing`);
+            }
+
+            await client.query('BEGIN');
+            try {
+              await client.query("INSERT INTO organizations(id,name) VALUES ('org_ci_hardening','CI Hardening')");
+              await client.query("INSERT INTO companies(id,organization_id,name,tax_id,city_code,tax_regime,updated_at) VALUES ('comp_ci_hardening','org_ci_hardening','CI Hardening LTDA','99887766000155','3548500','regular','2000-01-01T00:00:00Z')");
+              await client.query("INSERT INTO certificates(id,company_id,status,encrypted_pfx,encrypted_password,certificate_fingerprint) VALUES ('cert_ci_hardening','comp_ci_hardening','active','{}'::jsonb,'{}'::jsonb,$1)", ['a'.repeat(64)]);
+              let touched = await client.query("SELECT updated_at > '2000-01-01T00:00:00Z'::timestamptz AS ok FROM companies WHERE id='comp_ci_hardening'");
+              if (!touched.rows[0]?.ok) throw new Error('certificate change did not invalidate company freshness');
+
+              await client.query("UPDATE companies SET updated_at='2000-01-01T00:00:00Z' WHERE id='comp_ci_hardening'");
+              await client.query("INSERT INTO fiscal_provider_credentials(id,company_id,provider,environment,encrypted_credentials,credential_keys,status) VALUES ('cred_ci_hardening','comp_ci_hardening','giss','test','{}'::jsonb,'[\"login\"]'::jsonb,'pending')");
+              touched = await client.query("SELECT updated_at > '2000-01-01T00:00:00Z'::timestamptz AS ok FROM companies WHERE id='comp_ci_hardening'");
+              if (!touched.rows[0]?.ok) throw new Error('provider credential change did not invalidate company freshness');
+
+              await client.query("INSERT INTO fiscal_onboarding_attestations(id,company_id,environment,assessment_type,status,blockers,snapshot,snapshot_sha256,readiness_fingerprint_sha256) VALUES ('onbatt_ci_immutable','comp_ci_hardening','test','onboarding','BLOCKED','[]'::jsonb,'{}'::jsonb,$1,$2)", ['b'.repeat(64),'c'.repeat(64)]);
+
+              await client.query('SAVEPOINT immutable_update');
+              let updateBlocked = false;
+              try {
+                await client.query("UPDATE fiscal_onboarding_attestations SET status='MUTATED' WHERE id='onbatt_ci_immutable'");
+              } catch {
+                updateBlocked = true;
+                await client.query('ROLLBACK TO SAVEPOINT immutable_update');
+              }
+              if (!updateBlocked) throw new Error('fiscal onboarding attestation UPDATE was not blocked');
+
+              await client.query('SAVEPOINT immutable_delete');
+              let deleteBlocked = false;
+              try {
+                await client.query("DELETE FROM fiscal_onboarding_attestations WHERE id='onbatt_ci_immutable'");
+              } catch {
+                deleteBlocked = true;
+                await client.query('ROLLBACK TO SAVEPOINT immutable_delete');
+              }
+              if (!deleteBlocked) throw new Error('fiscal onboarding attestation DELETE was not blocked');
+            } finally {
+              await client.query('ROLLBACK');
+            }
+
             await client.end();
             console.log('Release schema + migration idempotency assertions: OK');
           })().catch((error) => { console.error(error); process.exit(1); });

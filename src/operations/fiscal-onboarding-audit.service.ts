@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
+import { FiscalReadinessFingerprintService } from './fiscal-readiness-fingerprint.service';
 
 export type FiscalOnboardingAttestationType = 'onboarding' | 'preflight';
 
@@ -24,17 +25,21 @@ interface AttestationRow {
   provider: string | null;
   blockers: unknown;
   snapshot_sha256: string;
+  readiness_fingerprint_sha256: string | null;
   created_at: Date | string;
 }
 
 const FORBIDDEN_SNAPSHOT_KEYS = new Set([
   'password', 'senha', 'token', 'api_key', 'apikey', 'private_key', 'privatekey', 'pfx', 'p12',
-  'encrypted_pfx', 'encrypted_password', 'credential_value', 'credential_values', 'raw_secret',
+  'encrypted_pfx', 'encrypted_password', 'encrypted_credentials', 'credential_value', 'credential_values', 'raw_secret',
 ]);
 
 @Injectable()
 export class FiscalOnboardingAuditService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly fingerprint: FiscalReadinessFingerprintService,
+  ) {}
 
   async record(companyId: string, type: FiscalOnboardingAttestationType, result: AttestationInput) {
     this.assertSafe(result);
@@ -47,13 +52,14 @@ export class FiscalOnboardingAuditService {
     const route = result.route?.resolved_route ? String(result.route.resolved_route) : null;
     const provider = result.route?.resolved_provider ? String(result.route.resolved_provider) : null;
     const blockers = Array.isArray(result.blockers) ? result.blockers : [];
+    const readinessFingerprint = await this.fingerprint.compute(companyId, environment, route, provider);
 
     const { rows } = await this.db.query<AttestationRow>(
       `INSERT INTO fiscal_onboarding_attestations(
-         id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot, snapshot_sha256
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10)
-       RETURNING id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot_sha256, created_at`,
-      [id, companyId, environment, type, status, route, provider, JSON.stringify(blockers), JSON.stringify(snapshot), sha256],
+         id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot, snapshot_sha256, readiness_fingerprint_sha256
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11)
+       RETURNING id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot_sha256, readiness_fingerprint_sha256, created_at`,
+      [id, companyId, environment, type, status, route, provider, JSON.stringify(blockers), JSON.stringify(snapshot), sha256, readinessFingerprint],
     );
 
     const row = rows[0];
@@ -67,8 +73,10 @@ export class FiscalOnboardingAuditService {
       provider,
       blockers,
       snapshot_sha256: sha256,
+      readiness_fingerprint_sha256: readinessFingerprint,
       created_at: row?.created_at ?? new Date().toISOString(),
       immutable_evidence: true,
+      immutability_enforced_by: 'postgres-trigger',
       secrets_exposed: false,
     };
   }
@@ -76,14 +84,18 @@ export class FiscalOnboardingAuditService {
   async list(companyId: string, limit = 50) {
     const safeLimit = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 50;
     const { rows } = await this.db.query<AttestationRow>(
-      `SELECT id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot_sha256, created_at
+      `SELECT id, company_id, environment, assessment_type, status, route, provider, blockers, snapshot_sha256, readiness_fingerprint_sha256, created_at
        FROM fiscal_onboarding_attestations
        WHERE company_id=$1
        ORDER BY created_at DESC
        LIMIT $2`,
       [companyId, safeLimit],
     );
-    return rows.map((row) => ({ ...row, immutable_evidence: true }));
+    return rows.map((row) => ({
+      ...row,
+      immutable_evidence: true,
+      immutability_enforced_by: 'postgres-trigger',
+    }));
   }
 
   private assertSafe(value: unknown, path = 'snapshot'): void {

@@ -46,6 +46,7 @@ interface QueueRow {
   onboarding_blockers: unknown;
   onboarding_snapshot: unknown;
   onboarding_sha256: string | null;
+  onboarding_readiness_fingerprint: string | null;
   onboarding_created_at: Date | string | null;
   preflight_id: string | null;
   preflight_status: string | null;
@@ -53,6 +54,7 @@ interface QueueRow {
   preflight_provider: string | null;
   preflight_blockers: unknown;
   preflight_sha256: string | null;
+  preflight_readiness_fingerprint: string | null;
   preflight_created_at: Date | string | null;
 }
 
@@ -100,14 +102,14 @@ export class PilotOperationsService {
     const { rows } = await this.db.query<QueueRow>(
       `WITH latest_onboarding AS (
          SELECT DISTINCT ON (company_id)
-           id, company_id, status, route, provider, blockers, snapshot, snapshot_sha256, created_at
+           id, company_id, status, route, provider, blockers, snapshot, snapshot_sha256, readiness_fingerprint_sha256, created_at
          FROM fiscal_onboarding_attestations
          WHERE environment=$1 AND assessment_type='onboarding'
          ORDER BY company_id, created_at DESC
        ),
        latest_preflight AS (
          SELECT DISTINCT ON (company_id)
-           id, company_id, status, route, provider, blockers, snapshot_sha256, created_at
+           id, company_id, status, route, provider, blockers, snapshot_sha256, readiness_fingerprint_sha256, created_at
          FROM fiscal_onboarding_attestations
          WHERE environment=$1 AND assessment_type='preflight'
          ORDER BY company_id, created_at DESC
@@ -133,6 +135,7 @@ export class PilotOperationsService {
          o.blockers AS onboarding_blockers,
          o.snapshot AS onboarding_snapshot,
          o.snapshot_sha256 AS onboarding_sha256,
+         o.readiness_fingerprint_sha256 AS onboarding_readiness_fingerprint,
          o.created_at AS onboarding_created_at,
          p.id AS preflight_id,
          p.status AS preflight_status,
@@ -140,6 +143,7 @@ export class PilotOperationsService {
          p.provider AS preflight_provider,
          p.blockers AS preflight_blockers,
          p.snapshot_sha256 AS preflight_sha256,
+         p.readiness_fingerprint_sha256 AS preflight_readiness_fingerprint,
          p.created_at AS preflight_created_at
        FROM pilot_enrollments e
        JOIN companies c ON c.id=e.company_id
@@ -215,9 +219,9 @@ export function toQueueItem(row: QueueRow): QueueItem {
   const onboardingTime = timestamp(row.onboarding_created_at);
   const preflightTime = timestamp(row.preflight_created_at);
   const companyChanged = Boolean(row.onboarding_id) && companyReferenceTime > onboardingTime;
-  const onboardingFresh = Boolean(row.onboarding_id) && !companyChanged;
+  const onboardingFresh = Boolean(row.onboarding_id) && !companyChanged && Boolean(row.onboarding_readiness_fingerprint);
   const preflightMatchesRoute = row.preflight_route === row.onboarding_route && row.preflight_provider === row.onboarding_provider;
-  const preflightFresh = Boolean(row.preflight_id) && onboardingFresh && preflightTime >= onboardingTime && preflightMatchesRoute;
+  const preflightFresh = Boolean(row.preflight_id) && Boolean(row.preflight_readiness_fingerprint) && onboardingFresh && preflightTime >= onboardingTime && preflightMatchesRoute;
 
   const pilotStatus = derivePilotStatus(row, onboardingFresh, preflightFresh);
   const blockers = activeBlockers(row, pilotStatus, companyChanged);
@@ -257,6 +261,7 @@ export function toQueueItem(row: QueueRow): QueueItem {
         id: row.onboarding_id,
         status: row.onboarding_status,
         snapshot_sha256: row.onboarding_sha256,
+        readiness_fingerprint_sha256: row.onboarding_readiness_fingerprint,
         created_at: row.onboarding_created_at,
         immutable_evidence: true,
       } : null,
@@ -264,6 +269,7 @@ export function toQueueItem(row: QueueRow): QueueItem {
         id: row.preflight_id,
         status: row.preflight_status,
         snapshot_sha256: row.preflight_sha256,
+        readiness_fingerprint_sha256: row.preflight_readiness_fingerprint,
         created_at: row.preflight_created_at,
         immutable_evidence: true,
       } : null,
