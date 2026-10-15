@@ -20,7 +20,7 @@ function databaseCapture() {
 
 test('attestation persists a sanitized immutable snapshot and SHA-256 evidence', async () => {
   const capture = databaseCapture();
-  const service = new FiscalOnboardingAuditService(capture.db as any);
+  const service = new FiscalOnboardingAuditService(capture.db as any, { compute: async () => 'f'.repeat(64) } as any);
   const result = {
     company: { id: 'comp_1', tax_id_masked: '12********0001' },
     environment: 'test' as const,
@@ -40,13 +40,17 @@ test('attestation persists a sanitized immutable snapshot and SHA-256 evidence',
   assert.equal(params[5], 'municipal-provider');
   assert.equal(params[6], 'giss');
   assert.equal(params[9], attestation.snapshot_sha256);
+  assert.equal(params[10], 'f'.repeat(64));
+  assert.equal(attestation.readiness_fingerprint_sha256, 'f'.repeat(64));
+  assert.equal(attestation.immutability_enforced_by, 'postgres-trigger');
 });
 
 test('canonical snapshot hash is stable across object key order', async () => {
   const first = databaseCapture();
   const second = databaseCapture();
-  const a = new FiscalOnboardingAuditService(first.db as any);
-  const b = new FiscalOnboardingAuditService(second.db as any);
+  const fingerprint = { compute: async () => 'f'.repeat(64) } as any;
+  const a = new FiscalOnboardingAuditService(first.db as any, fingerprint);
+  const b = new FiscalOnboardingAuditService(second.db as any, fingerprint);
 
   await a.record('comp_1', 'preflight', {
     environment: 'test', status: 'PREFLIGHT_OK', blockers: [],
@@ -64,7 +68,7 @@ test('canonical snapshot hash is stable across object key order', async () => {
 
 test('audit store refuses secret-bearing fields instead of persisting them', async () => {
   const capture = databaseCapture();
-  const service = new FiscalOnboardingAuditService(capture.db as any);
+  const service = new FiscalOnboardingAuditService(capture.db as any, { compute: async () => 'f'.repeat(64) } as any);
   await assert.rejects(
     () => service.record('comp_1', 'onboarding', {
       environment: 'test', status: 'BLOCKED', blockers: [], password: 'must-not-store',

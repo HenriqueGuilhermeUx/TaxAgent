@@ -55,7 +55,7 @@ export class FiscalOnboardingController {
   }
 
   @Post(':companyId/pilot/run')
-  @RequireScope('operations:read')
+  @RequireScope('operations:write')
   @ApiOperation({ summary: 'Run assessment and, only when locally ready, the safe non-emitting provider preflight; persist immutable evidence for both' })
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
@@ -71,7 +71,7 @@ export class FiscalOnboardingController {
   }
 
   @Post(':companyId/assess')
-  @RequireScope('operations:read')
+  @RequireScope('operations:write')
   @ApiOperation({ summary: 'Create an immutable onboarding assessment attestation without fiscal transmission' })
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-24' })
@@ -89,7 +89,7 @@ export class FiscalOnboardingController {
   }
 
   @Post(':companyId/preflight')
-  @RequireScope('operations:read')
+  @RequireScope('operations:write')
   @ApiOperation({ summary: 'Run the resolved provider preflight using only safe non-emitting network methods and persist its attestation' })
   @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
   @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-24' })
