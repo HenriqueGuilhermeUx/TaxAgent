@@ -5,6 +5,8 @@ import { InvoicesModule } from '../invoices/invoices.module';
 import { OperationsModule } from '../operations/operations.module';
 import { ProviderCredentialsModule } from '../provider-credentials/provider-credentials.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
+import { CommercialPilotController } from './commercial-pilot.controller';
+import { CommercialPilotService } from './commercial-pilot.service';
 import { CustomerFiscalController } from './customer-fiscal.controller';
 import { CustomerFiscalService } from './customer-fiscal.service';
 import { CustomerPortalPageController } from './customer-portal.controller';
@@ -13,7 +15,7 @@ import { NexOfficePartnerGuard } from './nexoffice-partner.guard';
 
 @Module({
   imports: [AuthModule, OperationsModule, TenancyModule, CertificatesModule, ProviderCredentialsModule, InvoicesModule],
-  controllers: [CustomerPortalPageController, CustomerFiscalController, NexOfficePartnerController],
-  providers: [CustomerFiscalService, NexOfficePartnerGuard],
+  controllers: [CustomerPortalPageController, CommercialPilotController, CustomerFiscalController, NexOfficePartnerController],
+  providers: [CommercialPilotService, CustomerFiscalService, NexOfficePartnerGuard],
 })
 export class CustomerPortalModule {}

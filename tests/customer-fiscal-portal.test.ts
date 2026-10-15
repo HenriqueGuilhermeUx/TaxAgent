@@ -55,7 +55,9 @@ test('customer portal is product-facing, truthful and keeps credentials memory-o
   assert.match(home, /Infraestrutura fiscal inteligente/i);
   assert.match(home, /Tax Engine/i);
   assert.match(home, /Fiscal Router/i);
-  assert.match(home, /Preparar minha empresa/i);
+  assert.match(home, /Solicitar piloto fiscal/i);
+  assert.match(home, /commercial\/pilot-applications/i);
+  assert.match(home, /Certificado A1, senha e arquivos fiscais nunca são solicitados/i);
   assert.match(home, /Evidências & Inteligência/i);
   assert.doesNotMatch(home, /SPED|PER\/DCOMP|PIS\/COFINS|R\$\s*50M|1\.200\+|98%|11 min/i);
   assert.doesNotMatch(portal, /X-TaxAgent-Bootstrap-Token/i);
