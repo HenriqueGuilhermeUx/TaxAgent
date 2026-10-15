@@ -49,11 +49,15 @@ test('customer profile update persists only non-secret fiscal fields and safely 
   assert.equal(result.safeguards.fiscal_emission_attempted, false);
 });
 
-test('customer portal is product-facing and keeps credentials memory-only', () => {
+test('customer portal is product-facing, truthful and keeps credentials memory-only', () => {
   const home = customerHomeHtml();
   const portal = customerPortalHtml();
-  assert.match(home, /Fiscal sem integração infinita/i);
-  assert.match(home, /Configurar minha empresa/i);
+  assert.match(home, /Infraestrutura fiscal inteligente/i);
+  assert.match(home, /Tax Engine/i);
+  assert.match(home, /Fiscal Router/i);
+  assert.match(home, /Preparar minha empresa/i);
+  assert.match(home, /Evidências & Inteligência/i);
+  assert.doesNotMatch(home, /SPED|PER\/DCOMP|PIS\/COFINS|R\$\s*50M|1\.200\+|98%|11 min/i);
   assert.doesNotMatch(portal, /X-TaxAgent-Bootstrap-Token/i);
   assert.doesNotMatch(portal, /localStorage\.setItem|sessionStorage\.setItem/i);
   assert.match(portal, /certificates\/upload/);

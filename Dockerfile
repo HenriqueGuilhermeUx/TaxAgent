@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates curl unar \
+  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates curl unar openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
 RUN npm install --no-audit --no-fund
@@ -9,7 +9,7 @@ COPY . .
 RUN npm run schemas:sync -- --environment=test
 RUN npx tsx scripts/national-conformance.ts
 RUN npx tsx scripts/national-event-conformance.ts
-ENV TAXAGENT_GISS_XSD_SHA256=c0e2b81b93faea908b70d42e827b44acc34b634153aa006cd35851e77ebad0e6
+ENV TAXAGENT_GISS_XSD_SHA256=c14a542de5fa2ce1a6a2b43da6e4eb0bebab12e6ebc850fe24dbdc8f6bb04356
 RUN npx tsx scripts/giss-emission-conformance.ts
 RUN npm run build
 
@@ -17,7 +17,7 @@ FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates \
+  && apt-get install -y --no-install-recommends libxml2-utils ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund \

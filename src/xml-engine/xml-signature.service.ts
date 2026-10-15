@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import * as forge from 'node-forge';
 import { SignedXml } from 'xml-crypto';
 import { CertificateMaterial } from '../certificates/certificate-vault.service';
-import { loadPkcs12Identity } from '../certificates/pkcs12-identity';
 
 export type XmlSignatureProfile = 'sha256' | 'sha1';
 
@@ -31,11 +29,6 @@ export class XmlSignatureService {
     return this.assertKeyInfoProfile(signer.getSignedXml());
   }
 
-  /**
-   * Signs the XML document element with an enveloped XMLDSig whose Reference URI is empty.
-   * GISS reconciliation queries use this whole-message signature shape instead of an Id-based
-   * RPS/lote reference. The signature is appended as the final child of the selected root.
-   */
   signEmptyUri(xml: string, signedElementLocalName: string, material: CertificateMaterial, profile: XmlSignatureProfile = 'sha1'): string {
     const root = new RegExp(`<(?:\\w+:)?${signedElementLocalName}(?:\\s|>)`, 'i');
     if (!root.test(xml)) throw new Error(`XML does not contain root element ${signedElementLocalName}`);
@@ -57,8 +50,7 @@ export class XmlSignatureService {
   }
 
   private signer(material: CertificateMaterial, profile: XmlSignatureProfile): SignedXml {
-    const { certificate, privateKey } = loadPkcs12Identity(material.pfx, material.password);
-    const signer = new SignedXml({ privateKey: forge.pki.privateKeyToPem(privateKey), publicCert: forge.pki.certificateToPem(certificate) });
+    const signer = new SignedXml({ privateKey: material.tlsPrivateKeyPem, publicCert: material.tlsCertificatePem });
     const algorithms = XMLDSIG_PROFILES[profile];
     signer.canonicalizationAlgorithm = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
     signer.signatureAlgorithm = algorithms.signatureAlgorithm;

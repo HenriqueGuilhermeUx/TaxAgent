@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import * as forge from 'node-forge';
 import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
 import { EncryptedEnvelope, EnvelopeCryptoService } from '../security/envelope-crypto.service';
@@ -63,37 +62,33 @@ export class CertificateVaultService {
     if (record.valid_to && record.valid_to.getTime() <= Date.now()) throw new BadRequestException('Active certificate is expired');
     const pfx = this.crypto.open(record.encrypted_pfx);
     const password = this.crypto.openText(record.encrypted_password);
-    // Do not hand the original PKCS#12 container to Node/OpenSSL for mTLS.
-    // Some valid ICP-Brasil A1 files use PKCS#12 algorithms that node-forge can
-    // open but OpenSSL 3 rejects as "Unsupported PKCS12 PFX data". Normalize the
-    // already validated identity to PEM in memory; neither PEM nor password is persisted.
     const identity = loadPkcs12Identity(pfx, password);
     return {
       pfx,
       password,
       fingerprint: record.certificate_fingerprint,
       subjectTaxId: record.subject_tax_id ?? undefined,
-      tlsCertificatePem: forge.pki.certificateToPem(identity.certificate),
-      tlsPrivateKeyPem: forge.pki.privateKeyToPem(identity.privateKey),
+      tlsCertificatePem: identity.certificatePem,
+      tlsPrivateKeyPem: identity.privateKeyPem,
     };
   }
 
   private inspectPkcs12(pfx: Buffer, password: string) {
     try {
       const { certificate } = loadPkcs12Identity(pfx, password);
+      const validFrom = new Date(certificate.validFrom);
+      const validTo = new Date(certificate.validTo);
       const now = Date.now();
-      if (certificate.validity.notAfter.getTime() <= now) throw new Error(`Certificate expired at ${certificate.validity.notAfter.toISOString()}`);
-      if (certificate.validity.notBefore.getTime() > now + 5 * 60_000) throw new Error(`Certificate is not valid before ${certificate.validity.notBefore.toISOString()}`);
-      const certDer = Buffer.from(forge.asn1.toDer(forge.pki.certificateToAsn1(certificate)).getBytes(), 'binary');
-      const label = (attrs: forge.pki.CertificateField[]) => attrs.map((a) => `${a.shortName ?? a.name}=${a.value}`).join(',');
+      if (validTo.getTime() <= now) throw new Error(`Certificate expired at ${validTo.toISOString()}`);
+      if (validFrom.getTime() > now + 5 * 60_000) throw new Error(`Certificate is not valid before ${validFrom.toISOString()}`);
       return {
-        fingerprint: createHash('sha256').update(certDer).digest('hex'),
+        fingerprint: createHash('sha256').update(certificate.raw).digest('hex'),
         subjectTaxId: extractIcpBrasilCnpj(certificate),
         serialNumber: certificate.serialNumber,
-        subject: label(certificate.subject.attributes),
-        issuer: label(certificate.issuer.attributes),
-        validFrom: certificate.validity.notBefore,
-        validTo: certificate.validity.notAfter,
+        subject: certificate.subject.replace(/\n/g, ','),
+        issuer: certificate.issuer.replace(/\n/g, ','),
+        validFrom,
+        validTo,
       };
     } catch (error) {
       throw new BadRequestException(`Unable to open PKCS#12 certificate: ${error instanceof Error ? error.message : 'invalid certificate'}`);

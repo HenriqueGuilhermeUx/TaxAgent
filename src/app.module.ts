@@ -8,6 +8,7 @@ import { DanfseModule } from './danfse/danfse.module';
 import { DatabaseModule } from './database/database.module';
 import { DocumentIntakeModule } from './document-intake/document-intake.module';
 import { DocumentsModule } from './documents/documents.module';
+import { EvidenceModule } from './evidence/evidence.module';
 import { HealthModule } from './health/health.module';
 import { HomologationConsoleModule } from './homologation-console/homologation-console.module';
 import { FiscalInboxModule } from './inbox/fiscal-inbox.module';
@@ -21,5 +22,5 @@ import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, CustomerPortalModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, CustomerPortalModule, EvidenceModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
 export class AppModule {}
