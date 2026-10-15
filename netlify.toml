@@ -1,0 +1,11 @@
+[build]
+  publish = "site"
+
+[context.production]
+  publish = "site"
+
+[context.deploy-preview]
+  publish = "site"
+
+[context.branch-deploy]
+  publish = "site"
