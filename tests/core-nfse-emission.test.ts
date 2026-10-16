@@ -18,7 +18,7 @@ test('homologation console exposes truthful core emission diagnostics', () => {
   const html = homologationConsoleHtml();
   assert.match(html, /Status real da emissão/);
   assert.match(html, /issuer-readiness/);
-  assert.match(html, /proven_authorized_nfse:false/);
+  assert.match(html, /core-status\?environment=test/);
   assert.match(html, /prova operacional/i);
 });
 
