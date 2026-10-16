@@ -86,3 +86,16 @@ test('Prepared DPS path POSTs the exact persisted signed XML only after reconcil
   assert.equal(f.transmittedXml(), '<SIGNED-IMMUTABLE/>');
   assert.equal(f.builderCalls(), 0);
 });
+
+
+test('live National provider refuses any direct issuance path without Prepared DPS', async () => {
+  const f = fixture(null);
+  await assert.rejects(
+    () => withLive(() => f.provider.issue(input, { invoiceId: 'inv_direct_blocked' })),
+    (error: any) => error?.code === 'TA_PREPARED_DPS_REQUIRED'
+      && error?.details?.fiscal_transmission_attempted === false,
+  );
+  assert.equal(f.findCalls(), 0);
+  assert.equal(f.issueCalls(), 0);
+  assert.equal(f.builderCalls(), 0);
+});
