@@ -111,5 +111,7 @@ test('homologation page source itself contains the hardened flow without runtime
   assert.match(source, /grantTransmissionPermit/);
   assert.match(source, /Prepared DPS imutável \+ permit de uso único/);
   assert.match(source, /REGISTER-TEST-CANCELLATION-101101/);
+  assert.match(source, /function buildCustomer\(\)/);
+  assert.match(source, /Se informar endereço do tomador/);
   assert.equal(prepareHomologationConsoleHtml(source), source);
 });
