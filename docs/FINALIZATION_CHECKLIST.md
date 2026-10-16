@@ -120,7 +120,7 @@ Não declarar o TaxAgent homologado até concluir todos os itens abaixo com empr
 
 - [ ] escolher 10–20 empresas piloto
 - [ ] escolher 2–3 parceiros ERP/SaaS
-- [ ] definir onboarding técnico do piloto
+- [x] definir onboarding técnico do piloto (`docs/COMMERCIAL_PILOT_RUNBOOK.md` + fila browser-only + conversão idempotente em Pilot Enrollment TEST)
 - [ ] definir pricing piloto
 - [ ] medir custo por documento/tenant
 - [ ] medir taxa de automação sem intervenção
