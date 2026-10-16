@@ -149,12 +149,20 @@ export class IssuerReadinessService {
 
     const provenRows = authorized.rows.filter((row) => Boolean(row.access_key && row.authorized_xml_sha256));
     const last = provenRows[0] ?? null;
-    const cancellation = last
+    const cancellation = proofCount > 0
       ? await this.db.query<{ event_count: string; document_count: string }>(
           `SELECT
-             (SELECT COUNT(*)::text FROM fiscal_events WHERE invoice_id=$1 AND event_type='cancellation') AS event_count,
-             (SELECT COUNT(*)::text FROM fiscal_documents WHERE invoice_id=$1 AND kind='cancellation-event-xml') AS document_count`,
-          [last.id],
+             (SELECT COUNT(*)::text
+                FROM fiscal_events e
+                JOIN invoices i ON i.id=e.invoice_id
+               WHERE i.company_id=$1 AND i.environment=$2 AND i.provider='nfse-national'
+                 AND e.event_type='cancellation') AS event_count,
+             (SELECT COUNT(*)::text
+                FROM fiscal_documents d
+                JOIN invoices i ON i.id=d.invoice_id
+               WHERE i.company_id=$1 AND i.environment=$2 AND i.provider='nfse-national'
+                 AND d.kind='cancellation-event-xml') AS document_count`,
+          [companyId, environment],
         )
       : { rows: [] as Array<{ event_count: string; document_count: string }> };
     const cancellationRow = cancellation.rows[0];
