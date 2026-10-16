@@ -19,9 +19,9 @@ export class IssuerReadinessService {
   constructor(
     private readonly tenancy: TenancyService,
     private readonly certificates: CertificateVaultService,
-    private readonly db: DatabaseService,
     private readonly capabilities: MunicipalCapabilityService,
     private readonly schemas: SchemaRegistryService,
+    private readonly db: DatabaseService,
   ) {}
 
   async inspect(companyId: string, environment: FiscalEnvironment, effectiveAt?: string) {
