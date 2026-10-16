@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     region: virginia
-    branch: agent/engine-v0.1
+    branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
     autoDeployTrigger: checksPass
