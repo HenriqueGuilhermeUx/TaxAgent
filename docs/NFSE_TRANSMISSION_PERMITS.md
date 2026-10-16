@@ -55,8 +55,9 @@ signed Prepared DPS
 → one-shot permit
 → POST /v1/invoices
 → worker/provider validates global gates
+→ provider verifies active A1 fingerprint still matches the certificate that signed the Prepared DPS
 → provider reconciles GET /dps/{id}
-→ if already exists: no permit claim, no POST
+→ if already exists: no POST; any prior claimed permit owned by this invoice is settled as consumed
 → if absent: atomically claim permit
 → POST /nfse exactly once
 → definitive response: consume permit
@@ -68,3 +69,8 @@ signed Prepared DPS
 The first implementation rejects permit claims for `environment=production`.
 
 Production authorization requires a separate release process after repeatable homologation evidence exists.
+
+
+## Certificate rotation
+
+A signed Prepared DPS is cryptographically bound to the A1 certificate fingerprint recorded at signing time. If the active A1 changes before transmission, TaxAgent fails closed with `TA_PREPARED_DPS_CERTIFICATE_STALE` before any provider network call. The operator must prepare and sign a fresh DPS with the active certificate.
