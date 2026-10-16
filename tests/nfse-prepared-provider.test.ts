@@ -21,14 +21,15 @@ function fixture(reconciled: any) {
   let permitClaims = 0;
   let permitConsumes = 0;
   let transmittedXml = '';
+  let activeFingerprint = 'fp';
   const record = {
     id: 'pdps_test', company_id: 'comp_test', environment: 'test', tax_decision_id: 'taxdec_test', schema_id: 'nfse-prodrest-v1.01-20260727',
     dps_id: 'DPS353060724705102600012200001000000000000001', sequence: 1, series: '1', issued_at: input.issuedAt, competence: input.competence,
-    unsigned_xml_sha256: 'unsigned', signed_xml_sha256: 'signed',
+    unsigned_xml_sha256: 'unsigned', signed_xml_sha256: 'signed', certificate_fingerprint: 'fp',
   };
   const provider = new NfseNationalProvider(
     { async getCompany() { return { city_code: '3530607', tax_regime: 'regular' }; } } as any,
-    { async getActiveMaterial() { return { fingerprint: 'fp' }; } } as any,
+    { async getActiveMaterial() { return { fingerprint: activeFingerprint }; } } as any,
     {
       active() { return { id: 'nfse-prodrest-v1.01-20260727' }; },
       dpsConformance(environment: string) {
@@ -75,6 +76,7 @@ function fixture(reconciled: any) {
     permitClaims: () => permitClaims,
     permitConsumes: () => permitConsumes,
     transmittedXml: () => transmittedXml,
+    setActiveFingerprint: (value: string) => { activeFingerprint = value; },
   };
 }
 
@@ -137,4 +139,18 @@ test('live National provider fails closed before POST when transmission-permit s
   );
   assert.equal(f.findCalls(), 1);
   assert.equal(f.issueCalls(), 0);
+});
+
+
+test('Prepared DPS refuses provider network when active A1 differs from signing certificate', async () => {
+  const f = fixture(null);
+  f.setActiveFingerprint('rotated-fingerprint');
+  await assert.rejects(
+    () => withLive(() => f.provider.issue(input, { invoiceId: 'inv_rotated_a1', preparedDpsId: 'pdps_test' })),
+    (error: any) => error?.code === 'TA_PREPARED_DPS_CERTIFICATE_STALE'
+      && error?.details?.fiscal_transmission_attempted === false,
+  );
+  assert.equal(f.findCalls(), 0);
+  assert.equal(f.issueCalls(), 0);
+  assert.equal(f.permitClaims(), 0);
 });
