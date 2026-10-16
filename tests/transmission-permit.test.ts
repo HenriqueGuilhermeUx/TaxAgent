@@ -91,3 +91,19 @@ test('definitive provider response consumes a claimed permit', async () => {
   await service.consumeClaim('txpermit_1','inv_1','authorized');
   assert.deepEqual(params,['txpermit_1','inv_1','authorized']);
 });
+
+
+test('definitive reconciliation can settle a previously claimed permit by Prepared DPS and invoice', async () => {
+  let params:any[]=[];
+  const db={query:async(_sql:string,p:any[])=>{params=p;return {rows:[],rowCount:1};}} as any;
+  const service=new FiscalTransmissionPermitService(db,{} as any);
+  const settled=await service.consumeClaimIfOwned('pdps_1','inv_1','authorized');
+  assert.equal(settled,true);
+  assert.deepEqual(params,['pdps_1','inv_1','authorized']);
+});
+
+test('reconciliation settlement is a no-op when no claimed permit belongs to the invoice', async () => {
+  const db={query:async()=>({rows:[],rowCount:0})} as any;
+  const service=new FiscalTransmissionPermitService(db,{} as any);
+  assert.equal(await service.consumeClaimIfOwned('pdps_1','inv_other','authorized'),false);
+});
