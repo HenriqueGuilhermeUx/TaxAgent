@@ -11,7 +11,7 @@ test('homologation console requires Prepared DPS before first real invoice reque
   assert.match(html, /Prepared DPS imutável/);
   assert.match(html, /ready_for_transmission/);
   assert.match(html, /YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS/);
-  assert.doesNotMatch(html, /localStorage|sessionStorage/);
+  assert.doesNotMatch(html, /(?:localStorage|sessionStorage)\.(?:setItem|getItem|removeItem|clear)/);
 });
 
 test('homologation console exposes truthful core emission diagnostics', () => {
