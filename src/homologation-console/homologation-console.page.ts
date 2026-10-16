@@ -212,16 +212,24 @@ export function homologationConsoleHtml(): string {
     try{requireCompany();const body={company_id:state.companyId,effective_at:val('effectiveAt'),amount:Number(val('taxAmount')),issuer_city_code:val('issuerCity'),destination_city_code:val('destinationCity')||undefined,service_profile:val('serviceProfile')||undefined,iss_withholding:val('taxIssWithholding')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')};show('taxOut','Resolvendo...');const result=await request('/v1/tax/resolve',{method:'POST',body});if(result.status==='resolved'){state.taxDecisionId=result.id;state.preparedDpsId='';state.transmissionPermitId='';$('invoiceAmount').value=val('taxAmount');if($('preparedDpsId'))$('preparedDpsId').value='';if(val('destinationCity'))$('customerCity').value=val('destinationCity');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}show('taxOut',result);}catch(e){show('taxOut','ERRO: '+e.message);}
   };
 
+  function buildCustomer(){
+    const customer={tax_id:val('customerTaxId'),name:val('customerName'),city_code:val('customerCity')};
+    const address={street:val('customerStreet'),number:val('customerNumber'),district:val('customerDistrict'),postal_code:val('customerPostalCode'),city_code:val('customerCity')};
+    const parts=[address.street,address.number,address.district,address.postal_code];
+    if(parts.some(Boolean)){if(parts.some((part)=>!part))throw new Error('Se informar endereço do tomador, preencha logradouro, número, bairro e CEP');customer.address=address;}
+    return customer;
+  }
+
   function buildInvoiceBody(){
     requireCompany();if(!state.taxDecisionId)throw new Error('Resolva a Tax Decision primeiro');
-    const rate=val('issRate');return {company_id:state.companyId,environment:'test',competence:val('competence'),tax_decision_id:state.taxDecisionId,customer:{tax_id:val('customerTaxId'),name:val('customerName'),city_code:val('customerCity'),address:{street:val('customerStreet'),number:val('customerNumber'),district:val('customerDistrict'),postal_code:val('customerPostalCode'),city_code:val('customerCity')}},service:{description:val('serviceDescription'),amount:Number(val('invoiceAmount')),service_location_city_code:val('serviceLocation'),iss_taxation:val('issTaxation'),iss_withholding:val('issWithholding'),iss_rate:rate===''?undefined:Number(rate)}};
+    const rate=val('issRate');return {company_id:state.companyId,environment:'test',competence:val('competence'),tax_decision_id:state.taxDecisionId,customer:buildCustomer(),service:{description:val('serviceDescription'),amount:Number(val('invoiceAmount')),service_location_city_code:val('serviceLocation'),iss_taxation:val('issTaxation'),iss_withholding:val('issWithholding'),iss_rate:rate===''?undefined:Number(rate)}};
   }
 
   function restorePreparedPayload(result){
     const p=result&&result.resume_payload;if(!p)return;
     state.taxDecisionId=p.tax_decision_id||result.tax_decision_id||'';state.preparedDpsId=result.id||p.prepared_dps_id||'';state.lastInvoiceBody=p;state.transmissionPermitId='';
     if(p.competence)$('competence').value=p.competence;
-    if(p.customer){$('customerTaxId').value=p.customer.tax_id||'';$('customerName').value=p.customer.name||'';$('customerCity').value=p.customer.city_code||'';if(p.customer.address){$('customerStreet').value=p.customer.address.street||'';$('customerNumber').value=p.customer.address.number||'';$('customerDistrict').value=p.customer.address.district||'';$('customerPostalCode').value=p.customer.address.postal_code||'';}}
+    if(p.customer){$('customerTaxId').value=p.customer.tax_id||'';$('customerName').value=p.customer.name||'';$('customerCity').value=p.customer.city_code||'';const a=p.customer.address||{};$('customerStreet').value=a.street||'';$('customerNumber').value=a.number||'';$('customerDistrict').value=a.district||'';$('customerPostalCode').value=a.postal_code||'';}
     if(p.service){$('serviceDescription').value=p.service.description||'';$('invoiceAmount').value=String(p.service.amount??'');$('serviceLocation').value=p.service.service_location_city_code||'';$('issTaxation').value=p.service.iss_taxation||'1';$('issWithholding').value=p.service.iss_withholding||'1';$('issRate').value=p.service.iss_rate===undefined?'':String(p.service.iss_rate);}
     $('preparedDpsId').value=state.preparedDpsId;$('permitLabel').textContent='nenhum';syncStatus();
   }
