@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BootstrapGuard } from '../auth/bootstrap.guard';
 import { CommercialPilotService } from './commercial-pilot.service';
-import { CreatePilotApplicationDto, UpdatePilotApplicationStatusDto } from './dto/commercial-pilot.dto';
+import { ConvertPilotApplicationDto, CreatePilotApplicationDto, UpdatePilotApplicationStatusDto } from './dto/commercial-pilot.dto';
 
 @ApiTags('commercial')
 @Controller('commercial/pilot-applications')
@@ -21,4 +21,8 @@ export class CommercialPilotController {
   @Post(':id/status') @UseGuards(BootstrapGuard)
   @ApiOperation({ summary: 'Update commercial pilot application status (management plane)' })
   update(@Param('id') id:string,@Body() dto:UpdatePilotApplicationStatusDto) { return this.pilots.update(id,dto); }
+
+  @Post(':id/convert-to-pilot') @UseGuards(BootstrapGuard)
+  @ApiOperation({ summary: 'Convert a qualified commercial application into a TEST pilot enrollment without enabling fiscal transmission' })
+  convert(@Param('id') id:string,@Body() dto:ConvertPilotApplicationDto) { return this.pilots.convertToPilot(id,dto); }
 }
