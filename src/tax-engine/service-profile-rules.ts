@@ -44,6 +44,8 @@ const NFSE_CURRENT_DOCS_URL = 'https://www.gov.br/nfse/pt-br/biblioteca/document
 const MOGI_CCM_REFERENCE_URL = 'https://www.mogidascruzes.sp.gov.br/servico/impostos-e-taxas/cadastro-ccm-consulta-ao-cnae-item-da-lei';
 const MOGI_ISS_RATE_TABLE_URL = 'https://www.mogidascruzes.sp.gov.br/public/site/doc/201804040846525ac4bb2c9a512.pdf';
 const SANTOS_ACTIVITY_REFERENCE_URL = 'https://www.santos.sp.gov.br/?q=node%2F32262';
+const BH_ISS_LEGISLATION_URL = 'https://fazenda.pbh.gov.br/internet/legislacao/formchave.asp?key=542';
+const BH_NATIONAL_NFSE_PORTARIA_URL = 'https://fazenda.pbh.gov.br/legislacao/formkey.asp?key=1354';
 const LC116_URL = 'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp116.htm';
 const NBS_2_REFERENCE_URL = 'https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/legislacao/documentos-e-arquivos/anexo_i-nbs.pdf';
 
@@ -107,6 +109,50 @@ export function resolveServiceProfile(input: ServiceProfileInput): ResolvedServi
         municipality_code: '3530607',
         iss_item: '17.01',
         iss_rate: 4,
+      },
+      {
+        dataset: 'lc116-iss-incidence',
+        record_key: 'art3:17.01',
+        authority: 'official-law',
+        url: LC116_URL,
+        note: 'TaxAgent vetted rule: item 17.01 is not among the art. 3 exceptions, so the general provider-establishment rule applies.',
+      },
+    );
+  } else if (input.issuerCityCode === '3106200') {
+    if (!input.issWithholding) missing.push('iss_withholding');
+    municipalTax = {
+      iss_item: '17.01',
+      incidence_city_code: '3106200',
+      iss_taxation: '1',
+      iss_withholding: input.issWithholding,
+      iss_rate: 5,
+      source: {
+        authority: 'official-municipal-domain',
+        municipality_code: '3106200',
+        url: BH_ISS_LEGISLATION_URL,
+        rate_table_url: BH_ISS_LEGISLATION_URL,
+        legal_basis: ['Lei Municipal 8.725/2003 art. 14', 'LC Federal 116/2003 art. 3'],
+        rule: 'item-17.01',
+      },
+    };
+    sources.push(
+      {
+        dataset: 'belo-horizonte-iss-service-rate',
+        record_key: '3106200:17.01',
+        authority: 'official-municipal-domain',
+        url: BH_ISS_LEGISLATION_URL,
+        municipality_code: '3106200',
+        iss_item: '17.01',
+        iss_rate: 5,
+        note: 'Official Belo Horizonte ISS legislation applies the 5% general rate to service item 17.01, except specific statutory cases not represented by this standard consulting profile.',
+      },
+      {
+        dataset: 'belo-horizonte-national-nfse-transition',
+        record_key: '3106200:emissor-nacional',
+        authority: 'official-municipal-domain',
+        url: BH_NATIONAL_NFSE_PORTARIA_URL,
+        municipality_code: '3106200',
+        note: 'Belo Horizonte required all legal-entity service providers to use the National NFS-e issuer from 2026-02-01 under Portaria SMFA 075/2025 as amended.',
       },
       {
         dataset: 'lc116-iss-incidence',
