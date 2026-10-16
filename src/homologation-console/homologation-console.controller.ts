@@ -6,7 +6,7 @@ import { homologationConsoleHtml } from './homologation-console.page';
 const UTC_DATE_INITIALIZER = "const today=new Date().toISOString().slice(0,10);$('effectiveAt').value=today;$('competence').value=today;";
 const LOCAL_DATE_INITIALIZER = "const now=new Date();const pad=(n)=>String(n).padStart(2,'0');const today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());$('effectiveAt').value=today;$('competence').value=today;if($('prepareKey'))$('prepareKey').value='prep-'+crypto.randomUUID();";
 const STATE_OLD = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false};";
-const STATE_NEW = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',preparedDpsId:'',invoiceId:'',lastInvoiceBody:null,dryRunValid:false};";
+const STATE_NEW = "const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',preparedDpsId:'',invoiceId:'',transmissionPermitId:'',lastInvoiceBody:null,dryRunValid:false};";
 const DESTINATION_CITY_CONTROL = '<div><label>Município destino (IBGE)</label><input id="destinationCity" maxlength="7" /></div>';
 const PROFILE_CONTROLS = `${DESTINATION_CITY_CONTROL}
       <div><label>Perfil de serviço</label><select id="serviceProfile" onchange="serviceProfileChanged()"><option value="">Manual / sem perfil</option><option value="business_consulting">Consultoria empresarial padrão (TaxAgent)</option></select></div>
@@ -31,7 +31,7 @@ ${RESOLVE_FUNCTION_ANCHOR}`;
 const RESOLVE_BODY_OLD = "destination_city_code:val('destinationCity')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')";
 const RESOLVE_BODY_NEW = "destination_city_code:val('destinationCity')||undefined,service_profile:val('serviceProfile')||undefined,iss_withholding:val('taxIssWithholding')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')";
 const RESOLVED_ACTION_OLD = "if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');syncStatus();}";
-const RESOLVED_ACTION_NEW = "if(result.status==='resolved'){state.taxDecisionId=result.id;state.preparedDpsId='';$('invoiceAmount').value=val('taxAmount');if($('preparedDpsId'))$('preparedDpsId').value='';if(val('destinationCity'))$('customerCity').value=val('destinationCity');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}";
+const RESOLVED_ACTION_NEW = "if(result.status==='resolved'){state.taxDecisionId=result.id;state.preparedDpsId='';state.transmissionPermitId='';$('invoiceAmount').value=val('taxAmount');if($('preparedDpsId'))$('preparedDpsId').value='';if(val('destinationCity'))$('customerCity').value=val('destinationCity');if(result.municipal_tax){if(result.municipal_tax.iss_taxation)$('issTaxation').value=String(result.municipal_tax.iss_taxation);if(result.municipal_tax.iss_withholding)$('issWithholding').value=String(result.municipal_tax.iss_withholding);if(result.municipal_tax.iss_rate!==undefined)$('issRate').value=String(result.municipal_tax.iss_rate);}syncStatus();}";
 const ISS_RATE_CONTROL = '<div><label>Alíquota ISS (%) · quando aplicável</label><input id="issRate" type="number" step="0.01" min="0" max="9.99" /></div>';
 const PREPARED_CONTROLS = `${ISS_RATE_CONTROL}
       <div><label>Prepared DPS · Idempotency-Key</label><input id="prepareKey" autocomplete="off" placeholder="prep-..." /></div>
@@ -59,8 +59,31 @@ const PREBUILD_FUNCTION = `  function restorePreparedPayload(result){
   window.signPreparedDps=async function(){try{const id=val('preparedDpsId')||state.preparedDpsId;if(!id)throw new Error('Crie ou informe o Prepared DPS ID');show('dpsOut','Assinando exatamente o XML persistido, sem transmitir...');const result=await request('/v1/operations/dps/prepared/'+encodeURIComponent(id)+'/sign',{method:'POST'});restorePreparedPayload(result);state.dryRunValid=result.valid===true&&result.signed===true&&result.transmitted===false;show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
 
 ${DRYRUN_FUNCTION_ANCHOR}`;
+const SEND_FUNCTION_ANCHOR = '  window.sendFirstInvoice=async function(){';
+const PERMIT_FUNCTION = `  window.grantTransmissionPermit=async function(){
+    try{
+      requireCompany();
+      const preparedId=state.preparedDpsId||val('preparedDpsId');
+      if(!preparedId)throw new Error('Crie/carregue uma Prepared DPS antes do permit');
+      const prepared=await request('/v1/operations/dps/prepared/'+encodeURIComponent(preparedId));
+      if(prepared.signed!==true||prepared.transmitted!==false)throw new Error('Prepared DPS deve estar signed=true e transmitted=false');
+      const confirmation=val('permitConfirmation');
+      if(confirmation!=='AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION')throw new Error('Confirmação exata do permit não informada');
+      const readiness=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'/probe?environment=test',{method:'POST'});
+      if(readiness.ready_for_transmission!==true){show('liveOut',readiness);throw new Error('Readiness não está 100% verde; permit recusado');}
+      const permit=await request('/v1/operations/transmission-permits',{method:'POST',bootstrap:true,bearer:false,body:{
+        company_id:state.companyId,environment:'test',provider:'nfse-national',prepared_dps_id:preparedId,
+        expiration_minutes:Number(val('permitExpiration')||15),reason:val('permitReason'),confirmation
+      }});
+      state.transmissionPermitId=permit.id;$('permitLabel').textContent=permit.id;$('permitConfirmation').value='';
+      show('liveOut',{permit,note:'Uso único. Se o estado do POST ficar incerto, o mesmo permit não autoriza retransmissão cega.'});
+    }catch(e){show('liveOut','ERRO: '+e.message);}
+  };
+
+${SEND_FUNCTION_ANCHOR}`;
+
 const LIVE_BODY_OLD = "const body=state.lastInvoiceBody||buildInvoiceBody();show('liveOut','Transmitindo uma única operação...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});";
-const LIVE_BODY_NEW = "const preparedId=state.preparedDpsId||val('preparedDpsId');if(!preparedId)throw new Error('Prepared DPS assinada é obrigatória para transmissão Nacional');const prepared=await request('/v1/operations/dps/prepared/'+encodeURIComponent(preparedId));if(prepared.signed!==true||prepared.transmitted!==false||!prepared.resume_payload)throw new Error('Prepared DPS precisa estar signed=true e transmitted=false');if(prepared.resume_payload.prepared_dps_id!==preparedId)throw new Error('Prepared DPS resume payload inconsistente');const body=prepared.resume_payload;state.lastInvoiceBody=body;show('liveOut','Transmitindo uma única operação vinculada exatamente ao Prepared DPS persistido...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});if(result&&result.id){state.invoiceId=result.id;if($('invoiceId'))$('invoiceId').value=result.id;}";
+const LIVE_BODY_NEW = "if(!state.transmissionPermitId)throw new Error('Permit TEST de uso único é obrigatório antes do POST fiscal');const preparedId=state.preparedDpsId||val('preparedDpsId');if(!preparedId)throw new Error('Prepared DPS assinada é obrigatória para transmissão Nacional');const prepared=await request('/v1/operations/dps/prepared/'+encodeURIComponent(preparedId));if(prepared.signed!==true||prepared.transmitted!==false||!prepared.resume_payload)throw new Error('Prepared DPS precisa estar signed=true e transmitted=false');if(prepared.resume_payload.prepared_dps_id!==preparedId)throw new Error('Prepared DPS resume payload inconsistente');const body=prepared.resume_payload;state.lastInvoiceBody=body;show('liveOut','Transmitindo uma única operação com Prepared DPS imutável + permit de uso único...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});if(result&&result.id){state.invoiceId=result.id;if($('invoiceId'))$('invoiceId').value=result.id;}";
 const LIVE_CARD_CLOSE = '<pre id="liveOut" class="out">Aguardando gates de homologação...</pre>\n  </div>';
 const INVOICE_DIAGNOSTICS = `<pre id="liveOut" class="out">Aguardando gates de homologação...</pre>\n  </div>\n\n  <div class="card">\n    <div class="step">7 · Acompanhamento</div><h2>Invoice · Fiscal Ledger · documentos</h2>\n    <p class="muted">Consulta somente leitura. Não retransmite DPS e não cria nova invoice.</p>\n    <div class="row"><input id="invoiceId" autocomplete="off" placeholder="inv_..." /><button class="secondary" onclick="loadInvoiceDiagnostics()">Consultar invoice</button></div>\n    <pre id="invoiceOut" class="out">Aguardando consulta...</pre>\n  </div>`;
 const SYNC_STATUS_ANCHOR = '  syncStatus();';
@@ -79,6 +102,7 @@ export function prepareHomologationConsoleHtml(html: string): string {
     .replace(ISS_RATE_CONTROL, PREPARED_CONTROLS)
     .replace(DPS_ACTIONS_OLD, DPS_ACTIONS_NEW)
     .replace(DRYRUN_FUNCTION_ANCHOR, PREBUILD_FUNCTION)
+    .replace(SEND_FUNCTION_ANCHOR, PERMIT_FUNCTION)
     .replace(LIVE_BODY_OLD, LIVE_BODY_NEW)
     .replace(LIVE_CARD_CLOSE, INVOICE_DIAGNOSTICS)
     .replace(SYNC_STATUS_ANCHOR, INVOICE_DIAGNOSTICS_FUNCTION);

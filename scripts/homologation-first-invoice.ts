@@ -8,10 +8,14 @@ const taxDecisionId = required('TAXAGENT_TAX_DECISION_ID');
 const invoiceIdempotencyKey = required('TAXAGENT_FIRST_INVOICE_IDEMPOTENCY_KEY');
 const preparedIdempotencyKey = (process.env.TAXAGENT_PREPARED_DPS_IDEMPOTENCY_KEY ?? ('prepared-' + invoiceIdempotencyKey)).trim();
 const confirmation = required('TAXAGENT_CONFIRM_FIRST_TRANSMISSION');
+const permitConfirmation = required('TAXAGENT_CONFIRM_ONE_SHOT_PERMIT');
 
 async function main() {
   if (confirmation !== 'YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS') {
     throw new Error('Refusing transmission. TAXAGENT_CONFIRM_FIRST_TRANSMISSION must equal YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS');
+  }
+  if (permitConfirmation !== 'AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION') {
+    throw new Error('Refusing transmission. TAXAGENT_CONFIRM_ONE_SHOT_PERMIT must equal AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION');
   }
 
   const issuer = await call('GET', `/v1/operations/issuer-readiness/${encodeURIComponent(companyId)}?environment=test`);
@@ -46,6 +50,20 @@ async function main() {
     throw new Error('Refusing transmission because readiness/probe is not fully green. Keep live gates closed until this is intentionally resolved.');
   }
 
+  const permit = await call('POST', '/v1/operations/transmission-permits', {
+    company_id: companyId,
+    environment: 'test',
+    provider: 'nfse-national',
+    prepared_dps_id: signed.id,
+    expiration_minutes: 15,
+    reason: 'First controlled National NFS-e Produção Restrita proof',
+    confirmation: permitConfirmation,
+  });
+  if (!permit?.id || permit.status !== 'active' || permit.prepared_dps_id !== signed.id || permit.environment !== 'test') {
+    console.error(JSON.stringify(permit, null, 2));
+    throw new Error('Refusing transmission because the one-shot TEST permit was not granted for this exact signed Prepared DPS');
+  }
+
   const response = await fetch(`${api}/v1/invoices`, {
     method: 'POST',
     headers: {
@@ -70,6 +88,7 @@ async function main() {
     tax_decision_id: taxDecisionId,
     invoice_idempotency_key: invoiceIdempotencyKey,
     prepared_idempotency_key: preparedIdempotencyKey,
+    transmission_permit_id: permit.id,
     transmission_request_accepted: true,
     authorization_proven: false,
     instruction: `Poll GET /v1/invoices/${parsed.id} using the same API key. Only status=authorized with official access_key + preserved authorized XML proves issuance.`,

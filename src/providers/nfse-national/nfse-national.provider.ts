@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { CertificateMaterial, CertificateVaultService } from '../../certificates/certificate-vault.service';
 import { FiscalDocumentsService } from '../../documents/fiscal-documents.service';
@@ -9,6 +9,7 @@ import { NationalCoverageService } from '../../municipal-parameters/national-cov
 import { PreparedDpsService } from '../../prepared-dps/prepared-dps.service';
 import { SchemaRegistryService } from '../../schema-registry/schema-registry.service';
 import { TenancyService } from '../../tenancy/tenancy.service';
+import { FiscalTransmissionPermitService } from '../../transmission-permits/fiscal-transmission-permit.service';
 import { DpsBuilderService, FiscalCompany } from '../../xml-engine/dps-builder.service';
 import { EventBuilderService } from '../../xml-engine/event-builder.service';
 import { XmlSignatureService } from '../../xml-engine/xml-signature.service';
@@ -19,6 +20,9 @@ import { NationalApiResponse, NfseNationalClient } from './nfse-national.client'
 @Injectable()
 export class NfseNationalProvider implements FiscalProvider {
   readonly name = 'nfse-national';
+
+  @Inject(FiscalTransmissionPermitService)
+  private transmissionPermits?: FiscalTransmissionPermitService;
 
   constructor(
     private readonly tenancy: TenancyService,
@@ -262,6 +266,19 @@ export class NfseNationalProvider implements FiscalProvider {
     await this.preparedDps.sign(preparedId, input.companyId);
     const material = await this.preparedDps.signedMaterial(preparedId, input.companyId);
     const certificate = await this.vault.getActiveMaterial(input.companyId);
+    if (!material.record.certificate_fingerprint || material.record.certificate_fingerprint !== certificate.fingerprint) {
+      throw new FiscalEngineError(
+        'TA_PREPARED_DPS_CERTIFICATE_STALE',
+        'The active A1 certificate is not the certificate that signed this immutable Prepared DPS. Prepare and sign a fresh DPS after any certificate rotation.',
+        false,
+        {
+          prepared_dps_id: record.id,
+          prepared_certificate_fingerprint: material.record.certificate_fingerprint ?? null,
+          active_certificate_fingerprint: certificate.fingerprint,
+          fiscal_transmission_attempted: false,
+        },
+      );
+    }
     const existingDocument = await this.documents.latestContent(operation.invoiceId, 'dps-signed-xml');
     if (existingDocument) {
       if (existingDocument.sha256 !== material.record.signed_xml_sha256) {
@@ -287,8 +304,30 @@ export class NfseNationalProvider implements FiscalProvider {
     }
 
     const reconciled = await this.client.findByDpsId(input.environment, record.dps_id, certificate);
-    if (reconciled) return this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
-    return this.transmitSigned(operation.invoiceId, record.dps_id, material.signedXml, input.environment, certificate);
+    if (reconciled) {
+      const result = await this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
+      if (this.transmissionPermits) {
+        await this.transmissionPermits.consumeClaimForPreparedIfPresent(record.id, operation.invoiceId, result.status);
+      }
+      return result;
+    }
+
+    if (!this.transmissionPermits) {
+      throw new FiscalEngineError(
+        'TA_TRANSMISSION_PERMIT_SERVICE_UNAVAILABLE',
+        'Fiscal POST is fail-closed because the transmission-permit service is unavailable',
+        true,
+        { prepared_dps_id: record.id, fiscal_transmission_attempted: false },
+      );
+    }
+    const permit = await this.transmissionPermits.claimForPost({
+      companyId: input.companyId,
+      environment: input.environment,
+      provider: this.name,
+      preparedDpsId: record.id,
+      invoiceId: operation.invoiceId,
+    });
+    return this.transmitSigned(operation.invoiceId, record.dps_id, material.signedXml, input.environment, certificate, permit.id);
   }
 
   private async transmitSigned(
@@ -297,9 +336,12 @@ export class NfseNationalProvider implements FiscalProvider {
     signedXml: string,
     environment: CanonicalInvoiceInput['environment'],
     certificate: CertificateMaterial,
+    transmissionPermitId: string,
   ): Promise<IssueResult> {
     const response = await this.client.issue(environment, signedXml, certificate);
-    return this.authorizedResponse(invoiceId, dpsId, response);
+    const result = await this.authorizedResponse(invoiceId, dpsId, response);
+    await this.transmissionPermits!.consumeClaim(transmissionPermitId, invoiceId, result.status);
+    return result;
   }
 
   private async authorizedFromReconciliation(

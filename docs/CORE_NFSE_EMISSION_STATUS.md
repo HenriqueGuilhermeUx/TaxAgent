@@ -50,15 +50,17 @@ Para uma Company real de homologação:
 7. `readiness/probe` com mTLS e parâmetros municipais verdes;
 8. Prepared DPS criada com Idempotency-Key;
 9. Prepared DPS assinada e XSD-validada;
-10. runtime deliberadamente promovido para `TAXAGENT_NFSE_MODE=live`;
-11. `TAXAGENT_LIVE_ENABLED=true` somente no ambiente alvo;
-12. uma única transmissão autorizada em Produção Restrita;
-13. status final `authorized`;
-14. `access_key` oficial;
-15. XML autorizado preservado + SHA-256;
-16. Ledger/webhook confirmados;
-17. repetição sem intervenção extraordinária;
-18. cancelamento/evento 101101 comprovado no ambiente real.
+10. A1 ativo ainda possuir o mesmo fingerprint que assinou a Prepared DPS;
+11. runtime deliberadamente promovido para `TAXAGENT_NFSE_MODE=live`;
+12. `TAXAGENT_LIVE_ENABLED=true` somente no ambiente alvo;
+13. one-shot transmission permit TEST ativo, curto e preso àquela Prepared DPS;
+14. uma única transmissão autorizada em Produção Restrita;
+15. status final `authorized`;
+16. `access_key` oficial;
+17. XML autorizado preservado + SHA-256;
+18. Ledger/webhook confirmados;
+19. repetição sem intervenção extraordinária;
+20. cancelamento/evento 101101 comprovado no ambiente real.
 
 ## Fluxo obrigatório da primeira emissão
 
@@ -70,7 +72,9 @@ Company TEST real
 → POST /v1/operations/dps/prepare
 → POST /v1/operations/dps/prepared/:id/sign
 → readiness/probe novamente
+→ confirmar que o A1 ativo ainda corresponde ao fingerprint da assinatura
 → habilitação explícita dos gates live
+→ grant one-shot TEST transmission permit para a Prepared DPS assinada
 → POST /v1/invoices com resume_payload da Prepared DPS
 → polling GET /v1/invoices/:id
 → authorized/rejected
@@ -121,3 +125,8 @@ A rota GISS não deve ser tratada como equivalente à NFS-e Nacional:
 - backup/restore testados.
 
 Até lá, a oferta correta é **piloto fiscal controlado**, não “emissão nacional homologada em qualquer município”.
+
+
+## Segurança adicional da primeira transmissão
+
+Mesmo com os gates globais habilitados, a rota Nacional permanece fail-closed sem um permit TEST de uso único. O permit é reclamado atomicamente imediatamente antes do POST fiscal. Se a resposta HTTP ficar incerta, ele não pode ser reutilizado: o TaxAgent reconcilia pelo `dps_id` imutável antes de qualquer decisão posterior. Uma troca/rotação do A1 após a assinatura também invalida aquela Prepared DPS para transmissão; deve-se preparar e assinar uma nova DPS com o certificado ativo.
