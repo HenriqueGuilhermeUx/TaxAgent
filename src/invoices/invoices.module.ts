@@ -18,6 +18,7 @@ import { GissRpsSequenceService } from '../providers/giss/giss-rps-sequence.serv
 import { PlugNotasProvider } from '../providers/plugnotas/plugnotas.provider';
 import { SchemaRegistryModule } from '../schema-registry/schema-registry.module';
 import { TaxEngineModule } from '../tax-engine/tax-engine.module';
+import { FiscalTransmissionPermitsModule } from '../transmission-permits/fiscal-transmission-permits.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { XmlEngineModule } from '../xml-engine/xml-engine.module';
@@ -28,7 +29,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
 @Module({
-  imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule],
+  imports: [AuthModule, JobsModule, TenancyModule, CertificatesModule, SchemaRegistryModule, MunicipalParametersModule, XmlEngineModule, DocumentsModule, WebhooksModule, TaxEngineModule, PreparedDpsModule, FiscalTransmissionPermitsModule],
   controllers: [InvoicesController],
   providers: [InvoicesService, InvoicesRepository, InvoiceWorkerService, CancellationWorkerService, FiscalRouterService, FiscalLedgerService, NfseNationalClient, NfseNationalProvider, GissProvider, GissClient, GissSignatureService, GissReconciliationService, GissArtifactsService, GissRpsSequenceService, PlugNotasProvider],
   exports: [InvoicesService],

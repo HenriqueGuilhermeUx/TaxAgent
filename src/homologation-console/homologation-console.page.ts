@@ -110,8 +110,15 @@ export function homologationConsoleHtml(): string {
 
   <div class="card lock">
     <div class="step">6 · Bloqueado por segurança</div><h2>Primeira transmissão em Produção Restrita</h2>
-    <p class="muted">Só use depois de o dry-run retornar <b>valid=true</b> e o runtime estar com os gates live explicitamente habilitados.</p>
+    <p class="muted">Só use depois de Prepared DPS assinada, readiness verde e gates live explicitamente habilitados. O POST fiscal também exige um permit TEST de uso único preso à Prepared DPS.</p>
     <div class="grid">
+      <div><label>Motivo do permit</label><input id="permitReason" autocomplete="off" value="Primeira prova NFS-e Nacional em Produção Restrita" /></div>
+      <div><label>Expiração do permit (min)</label><input id="permitExpiration" type="number" min="5" max="60" value="15" /></div>
+      <div class="full"><label>Confirmação do permit</label><input id="permitConfirmation" autocomplete="off" placeholder="AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION" /></div>
+    </div>
+    <div class="actions"><button class="secondary" onclick="grantTransmissionPermit()">Autorizar UMA Prepared DPS (TEST)</button></div>
+    <div class="status">Permit ativo nesta aba: <b id="permitLabel">nenhum</b></div>
+    <div class="grid" style="margin-top:14px">
       <div><label>Idempotency-Key única</label><input id="idempotencyKey" autocomplete="off" placeholder="first-real-dps-..." /></div>
       <div><label>Confirmação exata</label><input id="liveConfirmation" autocomplete="off" placeholder="YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS" /></div>
     </div>
