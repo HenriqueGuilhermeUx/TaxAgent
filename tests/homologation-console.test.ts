@@ -34,9 +34,13 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /loadInvoiceDiagnostics/);
   assert.match(html, /\/v1\/invoices\//);
   assert.match(html, /\/documents/);
-  assert.match(html, /Somente leitura/);
+  assert.match(html, /Polling e reconciliação sempre consultam o provider/);
   assert.match(html, /Acompanhar até estado final/);
   assert.match(html, /pollInvoiceUntilTerminal/);
+  assert.match(html, /RECONCILE-PREPARED-NATIONAL-NO-BLIND-REPOST/);
+  assert.match(html, /requestSafeReconciliation/);
+  assert.match(html, /reconcile-prepared/);
+  assert.match(html, /x-taxagent-reconcile-confirmation/);
   assert.match(html, /Provar cancelamento 101101/);
   assert.match(html, /REGISTER-TEST-CANCELLATION-101101/);
   assert.match(html, /requestCancellation101101/);

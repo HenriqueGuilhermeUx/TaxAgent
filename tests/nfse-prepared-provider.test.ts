@@ -22,6 +22,7 @@ function fixture(reconciled: any) {
   let permitConsumes = 0;
   let transmittedXml = '';
   let activeFingerprint = 'fp';
+  let authorizedXmlAvailable = true;
   const record = {
     id: 'pdps_test', company_id: 'comp_test', environment: 'test', tax_decision_id: 'taxdec_test', schema_id: 'nfse-prodrest-v1.01-20260727',
     dps_id: 'DPS353060724705102600012200001000000000000001', sequence: 1, series: '1', issued_at: input.issuedAt, competence: input.competence,
@@ -46,7 +47,7 @@ function fixture(reconciled: any) {
       async findByDpsId() { findCalls += 1; return reconciled; },
       async getByAccessKey() { return { chaveAcesso: 'KEY-1', idDps: record.dps_id }; },
       async issue(_environment: string, xml: string) { issueCalls += 1; transmittedXml = xml; return { chaveAcesso: 'KEY-1', idDps: record.dps_id }; },
-      decodeNfseXml() { return undefined; },
+      decodeNfseXml() { return authorizedXmlAvailable ? '<NFSe autorizada="true"/>' : undefined; },
       sanitize(value: any) { return value; },
     } as any,
     { async latestContent() { return null; }, async save() { return { id: 'doc' }; } } as any,
@@ -77,6 +78,7 @@ function fixture(reconciled: any) {
     permitConsumes: () => permitConsumes,
     transmittedXml: () => transmittedXml,
     setActiveFingerprint: (value: string) => { activeFingerprint = value; },
+    setAuthorizedXmlAvailable: (value: boolean) => { authorizedXmlAvailable = value; },
   };
 }
 
@@ -153,4 +155,21 @@ test('Prepared DPS refuses provider network when active A1 differs from signing 
   assert.equal(f.findCalls(), 0);
   assert.equal(f.issueCalls(), 0);
   assert.equal(f.permitClaims(), 0);
+});
+
+
+test('access key without official authorized XML stays incomplete and never consumes the one-shot permit', async () => {
+  const f = fixture(null);
+  f.setAuthorizedXmlAvailable(false);
+  await assert.rejects(
+    () => withLive(() => f.provider.issue(input, { invoiceId: 'inv_xml_missing', preparedDpsId: 'pdps_test' })),
+    (error: any) => error?.code === 'NFSE_AUTHORIZATION_PROOF_INCOMPLETE'
+      && error?.retryable === true
+      && error?.details?.authorization_proven === false
+      && error?.details?.fiscal_retransmission_attempted === false,
+  );
+  assert.equal(f.findCalls(), 1);
+  assert.equal(f.issueCalls(), 1);
+  assert.equal(f.permitClaims(), 1);
+  assert.equal(f.permitConsumes(), 0);
 });

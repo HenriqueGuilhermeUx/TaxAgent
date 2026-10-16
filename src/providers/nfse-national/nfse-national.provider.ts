@@ -368,15 +368,27 @@ export class NfseNationalProvider implements FiscalProvider {
     }
     const providerReference = response.idDps ?? response.idDPS ?? dpsId;
     const authorizedXml = this.client.decodeNfseXml(response);
-    if (authorizedXml) {
-      await this.documents.save({
-        invoiceId,
-        kind: 'nfse-authorized-xml',
-        content: authorizedXml,
-        contentType: 'application/xml',
-        metadata: { accessKey, providerReference },
-      });
+    if (!authorizedXml) {
+      throw new FiscalEngineError(
+        'NFSE_AUTHORIZATION_PROOF_INCOMPLETE',
+        'SEFIN returned an access key without the official NFS-e XML. TaxAgent will reconcile provider state and will not mark the invoice authorized until the official XML is preserved.',
+        true,
+        {
+          dps_id: dpsId,
+          provider_reference: providerReference,
+          access_key_present: true,
+          authorization_proven: false,
+          fiscal_retransmission_attempted: false,
+        },
+      );
     }
+    await this.documents.save({
+      invoiceId,
+      kind: 'nfse-authorized-xml',
+      content: authorizedXml,
+      contentType: 'application/xml',
+      metadata: { accessKey, providerReference },
+    });
     return { status: 'authorized', provider: this.name, accessKey, providerReference, raw: this.client.sanitize(response) };
   }
 

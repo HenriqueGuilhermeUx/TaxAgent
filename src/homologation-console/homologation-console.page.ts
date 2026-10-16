@@ -136,8 +136,12 @@ export function homologationConsoleHtml(): string {
 
   <div class="card">
     <div class="step">7 · Acompanhamento</div><h2>Invoice · Fiscal Ledger · documentos</h2>
-    <p class="muted">Somente leitura. O polling usa GET e nunca retransmite uma DPS.</p>
+    <p class="muted">Polling e reconciliação sempre consultam o provider antes de qualquer POST. A reconciliação manual não concede nova autorização de transmissão e o one-shot permit continua impedindo repost cego.</p>
     <div class="row"><input id="invoiceId" autocomplete="off" placeholder="inv_..." /><button class="secondary" onclick="loadInvoiceDiagnostics()">Consultar invoice</button><button class="secondary" onclick="pollInvoiceUntilTerminal()">Acompanhar até estado final</button></div>
+    <div class="grid" style="margin-top:12px">
+      <div class="full"><label>Confirmação para reconciliação manual</label><input id="reconcileConfirmation" autocomplete="off" placeholder="RECONCILE-PREPARED-NATIONAL-NO-BLIND-REPOST" /></div>
+    </div>
+    <div class="actions"><button class="secondary" onclick="requestSafeReconciliation()">Reconciliar Prepared DPS sem repost cego</button></div>
     <pre id="invoiceOut" class="out">Aguardando consulta...</pre>
   </div>
 
@@ -169,6 +173,7 @@ export function homologationConsoleHtml(): string {
     let body;
     if(opts.form){body=opts.form;} else if(opts.body!==undefined){headers['content-type']='application/json';body=JSON.stringify(opts.body);}
     if(opts.idempotencyKey)headers['idempotency-key']=opts.idempotencyKey;
+    if(opts.headers)Object.assign(headers,opts.headers);
     const response=await fetch(path,{method:opts.method||'GET',headers,body,cache:'no-store',credentials:'same-origin'});
     const raw=await response.text();let parsed=raw;try{parsed=raw?JSON.parse(raw):{};}catch(e){}
     if(!response.ok)throw new Error('HTTP '+response.status+' · '+(typeof parsed==='string'?parsed.slice(0,1500):JSON.stringify(parsed)));
@@ -298,6 +303,22 @@ export function homologationConsoleHtml(): string {
       await new Promise((resolve)=>setTimeout(resolve,3000));
     }
     show('invoiceOut','Polling encerrado após 10 minutos sem estado terminal. Consulte novamente antes de qualquer ação.');
+  };
+
+  window.requestSafeReconciliation=async function(){
+    try{
+      const id=val('invoiceId')||state.invoiceId;if(!id)throw new Error('Informe o Invoice ID');
+      const confirmation=val('reconcileConfirmation');if(confirmation!=='RECONCILE-PREPARED-NATIONAL-NO-BLIND-REPOST')throw new Error('Confirmação exata da reconciliação não informada');
+      const invoice=await request('/v1/invoices/'+encodeURIComponent(id));
+      if(invoice.environment!=='test')throw new Error('A reconciliação manual da Console é restrita a TEST');
+      if(invoice.status!=='retrying'||!invoice.prepared_dps_id)throw new Error('A invoice precisa estar retrying e vinculada a uma Prepared DPS');
+      const result=await request('/v1/invoices/'+encodeURIComponent(id)+'/reconcile-prepared',{
+        method:'POST',
+        headers:{'x-taxagent-reconcile-confirmation':confirmation}
+      });
+      $('reconcileConfirmation').value='';
+      show('invoiceOut',{reconciliation:result,note:'A operação foi apenas reenfileirada. O provider reconcilia por dps_id antes de qualquer POST e o permit já reclamado não pode ser reutilizado.'});
+    }catch(e){show('invoiceOut','ERRO: '+e.message);}
   };
 
   window.requestCancellation101101=async function(){

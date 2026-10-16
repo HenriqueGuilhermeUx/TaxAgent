@@ -130,6 +130,31 @@ export class InvoicesService {
     return { id, status: 'retrying', prepared_dps_id: invoice.prepared_dps_id, strategy: 'reconcile_by_dps_then_same_signed_xml' };
   }
 
+  async reconcilePreparedNational(id: string, companyId: string | undefined) {
+    const invoice = await this.repository.findById(id);
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (companyId && invoice.company_id !== companyId) throw new ForbiddenException('Invoice belongs to another company');
+    if (invoice.environment !== 'test') throw new BadRequestException('Safe Prepared DPS reconciliation is restricted to Produção Restrita');
+    if (invoice.status !== 'retrying' || !invoice.prepared_dps_id) throw new BadRequestException('Invoice must be retrying with an immutable Prepared DPS before reconciliation can be requested');
+    await this.ledger.append({
+      invoiceId: id,
+      type: 'invoice.reconciliation_requested',
+      payload: {
+        prepared_dps_id: invoice.prepared_dps_id,
+        strategy: 'reconcile_by_dps_before_any_post',
+        fiscal_retransmission_authorized: false,
+      },
+    });
+    await this.jobs.enqueue('issue_invoice', { invoiceId: id });
+    return {
+      id,
+      status: 'retrying',
+      prepared_dps_id: invoice.prepared_dps_id,
+      strategy: 'reconcile_by_dps_before_any_post',
+      blind_repost_allowed: false,
+    };
+  }
+
   async requestCancellation(id: string, companyId: string | undefined, dto: CancelInvoiceDto) {
     const invoice = await this.repository.findById(id);
     if (!invoice) throw new NotFoundException('Invoice not found');
@@ -262,19 +287,39 @@ export class InvoicesService {
     const normalized = normalizeEngineError(error);
     if (attemptId) await this.repository.finishAttempt(attemptId, 'error', normalized, normalized.code, normalized.message);
     const exhausted = attemptNumber >= MAX_ATTEMPTS;
-    if (normalized.retryable && !exhausted) {
+    if (normalized.retryable) {
       await this.repository.markRetrying(id);
-      await this.ledger.append({ invoiceId: id, type: 'invoice.retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message } });
-      throw error;
+      if (!exhausted) {
+        await this.ledger.append({ invoiceId: id, type: 'invoice.retry_scheduled', payload: { attempt: attemptNumber, code: normalized.code, message: normalized.message } });
+        throw error;
+      }
+      await this.ledger.append({
+        invoiceId: id,
+        type: 'invoice.retry_exhausted_operator_attention_required',
+        payload: {
+          attempt: attemptNumber,
+          code: normalized.code,
+          message: normalized.message,
+          status_preserved: 'retrying',
+          fiscal_rejection_proven: false,
+        },
+      });
+      await this.webhooks.emit(companyId, 'invoice.retry_exhausted_operator_attention_required', {
+        invoice_id: id,
+        error: normalized,
+        status: 'retrying',
+        fiscal_rejection_proven: false,
+      });
+      return;
     }
     const result: IssueResult = {
       status: 'rejected',
       provider: 'taxagent',
       rejection: {
-        code: exhausted && normalized.retryable ? 'TA_RETRIES_EXHAUSTED' : normalized.code,
+        code: normalized.code,
         message: normalized.message,
         retryable: false,
-        category: exhausted ? 'retry-exhausted' : 'engine',
+        category: 'engine',
       },
     };
     await this.repository.saveResult(id, result);

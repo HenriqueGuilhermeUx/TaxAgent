@@ -1,6 +1,6 @@
 # TaxAgent — Core NFS-e Emission Status
 
-Atualizado em 2026-10-15.
+Atualizado em 2026-10-16.
 
 ## Resposta curta
 
@@ -35,7 +35,9 @@ Hoje o TaxAgent está entre **implemented** e **pilot/homologation-ready**, depe
 - Fiscal Ledger;
 - webhooks;
 - cancelamento via evento 101101;
-- retry/reconciliação sem retransmissão cega.
+- retry/reconciliação sem retransmissão cega;
+- estado `authorized` só é persistido quando a chave oficial e o XML oficial da NFS-e foram obtidos e o XML foi preservado;
+- exaustão de erro técnico retryable não é convertida em falsa rejeição fiscal: a invoice permanece `retrying` e exige reconciliação/atenção operacional.
 
 ## O que falta para dizer “emissão funcionando”
 
@@ -93,6 +95,8 @@ Somente considerar uma NFS-e emitida quando:
 - houver `access_key` oficial;
 - XML autorizado estiver preservado;
 - ledger registrar `invoice.authorized`.
+
+Se a SEFIN devolver `chaveAcesso` mas o XML oficial ainda não estiver disponível, o estado permanece inconclusivo/retryable. O TaxAgent não grava `authorized`, não consome a prova como concluída e não permite repost cego. Após a janela automática de retries, o operador pode solicitar apenas uma nova passagem de reconciliação por `POST /v1/invoices/:id/reconcile-prepared`, com confirmação explícita; essa ação não concede uma nova transmissão e o one-shot permit continua sendo a barreira final.
 
 ## Estado dos gates padrão
 
