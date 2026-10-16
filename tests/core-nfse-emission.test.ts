@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { prepareHomologationConsoleHtml } from '../src/homologation-console/homologation-console.controller';
 import { homologationConsoleHtml } from '../src/homologation-console/homologation-console.page';
 
 test('homologation console requires Prepared DPS before first real invoice request', () => {
-  const html = homologationConsoleHtml();
+  const html = prepareHomologationConsoleHtml(homologationConsoleHtml());
   assert.match(html, /\/v1\/operations\/dps\/prepare/);
   assert.match(html, /\/v1\/operations\/dps\/prepared\/.*\/sign/);
   assert.match(html, /prepared_dps_id/);
@@ -15,7 +16,7 @@ test('homologation console requires Prepared DPS before first real invoice reque
 });
 
 test('homologation console exposes truthful core emission diagnostics', () => {
-  const html = homologationConsoleHtml();
+  const html = prepareHomologationConsoleHtml(homologationConsoleHtml());
   assert.match(html, /Status real da emissão/);
   assert.match(html, /issuer-readiness/);
   assert.match(html, /core-status\?environment=test/);
