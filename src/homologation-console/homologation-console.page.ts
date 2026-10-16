@@ -66,8 +66,8 @@ export function homologationConsoleHtml(): string {
 
   <div class="card">
     <div class="step">3.5 · Core NFS-e</div><h2>Status real da emissão</h2>
-    <p class="muted">Separa capacidade implementada de prova operacional. Este diagnóstico não transmite documento fiscal.</p>
-    <div class="actions"><button class="secondary" onclick="checkCoreEmission()">Ver blockers da emissão</button></div>
+    <p class="muted">Separa capacidade implementada de prova oficial persistida. Este diagnóstico não transmite documento fiscal.</p>
+    <div class="actions"><button class="secondary" onclick="checkCoreEmission()">Ver status e blockers da emissão</button></div>
     <pre id="coreEmissionOut" class="out">Aguardando diagnóstico...</pre>
   </div>
 
@@ -90,7 +90,7 @@ export function homologationConsoleHtml(): string {
   </div>
 
   <div class="card">
-    <div class="step">5 · Prepared DPS</div><h2>Congelar, validar e assinar a DPS real — sem transmitir</h2>
+    <div class="step">5 · DPS</div><h2>Dry-run real com A1, sem transmissão</h2>
     <div class="grid">
       <div><label>Competência</label><input id="competence" type="date" /></div>
       <div><label>Tax Decision ID</label><input id="taxDecisionId" readonly placeholder="taxdec_..." /></div>
@@ -103,16 +103,14 @@ export function homologationConsoleHtml(): string {
       <div><label>ISS · tributação (tribISSQN)</label><select id="issTaxation"><option value="1">1 · Tributável</option><option value="2">2 · Imunidade</option><option value="3">3 · Exportação</option><option value="4">4 · Não incidência</option></select></div>
       <div><label>ISS · retenção (tpRetISSQN)</label><select id="issWithholding"><option value="1">1 · Não retido</option><option value="2">2 · Retido pelo tomador</option><option value="3">3 · Retido pelo intermediário</option></select></div>
       <div><label>Alíquota ISS (%) · quando aplicável</label><input id="issRate" type="number" step="0.01" min="0" max="9.99" /></div>
-      <div><label>Idempotency-Key da Prepared DPS</label><input id="preparedIdempotencyKey" autocomplete="off" placeholder="prepared-first-dps-..." /></div>
     </div>
-    <div class="actions"><button class="secondary" onclick="dryRunDps()">Preview XSD + A1 sem consumir sequência</button><button onclick="prepareAndSignDps()">Preparar + assinar DPS imutável</button></div>
-    <div class="status">Prepared DPS ativa: <b id="preparedDpsLabel">nenhuma</b></div>
+    <div class="actions"><button onclick="dryRunDps()">Build → XSD → A1 → XMLDSig → XSD</button></div>
     <pre id="dpsOut" class="out">Aguardando...</pre>
   </div>
 
   <div class="card lock">
     <div class="step">6 · Bloqueado por segurança</div><h2>Primeira transmissão em Produção Restrita</h2>
-    <p class="muted">Só use depois de existir uma <b>Prepared DPS signed</b>, o readiness estar totalmente verde e os gates live terem sido habilitados explicitamente no ambiente de homologação.</p>
+    <p class="muted">Só use depois de o dry-run retornar <b>valid=true</b> e o runtime estar com os gates live explicitamente habilitados.</p>
     <div class="grid">
       <div><label>Idempotency-Key única</label><input id="idempotencyKey" autocomplete="off" placeholder="first-real-dps-..." /></div>
       <div><label>Confirmação exata</label><input id="liveConfirmation" autocomplete="off" placeholder="YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS" /></div>
@@ -124,7 +122,7 @@ export function homologationConsoleHtml(): string {
 <script>
 (function(){
   'use strict';
-  const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false,preparedDpsId:'',preparedResumePayload:null,preparedSigned:false};
+  const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false};
   const $=(id)=>document.getElementById(id);
   const val=(id)=>String($(id).value||'').trim();
   const show=(id,value)=>{$(id).textContent=typeof value==='string'?value:JSON.stringify(value,null,2)};
@@ -146,7 +144,7 @@ export function homologationConsoleHtml(): string {
   function syncStatus(){
     $('sessionStatus').textContent=state.companyId?'Company ativa: '+state.companyId+' · API key '+(state.apiKey?'carregada':'ausente'):'Nenhuma Company ativa nesta aba.';
     if(state.cityCode){$('issuerCity').value=state.cityCode;$('serviceLocation').value=state.cityCode;$('customerCity').value=$('customerCity').value||state.cityCode;$('destinationCity').value=$('destinationCity').value||state.cityCode;}
-    $('taxDecisionId').value=state.taxDecisionId;$('decisionLabel').textContent=state.taxDecisionId||'nenhuma';$('preparedDpsLabel').textContent=state.preparedDpsId?(state.preparedDpsId+(state.preparedSigned?' · signed':' · prepared')):'nenhuma';
+    $('taxDecisionId').value=state.taxDecisionId;$('decisionLabel').textContent=state.taxDecisionId||'nenhuma';
   }
   window.useExisting=function(){state.companyId=val('existingCompany');state.apiKey=val('existingKey');state.cityCode=val('existingCity');syncStatus();};
   window.copyCreatedKey=async function(){const key=$('createdKey').value;if(!key)return;await navigator.clipboard.writeText(key);};
@@ -178,16 +176,15 @@ export function homologationConsoleHtml(): string {
     const rate=val('issRate');return {company_id:state.companyId,environment:'test',competence:val('competence'),tax_decision_id:state.taxDecisionId,customer:{tax_id:val('customerTaxId'),name:val('customerName'),city_code:val('customerCity')},service:{description:val('serviceDescription'),amount:Number(val('invoiceAmount')),service_location_city_code:val('serviceLocation'),iss_taxation:val('issTaxation'),iss_withholding:val('issWithholding'),iss_rate:rate===''?undefined:Number(rate)}};
   }
 
-  window.dryRunDps=async function(){try{const body=buildInvoiceBody();state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Validando preview sem transmitir...');const result=await request('/v1/operations/dps/validate',{method:'POST',body});state.dryRunValid=result.valid===true&&result.transmitted===false;show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
-  window.prepareAndSignDps=async function(){try{const body=buildInvoiceBody();const idem=val('preparedIdempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key própria para a Prepared DPS');state.lastInvoiceBody=body;state.preparedDpsId='';state.preparedResumePayload=null;state.preparedSigned=false;show('dpsOut','Persistindo Prepared DPS imutável...');const prepared=await request('/v1/operations/dps/prepare',{method:'POST',body,idempotencyKey:idem});const signed=await request('/v1/operations/dps/prepared/'+encodeURIComponent(prepared.id)+'/sign',{method:'POST'});if(signed.signed!==true||signed.transmitted!==false)throw new Error('Prepared DPS não retornou signed=true/transmitted=false');state.preparedDpsId=signed.id;state.preparedResumePayload=signed.resume_payload;state.preparedSigned=true;syncStatus();show('dpsOut',{prepared_dps_id:signed.id,status:signed.status,signed:signed.signed,transmitted:signed.transmitted,dps_id:signed.dps_id,sequence:signed.sequence,schema:signed.schema,signed_xml_sha256:signed.signed_xml_sha256,certificate_fingerprint:signed.certificate_fingerprint,resume_payload:signed.resume_payload,note:'Artefato real congelado e assinado. Ainda não houve transmissão SEFIN.'});}catch(e){show('dpsOut','ERRO: '+e.message);}};
+  window.dryRunDps=async function(){try{const body=buildInvoiceBody();state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Validando sem transmitir...');const result=await request('/v1/operations/dps/validate',{method:'POST',body});state.dryRunValid=result.valid===true&&result.transmitted===false;show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
 
   window.sendFirstInvoice=async function(){
     try{
-      if(!state.preparedDpsId||!state.preparedSigned||!state.preparedResumePayload)throw new Error('Prepare e assine uma Prepared DPS imutável nesta aba antes da transmissão');
+      if(!state.dryRunValid)throw new Error('Execute um dry-run válido nesta aba antes da transmissão');
       const confirmation=val('liveConfirmation');if(confirmation!=='YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS')throw new Error('Confirmação exata não informada');
-      const idem=val('idempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key única e persistente para a Invoice');
+      const idem=val('idempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key única e persistente');
       const readiness=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'/probe?environment=test',{method:'POST'});if(readiness.ready_for_transmission!==true){show('liveOut',readiness);throw new Error('Readiness não está 100% verde; transmissão recusada');}
-      const body=state.preparedResumePayload;if(body.prepared_dps_id!==state.preparedDpsId)throw new Error('Prepared DPS resume payload inconsistente; transmissão recusada');show('liveOut','Enfileirando uma única operação com a Prepared DPS já congelada...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});show('liveOut',{...result,prepared_dps_id:state.preparedDpsId,note:'A operação foi aceita pela fila. Consulte GET /v1/invoices/:id até authorized/rejected; aceite na fila não prova autorização SEFIN.'});
+      const body=state.lastInvoiceBody||buildInvoiceBody();show('liveOut','Transmitindo uma única operação...');const result=await request('/v1/invoices',{method:'POST',body,idempotencyKey:idem});show('liveOut',result);
     }catch(e){show('liveOut','ERRO: '+e.message);}
   };
   syncStatus();
