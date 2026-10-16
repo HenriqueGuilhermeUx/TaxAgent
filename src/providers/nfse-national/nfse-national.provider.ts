@@ -266,6 +266,19 @@ export class NfseNationalProvider implements FiscalProvider {
     await this.preparedDps.sign(preparedId, input.companyId);
     const material = await this.preparedDps.signedMaterial(preparedId, input.companyId);
     const certificate = await this.vault.getActiveMaterial(input.companyId);
+    if (!material.record.certificate_fingerprint || material.record.certificate_fingerprint !== certificate.fingerprint) {
+      throw new FiscalEngineError(
+        'TA_PREPARED_DPS_CERTIFICATE_STALE',
+        'The active A1 certificate is not the certificate that signed this immutable Prepared DPS. Prepare and sign a fresh DPS after any certificate rotation.',
+        false,
+        {
+          prepared_dps_id: record.id,
+          prepared_certificate_fingerprint: material.record.certificate_fingerprint ?? null,
+          active_certificate_fingerprint: certificate.fingerprint,
+          fiscal_transmission_attempted: false,
+        },
+      );
+    }
     const existingDocument = await this.documents.latestContent(operation.invoiceId, 'dps-signed-xml');
     if (existingDocument) {
       if (existingDocument.sha256 !== material.record.signed_xml_sha256) {
@@ -291,7 +304,13 @@ export class NfseNationalProvider implements FiscalProvider {
     }
 
     const reconciled = await this.client.findByDpsId(input.environment, record.dps_id, certificate);
-    if (reconciled) return this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
+    if (reconciled) {
+      const result = await this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
+      if (this.transmissionPermits) {
+        await this.transmissionPermits.consumeClaimIfOwned(record.id, operation.invoiceId, result.status);
+      }
+      return result;
+    }
 
     if (!this.transmissionPermits) {
       throw new FiscalEngineError(
