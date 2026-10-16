@@ -291,7 +291,13 @@ export class NfseNationalProvider implements FiscalProvider {
     }
 
     const reconciled = await this.client.findByDpsId(input.environment, record.dps_id, certificate);
-    if (reconciled) return this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
+    if (reconciled) {
+      const result = await this.authorizedFromReconciliation(operation.invoiceId, record.dps_id, reconciled, input.environment, certificate);
+      if (this.transmissionPermits) {
+        await this.transmissionPermits.consumeClaimForPreparedIfPresent(record.id, operation.invoiceId, result.status);
+      }
+      return result;
+    }
 
     if (!this.transmissionPermits) {
       throw new FiscalEngineError(
