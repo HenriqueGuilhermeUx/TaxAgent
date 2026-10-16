@@ -61,6 +61,11 @@ function fixture(reconciled: any) {
       permitConsumes += 1;
       assert.ok(outcome === 'authorized' || outcome === 'rejected');
     },
+    async consumeClaimForPreparedIfPresent(_preparedDpsId: string, _invoiceId: string, outcome: string) {
+      permitConsumes += 1;
+      assert.ok(outcome === 'authorized' || outcome === 'rejected');
+      return true;
+    },
   };
   return {
     provider,
@@ -93,7 +98,7 @@ test('Prepared DPS path reconciles by immutable dps_id and does not POST or rebu
   assert.equal(f.issueCalls(), 0);
   assert.equal(f.builderCalls(), 0);
   assert.equal(f.permitClaims(), 0);
-  assert.equal(f.permitConsumes(), 0);
+  assert.equal(f.permitConsumes(), 1);
 });
 
 test('Prepared DPS path POSTs the exact persisted signed XML only after reconciliation confirms absence', async () => {
