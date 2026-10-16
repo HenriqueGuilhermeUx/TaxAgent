@@ -91,6 +91,7 @@ export class NfseNationalProvider implements FiscalProvider {
       );
     }
     return this.issuePrepared(input, operation);
+  }
 
   async cancel(input: CancelFiscalInput, operation: FiscalOperationContext): Promise<EventResult> {
     const mode = process.env.TAXAGENT_NFSE_MODE ?? 'mock';
