@@ -101,3 +101,10 @@ test('authoritative reconciliation can finalize a previously claimed permit with
   assert.equal(consumed,true);
   assert.deepEqual(params,['pdps_1','inv_1','authorized']);
 });
+
+
+test('reconciliation settlement is a no-op when no claimed permit belongs to the invoice', async () => {
+  const db={query:async()=>({rows:[],rowCount:0})} as any;
+  const service=new FiscalTransmissionPermitService(db,{} as any);
+  assert.equal(await service.consumeClaimForPreparedIfPresent('pdps_1','inv_other','authorized'),false);
+});
