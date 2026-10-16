@@ -74,3 +74,13 @@ Production authorization requires a separate release process after repeatable ho
 ## Certificate rotation
 
 A signed Prepared DPS is cryptographically bound to the A1 certificate fingerprint recorded at signing time. If the active A1 changes before transmission, TaxAgent fails closed with `TA_PREPARED_DPS_CERTIFICATE_STALE` before any provider network call. The operator must prepare and sign a fresh DPS with the active certificate.
+
+
+## First-invoice script
+
+`scripts/homologation-first-invoice.ts` now requires two independent explicit confirmations before it can reach the invoice POST:
+
+- `TAXAGENT_CONFIRM_FIRST_TRANSMISSION=YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS`
+- `TAXAGENT_CONFIRM_ONE_SHOT_PERMIT=AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION`
+
+After issuer-readiness, Prepared DPS signing and readiness/probe succeed, the script grants a 15-minute TEST-only permit bound to that exact signed Prepared DPS. If permit metadata does not match, the script stops before creating the invoice request.
