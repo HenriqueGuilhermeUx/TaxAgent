@@ -10,7 +10,7 @@ function serviceWithDb(rows: any[], cancellation = { event_count: '0', document_
       return queryCount === 1 ? { rows, rowCount: rows.length } : { rows: [cancellation], rowCount: 1 };
     },
   } as any;
-  const service = new IssuerReadinessService({} as any, {} as any, db, {} as any, {} as any);
+  const service = new IssuerReadinessService({} as any, {} as any, {} as any, {} as any, db);
   (service as any).inspect = async () => ({
     company_id: 'comp_1',
     environment: 'test',
