@@ -112,19 +112,26 @@ export function homologationConsoleHtml(): string {
 
   <div class="card lock">
     <div class="step">6 · Bloqueado por segurança</div><h2>Primeira transmissão em Produção Restrita</h2>
-    <p class="muted">Só use depois de existir uma <b>Prepared DPS signed</b>, o readiness estar totalmente verde e os gates live terem sido habilitados explicitamente no ambiente de homologação.</p>
+    <p class="muted">A transmissão exige quatro gates simultâneos: Prepared DPS signed, readiness verde, runtime live explicitamente habilitado e um <b>permit TEST de uso único</b> preso a esta Prepared DPS.</p>
     <div class="grid">
-      <div><label>Idempotency-Key única</label><input id="idempotencyKey" autocomplete="off" placeholder="first-real-dps-..." /></div>
-      <div><label>Confirmação exata</label><input id="liveConfirmation" autocomplete="off" placeholder="YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS" /></div>
+      <div><label>Motivo do permit</label><input id="permitReason" autocomplete="off" value="Primeira prova NFS-e Nacional em Produção Restrita" /></div>
+      <div><label>Expiração do permit (minutos)</label><input id="permitExpiration" type="number" min="5" max="60" value="15" /></div>
+      <div class="full"><label>Confirmação do permit</label><input id="permitConfirmation" autocomplete="off" placeholder="AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION" /></div>
+    </div>
+    <div class="actions"><button class="secondary" onclick="grantTransmissionPermit()">Autorizar UMA Prepared DPS (TEST)</button></div>
+    <div class="status">Permit ativo nesta aba: <b id="permitLabel">nenhum</b></div>
+    <div class="grid" style="margin-top:14px">
+      <div><label>Idempotency-Key única da Invoice</label><input id="idempotencyKey" autocomplete="off" placeholder="first-real-dps-..." /></div>
+      <div><label>Confirmação final</label><input id="liveConfirmation" autocomplete="off" placeholder="YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS" /></div>
     </div>
     <div class="actions"><button class="danger" onclick="sendFirstInvoice()">Transmitir UMA DPS real</button></div>
-    <pre id="liveOut" class="out">Aguardando gates de homologação...</pre>
+    <pre id="liveOut" class="out">Aguardando Prepared DPS + permit + gates de homologação...</pre>
   </div>
 </div>
 <script>
 (function(){
   'use strict';
-  const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false,preparedDpsId:'',preparedResumePayload:null,preparedSigned:false};
+  const state={companyId:'',apiKey:'',cityCode:'',taxDecisionId:'',lastInvoiceBody:null,dryRunValid:false,preparedDpsId:'',preparedResumePayload:null,preparedSigned:false,transmissionPermitId:''};
   const $=(id)=>document.getElementById(id);
   const val=(id)=>String($(id).value||'').trim();
   const show=(id,value)=>{$(id).textContent=typeof value==='string'?value:JSON.stringify(value,null,2)};
@@ -146,7 +153,7 @@ export function homologationConsoleHtml(): string {
   function syncStatus(){
     $('sessionStatus').textContent=state.companyId?'Company ativa: '+state.companyId+' · API key '+(state.apiKey?'carregada':'ausente'):'Nenhuma Company ativa nesta aba.';
     if(state.cityCode){$('issuerCity').value=state.cityCode;$('serviceLocation').value=state.cityCode;$('customerCity').value=$('customerCity').value||state.cityCode;$('destinationCity').value=$('destinationCity').value||state.cityCode;}
-    $('taxDecisionId').value=state.taxDecisionId;$('decisionLabel').textContent=state.taxDecisionId||'nenhuma';$('preparedDpsLabel').textContent=state.preparedDpsId?(state.preparedDpsId+(state.preparedSigned?' · signed':' · prepared')):'nenhuma';
+    $('taxDecisionId').value=state.taxDecisionId;$('decisionLabel').textContent=state.taxDecisionId||'nenhuma';$('preparedDpsLabel').textContent=state.preparedDpsId?(state.preparedDpsId+(state.preparedSigned?' · signed':' · prepared')):'nenhuma';$('permitLabel').textContent=state.transmissionPermitId||'nenhum';
   }
   window.useExisting=function(){state.companyId=val('existingCompany');state.apiKey=val('existingKey');state.cityCode=val('existingCity');syncStatus();};
   window.copyCreatedKey=async function(){const key=$('createdKey').value;if(!key)return;await navigator.clipboard.writeText(key);};
@@ -179,11 +186,32 @@ export function homologationConsoleHtml(): string {
   }
 
   window.dryRunDps=async function(){try{const body=buildInvoiceBody();state.lastInvoiceBody=body;state.dryRunValid=false;show('dpsOut','Validando preview sem transmitir...');const result=await request('/v1/operations/dps/validate',{method:'POST',body});state.dryRunValid=result.valid===true&&result.transmitted===false;show('dpsOut',result);}catch(e){show('dpsOut','ERRO: '+e.message);}};
-  window.prepareAndSignDps=async function(){try{const body=buildInvoiceBody();const idem=val('preparedIdempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key própria para a Prepared DPS');state.lastInvoiceBody=body;state.preparedDpsId='';state.preparedResumePayload=null;state.preparedSigned=false;show('dpsOut','Persistindo Prepared DPS imutável...');const prepared=await request('/v1/operations/dps/prepare',{method:'POST',body,idempotencyKey:idem});const signed=await request('/v1/operations/dps/prepared/'+encodeURIComponent(prepared.id)+'/sign',{method:'POST'});if(signed.signed!==true||signed.transmitted!==false)throw new Error('Prepared DPS não retornou signed=true/transmitted=false');state.preparedDpsId=signed.id;state.preparedResumePayload=signed.resume_payload;state.preparedSigned=true;syncStatus();show('dpsOut',{prepared_dps_id:signed.id,status:signed.status,signed:signed.signed,transmitted:signed.transmitted,dps_id:signed.dps_id,sequence:signed.sequence,schema:signed.schema,signed_xml_sha256:signed.signed_xml_sha256,certificate_fingerprint:signed.certificate_fingerprint,resume_payload:signed.resume_payload,note:'Artefato real congelado e assinado. Ainda não houve transmissão SEFIN.'});}catch(e){show('dpsOut','ERRO: '+e.message);}};
+  window.prepareAndSignDps=async function(){try{const body=buildInvoiceBody();const idem=val('preparedIdempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key própria para a Prepared DPS');state.lastInvoiceBody=body;state.preparedDpsId='';state.preparedResumePayload=null;state.preparedSigned=false;state.transmissionPermitId='';show('dpsOut','Persistindo Prepared DPS imutável...');const prepared=await request('/v1/operations/dps/prepare',{method:'POST',body,idempotencyKey:idem});const signed=await request('/v1/operations/dps/prepared/'+encodeURIComponent(prepared.id)+'/sign',{method:'POST'});if(signed.signed!==true||signed.transmitted!==false)throw new Error('Prepared DPS não retornou signed=true/transmitted=false');state.preparedDpsId=signed.id;state.preparedResumePayload=signed.resume_payload;state.preparedSigned=true;syncStatus();show('dpsOut',{prepared_dps_id:signed.id,status:signed.status,signed:signed.signed,transmitted:signed.transmitted,dps_id:signed.dps_id,sequence:signed.sequence,schema:signed.schema,signed_xml_sha256:signed.signed_xml_sha256,certificate_fingerprint:signed.certificate_fingerprint,resume_payload:signed.resume_payload,note:'Artefato real congelado e assinado. Ainda não houve transmissão SEFIN.'});}catch(e){show('dpsOut','ERRO: '+e.message);}};
+
+  window.grantTransmissionPermit=async function(){
+    try{
+      requireCompany();
+      if(!state.preparedDpsId||!state.preparedSigned)throw new Error('Prepare e assine a Prepared DPS antes de autorizar transmissão');
+      const confirmation=val('permitConfirmation');
+      if(confirmation!=='AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION')throw new Error('Confirmação exata do permit não informada');
+      const readiness=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'/probe?environment=test',{method:'POST'});
+      if(readiness.ready_for_transmission!==true){show('liveOut',readiness);throw new Error('Readiness não está 100% verde; permit não criado');}
+      const result=await request('/v1/operations/transmission-permits',{method:'POST',bootstrap:true,bearer:false,body:{
+        company_id:state.companyId,
+        environment:'test',
+        provider:'nfse-national',
+        prepared_dps_id:state.preparedDpsId,
+        expiration_minutes:Number(val('permitExpiration')||15),
+        reason:val('permitReason'),
+        confirmation
+      }});
+      state.transmissionPermitId=result.id;syncStatus();$('permitConfirmation').value='';show('liveOut',{permit:result,note:'Este permit autoriza no máximo um fiscal POST desta Prepared DPS. Timeout/estado incerto não libera retransmissão.'});
+    }catch(e){show('liveOut','ERRO: '+e.message);}
+  };
 
   window.sendFirstInvoice=async function(){
     try{
-      if(!state.preparedDpsId||!state.preparedSigned||!state.preparedResumePayload)throw new Error('Prepare e assine uma Prepared DPS imutável nesta aba antes da transmissão');
+      if(!state.preparedDpsId||!state.preparedSigned||!state.preparedResumePayload)throw new Error('Prepare e assine uma Prepared DPS imutável nesta aba antes da transmissão');if(!state.transmissionPermitId)throw new Error('Crie o permit TEST de uso único para esta Prepared DPS antes da transmissão');
       const confirmation=val('liveConfirmation');if(confirmation!=='YES-I-UNDERSTAND-THIS-SENDS-A-REAL-DPS')throw new Error('Confirmação exata não informada');
       const idem=val('idempotencyKey');if(!idem)throw new Error('Informe uma Idempotency-Key única e persistente para a Invoice');
       const readiness=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'/probe?environment=test',{method:'POST'});if(readiness.ready_for_transmission!==true){show('liveOut',readiness);throw new Error('Readiness não está 100% verde; transmissão recusada');}
