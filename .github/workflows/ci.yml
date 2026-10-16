@@ -130,6 +130,8 @@ jobs:
               grep -q 'operations/dps/prepare' /tmp/homologation.html
               grep -q 'AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION' /tmp/homologation.html
               grep -q 'operations/transmission-permits' /tmp/homologation.html
+              grep -q 'REGISTER-TEST-CANCELLATION-101101' /tmp/homologation.html
+              grep -q 'pollInvoiceUntilTerminal' /tmp/homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/autopilot > /tmp/autopilot.html
               grep -q 'Autopilot fiscal' /tmp/autopilot.html
               grep -q 'Resolver e preparar automaticamente' /tmp/autopilot.html
@@ -185,6 +187,8 @@ jobs:
               grep -q 'operations/dps/prepare' /tmp/docker-homologation.html
               grep -q 'AUTHORIZE-ONE-NATIONAL-TEST-TRANSMISSION' /tmp/docker-homologation.html
               grep -q 'operations/transmission-permits' /tmp/docker-homologation.html
+              grep -q 'REGISTER-TEST-CANCELLATION-101101' /tmp/docker-homologation.html
+              grep -q 'pollInvoiceUntilTerminal' /tmp/docker-homologation.html
               curl --fail --silent --show-error http://127.0.0.1:3000/v1/homologation/autopilot > /tmp/docker-autopilot.html
               grep -q 'Autopilot fiscal' /tmp/docker-autopilot.html
               grep -q 'Resolver e preparar automaticamente' /tmp/docker-autopilot.html
