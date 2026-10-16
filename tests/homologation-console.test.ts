@@ -34,7 +34,7 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /loadInvoiceDiagnostics/);
   assert.match(html, /\/v1\/invoices\//);
   assert.match(html, /\/documents/);
-  assert.match(html, /Somente leitura/);
+  assert.match(html, /Polling e reconciliação sempre consultam o provider/);
   assert.match(html, /Acompanhar até estado final/);
   assert.match(html, /pollInvoiceUntilTerminal/);
   assert.match(html, /RECONCILE-PREPARED-NATIONAL-NO-BLIND-REPOST/);
