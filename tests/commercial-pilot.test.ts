@@ -62,5 +62,5 @@ test('internal commercial console never persists bootstrap token in browser stor
   assert.match(html,/Commercial Pilot Operations/);
   assert.match(html,/convert-to-pilot/);
   assert.doesNotMatch(html,/localStorage|sessionStorage/);
-  assert.match(html,/fiscal transmission/i);
+  assert.match(html,/transmissão fiscal/i);
 });
