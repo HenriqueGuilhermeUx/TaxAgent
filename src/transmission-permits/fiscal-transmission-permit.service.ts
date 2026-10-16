@@ -161,6 +161,16 @@ export class FiscalTransmissionPermitService {
     }
   }
 
+  async consumeClaimIfOwned(preparedDpsId:string,invoiceId:string,outcome:'authorized'|'rejected'):Promise<boolean>{
+    const {rowCount}=await this.db.query(
+      `UPDATE fiscal_transmission_permits
+          SET status='consumed',outcome=$3,consumed_at=NOW()
+        WHERE prepared_dps_id=$1 AND claimed_invoice_id=$2 AND status='claimed'`,
+      [preparedDpsId,invoiceId,outcome],
+    );
+    return (rowCount??0)===1;
+  }
+
   async revoke(id:string,reason?:string){
     const {rows}=await this.db.query<PermitRow>(
       `UPDATE fiscal_transmission_permits
