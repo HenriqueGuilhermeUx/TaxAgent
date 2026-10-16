@@ -57,6 +57,8 @@ Nota de escopo v0.1: verdadeiro matching N:N entre múltiplos documentos e múlt
 
 ## 4. Homologação real — bloqueio externo principal
 
+Estado objetivo e critérios de prova: `docs/CORE_NFSE_EMISSION_STATUS.md`.
+
 Não declarar o TaxAgent homologado até concluir todos os itens abaixo com empresa e A1 reais em Produção Restrita.
 
 - [ ] cadastrar/confirmar Company real
@@ -64,11 +66,12 @@ Não declarar o TaxAgent homologado até concluir todos os itens abaixo com empr
 - [ ] validar certificado/chave/CNPJ/validade
 - [ ] consultar parâmetros/convênio municipal
 - [ ] criar Tax Decision `resolved`
-- [ ] build DPS
-- [ ] validar DPS contra XSD oficial
-- [ ] assinar XML com A1
+- [x] fluxo técnico de Prepared DPS imutável implementado e obrigatório no caminho de primeira emissão
+- [ ] build Prepared DPS com empresa/A1 reais
+- [ ] validar Prepared DPS contra XSD oficial com dados reais
+- [ ] assinar Prepared DPS com A1 real
 - [ ] validar XML assinado contra XSD oficial
-- [ ] dry-run `valid=true` / `transmitted=false`
+- [ ] dry-run/Prepared DPS `signed=true` / `transmitted=false`
 - [ ] promover builder para `verified`
 - [ ] habilitar live somente no ambiente alvo
 - [ ] transmitir primeira DPS em Produção Restrita

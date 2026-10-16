@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CertificateVaultService } from '../certificates/certificate-vault.service';
+import { DatabaseService } from '../database/database.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 import { MunicipalCapabilityService } from '../municipal-parameters/municipal-capability.service';
 import { SchemaRegistryService } from '../schema-registry/schema-registry.service';
@@ -20,6 +21,7 @@ export class IssuerReadinessService {
     private readonly certificates: CertificateVaultService,
     private readonly capabilities: MunicipalCapabilityService,
     private readonly schemas: SchemaRegistryService,
+    private readonly db: DatabaseService,
   ) {}
 
   async inspect(companyId: string, environment: FiscalEnvironment, effectiveAt?: string) {
@@ -115,6 +117,114 @@ export class IssuerReadinessService {
 
     return result;
   }
+
+  async coreEmissionStatus(companyId: string, environment: FiscalEnvironment, effectiveAt?: string) {
+    const issuer = await this.inspect(companyId, environment, effectiveAt);
+    const authorized = await this.db.query<{
+      id: string;
+      provider: string | null;
+      access_key: string | null;
+      updated_at: Date | string;
+      authorized_xml_sha256: string | null;
+      authorized_xml_created_at: Date | string | null;
+    }>(
+      `SELECT i.id, i.provider, i.access_key, i.updated_at,
+              d.sha256 AS authorized_xml_sha256,
+              d.created_at AS authorized_xml_created_at
+         FROM invoices i
+         LEFT JOIN LATERAL (
+           SELECT sha256, created_at
+             FROM fiscal_documents
+            WHERE invoice_id=i.id AND kind='nfse-authorized-xml'
+            ORDER BY created_at DESC
+            LIMIT 1
+         ) d ON TRUE
+        WHERE i.company_id=$1
+          AND i.environment=$2
+          AND i.status='authorized'
+          AND i.provider='nfse-national'
+        ORDER BY i.updated_at DESC`,
+      [companyId, environment],
+    );
+
+    const provenRows = authorized.rows.filter((row) => Boolean(row.access_key && row.authorized_xml_sha256));
+    const proofCount = provenRows.length;
+    const last = provenRows[0] ?? null;
+    const cancellation = proofCount > 0
+      ? await this.db.query<{ event_count: string; document_count: string }>(
+          `SELECT
+             (SELECT COUNT(*)::text
+                FROM fiscal_events e
+                JOIN invoices i ON i.id=e.invoice_id
+               WHERE i.company_id=$1 AND i.environment=$2 AND i.provider='nfse-national'
+                 AND e.event_type='cancellation') AS event_count,
+             (SELECT COUNT(*)::text
+                FROM fiscal_documents d
+                JOIN invoices i ON i.id=d.invoice_id
+               WHERE i.company_id=$1 AND i.environment=$2 AND i.provider='nfse-national'
+                 AND d.kind='cancellation-event-xml') AS document_count`,
+          [companyId, environment],
+        )
+      : { rows: [] as Array<{ event_count: string; document_count: string }> };
+    const cancellationRow = cancellation.rows[0];
+    const cancellationProven = Boolean(
+      cancellationRow
+      && Number(cancellationRow.event_count) > 0
+      && Number(cancellationRow.document_count) > 0,
+    );
+
+    const stage = proofCount >= 10 && cancellationProven
+      ? 'REPEATABLE_HOMOLOGATION'
+      : proofCount > 0
+        ? 'AUTHORIZED_PROOF_EXISTS'
+        : issuer.eligible_for_national_test_issuance
+          ? 'ELIGIBLE_NOT_YET_PROVEN'
+          : 'BLOCKED_BEFORE_REAL_TEST';
+
+    return {
+      company_id: companyId,
+      environment,
+      stage,
+      implementation: {
+        fiscal_router: true,
+        tax_decision: true,
+        dps_xsd: true,
+        certificate_vault_a1: true,
+        xmldsig: true,
+        prepared_dps: true,
+        sefin_mtls_client: true,
+        national_issue_post: true,
+        reconciliation_by_dps: true,
+        cancellation_event_101101: true,
+        fiscal_ledger: true,
+        webhooks: true,
+      },
+      issuer_readiness: issuer,
+      official_proof: {
+        proven_authorized_nfse_count: proofCount,
+        proven_once: proofCount > 0,
+        repeatability_target_met: proofCount >= 10,
+        cancellation_event_proven: cancellationProven,
+        last_proof: last ? {
+          invoice_id: last.id,
+          provider: last.provider,
+          access_key_present: Boolean(last.access_key),
+          authorized_xml_sha256: last.authorized_xml_sha256,
+          authorized_xml_created_at: last.authorized_xml_created_at,
+          authorized_at: last.updated_at,
+        } : null,
+      },
+      truthful_answer: proofCount > 0
+        ? 'TaxAgent has at least one persisted official National NFS-e authorization proof for this Company/environment.'
+        : 'The National NFS-e emission core is implemented, but no persisted official authorization proof exists yet for this Company/environment.',
+      safeguards: {
+        fiscal_transmission_attempted_by_this_endpoint: false,
+        secrets_exposed: false,
+        access_key_exposed: false,
+      },
+    };
+  }
+
 }
 
 function normalizeTaxId(value: string): string {

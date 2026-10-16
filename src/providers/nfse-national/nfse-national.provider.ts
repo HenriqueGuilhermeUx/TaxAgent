@@ -78,41 +78,19 @@ export class NfseNationalProvider implements FiscalProvider {
       throw new FiscalEngineError('TA_RTC_FIELDS_REQUIRED', 'Live NFS-e transmission requires cIndOp, CST and cClassTrib under the active IBS/CBS rules. Resolve the tax decision before issuance.', false);
     }
 
-    if (operation.preparedDpsId) return this.issuePrepared(input, operation);
-
-    const certificate = await this.vault.getActiveMaterial(input.companyId);
-    const existingSigned = await this.documents.latestContent(operation.invoiceId, 'dps-signed-xml');
-    if (existingSigned) {
-      const metadata = (existingSigned.metadata && typeof existingSigned.metadata === 'object' ? existingSigned.metadata : {}) as { dpsId?: string };
-      if (!metadata.dpsId) {
-        throw new FiscalEngineError('TA_DPS_IDENTITY_MISSING', 'Stored signed DPS is missing its immutable dpsId metadata; refusing to construct a second DPS', false);
-      }
-      const reconciled = await this.client.findByDpsId(input.environment, metadata.dpsId, certificate);
-      if (reconciled) return this.authorizedFromReconciliation(operation.invoiceId, metadata.dpsId, reconciled, input.environment, certificate);
-      return this.transmitSigned(operation.invoiceId, metadata.dpsId, existingSigned.content.toString('utf8'), input.environment, certificate);
+    if (!operation.preparedDpsId) {
+      throw new FiscalEngineError(
+        'TA_PREPARED_DPS_REQUIRED',
+        'Live National NFS-e transmission requires an immutable Prepared DPS. Direct rebuild/sign/transmit is disabled even when the provider is called outside InvoicesService.',
+        false,
+        {
+          environment: input.environment,
+          company_id: input.companyId,
+          fiscal_transmission_attempted: false,
+        },
+      );
     }
-
-    const built = await this.builder.build(input, company);
-    await this.validation.validateWellFormed(built.xml);
-    await this.validation.validateStrict(built.xml, input.environment);
-    const signedXml = this.signature.sign(built.xml, built.id, 'infDPS', certificate);
-    await this.validation.validateWellFormed(signedXml);
-    await this.validation.validateStrict(signedXml, input.environment);
-    await this.documents.save({
-      invoiceId: operation.invoiceId,
-      kind: 'dps-signed-xml',
-      content: signedXml,
-      contentType: 'application/xml',
-      metadata: {
-        dpsId: built.id,
-        sequence: built.sequence,
-        series: built.series,
-        issuedAt: input.issuedAt,
-        competence: input.competence,
-        schema: this.schemas.active(input.environment).id,
-      },
-    });
-    return this.transmitSigned(operation.invoiceId, built.id, signedXml, input.environment, certificate);
+    return this.issuePrepared(input, operation);
   }
 
   async cancel(input: CancelFiscalInput, operation: FiscalOperationContext): Promise<EventResult> {

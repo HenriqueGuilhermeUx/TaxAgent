@@ -33,6 +33,26 @@ export class IssuerReadinessController {
     return this.readiness.inspect(companyId, environment, effectiveAt);
   }
 
+
+  @Get(':companyId/core-status')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Report whether National NFS-e issuance is merely implemented, eligible, or already proven by persisted official authorization evidence' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'], example: 'test' })
+  @ApiQuery({ name: 'effectiveAt', required: false, example: '2026-10-15' })
+  coreStatus(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment: string | undefined,
+    @Query('effectiveAt') effectiveAt: string | undefined,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    if (!auth) throw new ForbiddenException('API key authentication is required');
+    const environment = this.environment(rawEnvironment ?? auth.environment);
+    if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot inspect another company');
+    if (auth.environment !== environment) throw new ForbiddenException('API key environment does not match requested environment');
+    if (effectiveAt && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveAt)) throw new BadRequestException('effectiveAt must use YYYY-MM-DD');
+    return this.readiness.coreEmissionStatus(companyId, environment, effectiveAt);
+  }
+
   private environment(value: string): FiscalEnvironment {
     if (value !== 'test' && value !== 'production') throw new BadRequestException('environment must be test or production');
     return value;

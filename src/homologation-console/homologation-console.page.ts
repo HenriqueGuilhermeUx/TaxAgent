@@ -65,6 +65,13 @@ export function homologationConsoleHtml(): string {
   </div>
 
   <div class="card">
+    <div class="step">3.5 · Core NFS-e</div><h2>Status real da emissão</h2>
+    <p class="muted">Separa capacidade implementada de prova oficial persistida. Este diagnóstico não transmite documento fiscal.</p>
+    <div class="actions"><button class="secondary" onclick="checkCoreEmission()">Ver status e blockers da emissão</button></div>
+    <pre id="coreEmissionOut" class="out">Aguardando diagnóstico...</pre>
+  </div>
+
+  <div class="card">
     <div class="step">4 · Tributação</div><h2>Resolver Tax Decision</h2>
     <div class="grid">
       <div><label>Data efetiva</label><input id="effectiveAt" type="date" /></div>
@@ -158,6 +165,7 @@ export function homologationConsoleHtml(): string {
   };
 
   window.runPreflight=async function(){try{requireCompany();show('preflightOut','Executando...');const result=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'/probe?environment=test',{method:'POST'});show('preflightOut',result);}catch(e){show('preflightOut','ERRO: '+e.message);}};
+  window.checkCoreEmission=async function(){try{requireCompany();show('coreEmissionOut','Diagnosticando...');const proof=await request('/v1/operations/issuer-readiness/'+encodeURIComponent(state.companyId)+'/core-status?environment=test',{method:'GET'});const runtime=await request('/v1/operations/readiness/'+encodeURIComponent(state.companyId)+'?environment=test',{method:'GET'});show('coreEmissionOut',{...proof,runtime:{ready_to_enable_live:runtime.readyToEnableLive||false,ready_for_transmission:runtime.readyForTransmission||false,blocking_gates:(runtime.gates||[]).filter(g=>g.blocking&&g.status!=='pass').map(g=>({id:g.id,detail:g.detail}))}});}catch(e){show('coreEmissionOut','ERRO: '+e.message);}};
 
   window.resolveTax=async function(){
     try{requireCompany();const body={company_id:state.companyId,effective_at:val('effectiveAt'),amount:Number(val('taxAmount')),issuer_city_code:val('issuerCity'),destination_city_code:val('destinationCity')||undefined,national_service_code:val('serviceCode')||undefined,operation_indicator:val('operationIndicator')||undefined,cst:val('cst')||undefined,tax_classification:val('taxClassification')||undefined,tax_treatment:val('taxTreatment')};show('taxOut','Resolvendo...');const result=await request('/v1/tax/resolve',{method:'POST',body});if(result.status==='resolved'){state.taxDecisionId=result.id;$('invoiceAmount').value=val('taxAmount');syncStatus();}show('taxOut',result);}catch(e){show('taxOut','ERRO: '+e.message);}
