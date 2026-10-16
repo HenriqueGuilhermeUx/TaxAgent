@@ -90,3 +90,35 @@ test('business consulting profile refuses to infer Santos ISS withholding', () =
   assert.ok(result.missing.includes('iss_withholding'));
   assert.equal(result.municipal_tax?.iss_withholding, undefined);
 });
+
+
+test('business consulting profile resolves Belo Horizonte ISS 17.01 at 5 percent for National NFS-e pilot', () => {
+  const result = resolveServiceProfile({
+    profile: 'business_consulting',
+    issuerCityCode: '3106200',
+    destinationCityCode: '3106200',
+    issWithholding: '1',
+  });
+
+  assert.equal(result.classification.national_service_code, '170101');
+  assert.equal(result.classification.nbs, '114011900');
+  assert.equal(result.municipal_tax?.iss_item, '17.01');
+  assert.equal(result.municipal_tax?.incidence_city_code, '3106200');
+  assert.equal(result.municipal_tax?.iss_taxation, '1');
+  assert.equal(result.municipal_tax?.iss_withholding, '1');
+  assert.equal(result.municipal_tax?.iss_rate, 5);
+  assert.deepEqual(result.missing, []);
+  assert.ok(result.sources.some((source) => source.dataset === 'belo-horizonte-iss-service-rate'));
+  assert.ok(result.sources.some((source) => source.dataset === 'belo-horizonte-national-nfse-transition'));
+});
+
+test('Belo Horizonte business consulting profile refuses to infer ISS withholding', () => {
+  const result = resolveServiceProfile({
+    profile: 'business_consulting',
+    issuerCityCode: '3106200',
+    destinationCityCode: '3106200',
+  });
+
+  assert.ok(result.missing.includes('iss_withholding'));
+  assert.equal(result.municipal_tax?.iss_withholding, undefined);
+});
