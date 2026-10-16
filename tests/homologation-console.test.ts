@@ -34,7 +34,16 @@ test('homologation console exposes browser-only fiscal workflow without browser 
   assert.match(html, /loadInvoiceDiagnostics/);
   assert.match(html, /\/v1\/invoices\//);
   assert.match(html, /\/documents/);
-  assert.match(html, /Consulta somente leitura/);
+  assert.match(html, /Somente leitura/);
+  assert.match(html, /Acompanhar até estado final/);
+  assert.match(html, /pollInvoiceUntilTerminal/);
+  assert.match(html, /Provar cancelamento 101101/);
+  assert.match(html, /REGISTER-TEST-CANCELLATION-101101/);
+  assert.match(html, /requestCancellation101101/);
+  assert.match(html, /invoice\.environment!=='test'/);
+  assert.match(html, /operations\/transmission-permits/);
+  assert.match(html, /state\.transmissionPermitId/);
+  assert.doesNotMatch(html, /const body=state\.lastInvoiceBody\|\|buildInvoiceBody\(\);show\('liveOut','Transmitindo uma única operação\.\.\.'\)/);
 
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
   assert.ok(script.length > 0, 'inline console script must exist');
@@ -92,4 +101,17 @@ test('company correction tool patches an existing company and can replace a lost
   assert.doesNotMatch(script, /localStorage\s*[.\[]/);
   assert.doesNotMatch(script, /sessionStorage\s*[.\[]/);
   assert.doesNotMatch(script, /console\.(?:log|debug|info)\s*\(/);
+});
+
+
+test('homologation page source itself contains the hardened flow without runtime source patching', () => {
+  const source = homologationConsoleHtml();
+  assert.match(source, /operations\/dps\/prepare/);
+  assert.match(source, /operations\/transmission-permits/);
+  assert.match(source, /grantTransmissionPermit/);
+  assert.match(source, /Prepared DPS imutável \+ permit de uso único/);
+  assert.match(source, /REGISTER-TEST-CANCELLATION-101101/);
+  assert.match(source, /function buildCustomer\(\)/);
+  assert.match(source, /Se informar endereço do tomador/);
+  assert.equal(prepareHomologationConsoleHtml(source), source);
 });
