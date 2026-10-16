@@ -19,5 +19,10 @@ export class InvoicesController {
     if (confirmation !== 'RECONCILE-THEN-REPROCESS-SAME-DPS') throw new ForbiddenException('Exact reprocess confirmation header is required');
     return this.invoices.reprocessRouteFailure(id, auth?.companyId);
   }
-  @Post(':id/cancel') @RequireScope('invoices:write') @HttpCode(HttpStatus.ACCEPTED) @ApiOperation({ summary: 'Request NFS-e cancellation through a fiscal event' }) cancel(@Param('id') id: string, @Body() dto: CancelInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { return this.invoices.requestCancellation(id, auth?.companyId, dto); }
+  @Post(':id/reconcile-prepared') @RequireScope('invoices:write') @HttpCode(HttpStatus.ACCEPTED) @ApiHeader({ name: 'X-TaxAgent-Reconcile-Confirmation', required: true }) @ApiOperation({ summary: 'Re-enqueue a TEST Prepared DPS operation for reconciliation-first processing without authorizing a blind repost' })
+  reconcilePrepared(@Param('id') id: string, @Headers('x-taxagent-reconcile-confirmation') confirmation: string | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+    if (confirmation !== 'RECONCILE-PREPARED-NATIONAL-NO-BLIND-REPOST') throw new ForbiddenException('Exact reconciliation confirmation header is required');
+    return this.invoices.reconcilePreparedNational(id, auth?.companyId);
+  }
+    @Post(':id/cancel') @RequireScope('invoices:write') @HttpCode(HttpStatus.ACCEPTED) @ApiOperation({ summary: 'Request NFS-e cancellation through a fiscal event' }) cancel(@Param('id') id: string, @Body() dto: CancelInvoiceDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) { return this.invoices.requestCancellation(id, auth?.companyId, dto); }
 }
