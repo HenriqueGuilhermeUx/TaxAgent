@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Equals, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Equals, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export class CreatePilotApplicationDto {
   @ApiProperty({ example: 'Maria Silva' }) @IsString() @IsNotEmpty() @MaxLength(160) contact_name!: string;
@@ -15,4 +15,19 @@ export class CreatePilotApplicationDto {
 export class UpdatePilotApplicationStatusDto {
   @ApiProperty({ enum: ['new','contacted','qualified','accepted','rejected'] }) @IsIn(['new','contacted','qualified','accepted','rejected']) status!: 'new'|'contacted'|'qualified'|'accepted'|'rejected';
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1200) note?: string;
+}
+
+export class ConvertPilotApplicationDto {
+  @ApiPropertyOptional({ description: 'Required only when the application did not provide a CNPJ/CPF.' })
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(32) tax_id?: string;
+
+  @ApiProperty({ example: '3548500', description: 'Código IBGE real do município emissor.' })
+  @IsString() @Length(7,7) city_code!: string;
+
+  @ApiProperty({ example: 'regular', description: 'Regime fiscal real informado/confirmado no onboarding.' })
+  @IsString() @IsNotEmpty() @MaxLength(80) tax_regime!: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) municipal_registration?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) organization_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) pilot_label?: string;
 }
