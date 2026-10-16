@@ -91,3 +91,13 @@ test('definitive provider response consumes a claimed permit', async () => {
   await service.consumeClaim('txpermit_1','inv_1','authorized');
   assert.deepEqual(params,['txpermit_1','inv_1','authorized']);
 });
+
+
+test('authoritative reconciliation can finalize a previously claimed permit without a second POST', async () => {
+  let params:any[]=[];
+  const db={query:async(_sql:string,p:any[])=>{params=p;return {rows:[],rowCount:1};}} as any;
+  const service=new FiscalTransmissionPermitService(db,{} as any);
+  const consumed=await service.consumeClaimForPreparedIfPresent('pdps_1','inv_1','authorized');
+  assert.equal(consumed,true);
+  assert.deepEqual(params,['pdps_1','inv_1','authorized']);
+});
