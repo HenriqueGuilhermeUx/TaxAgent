@@ -148,6 +148,7 @@ export class IssuerReadinessService {
     );
 
     const provenRows = authorized.rows.filter((row) => Boolean(row.access_key && row.authorized_xml_sha256));
+    const proofCount = provenRows.length;
     const last = provenRows[0] ?? null;
     const cancellation = proofCount > 0
       ? await this.db.query<{ event_count: string; document_count: string }>(
@@ -172,7 +173,6 @@ export class IssuerReadinessService {
       && Number(cancellationRow.document_count) > 0,
     );
 
-    const proofCount = provenRows.length;
     const stage = proofCount >= 10 && cancellationProven
       ? 'REPEATABLE_HOMOLOGATION'
       : proofCount > 0
