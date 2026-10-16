@@ -18,6 +18,8 @@ function fixture(reconciled: any) {
   let builderCalls = 0;
   let findCalls = 0;
   let issueCalls = 0;
+  let permitClaims = 0;
+  let permitConsumes = 0;
   let transmittedXml = '';
   const record = {
     id: 'pdps_test', company_id: 'comp_test', environment: 'test', tax_decision_id: 'taxdec_test', schema_id: 'nfse-prodrest-v1.01-20260727',
@@ -53,7 +55,22 @@ function fixture(reconciled: any) {
       async signedMaterial() { return { record, signedXml: '<SIGNED-IMMUTABLE/>', unsignedXml: '<UNSIGNED-IMMUTABLE/>' }; },
     } as any,
   );
-  return { provider, builderCalls: () => builderCalls, findCalls: () => findCalls, issueCalls: () => issueCalls, transmittedXml: () => transmittedXml };
+  (provider as any).transmissionPermits = {
+    async claimForPost() { permitClaims += 1; return { id: 'txpermit_test' }; },
+    async consumeClaim(_permitId: string, _invoiceId: string, outcome: string) {
+      permitConsumes += 1;
+      assert.ok(outcome === 'authorized' || outcome === 'rejected');
+    },
+  };
+  return {
+    provider,
+    builderCalls: () => builderCalls,
+    findCalls: () => findCalls,
+    issueCalls: () => issueCalls,
+    permitClaims: () => permitClaims,
+    permitConsumes: () => permitConsumes,
+    transmittedXml: () => transmittedXml,
+  };
 }
 
 async function withLive<T>(fn: () => Promise<T>): Promise<T> {
@@ -75,6 +92,8 @@ test('Prepared DPS path reconciles by immutable dps_id and does not POST or rebu
   assert.equal(f.findCalls(), 1);
   assert.equal(f.issueCalls(), 0);
   assert.equal(f.builderCalls(), 0);
+  assert.equal(f.permitClaims(), 0);
+  assert.equal(f.permitConsumes(), 0);
 });
 
 test('Prepared DPS path POSTs the exact persisted signed XML only after reconciliation confirms absence', async () => {
@@ -85,6 +104,8 @@ test('Prepared DPS path POSTs the exact persisted signed XML only after reconcil
   assert.equal(f.issueCalls(), 1);
   assert.equal(f.transmittedXml(), '<SIGNED-IMMUTABLE/>');
   assert.equal(f.builderCalls(), 0);
+  assert.equal(f.permitClaims(), 1);
+  assert.equal(f.permitConsumes(), 1);
 });
 
 
@@ -98,4 +119,17 @@ test('live National provider refuses any direct issuance path without Prepared D
   assert.equal(f.findCalls(), 0);
   assert.equal(f.issueCalls(), 0);
   assert.equal(f.builderCalls(), 0);
+});
+
+
+test('live National provider fails closed before POST when transmission-permit service is unavailable', async () => {
+  const f = fixture(null);
+  (f.provider as any).transmissionPermits = undefined;
+  await assert.rejects(
+    () => withLive(() => f.provider.issue(input, { invoiceId: 'inv_no_permit_service', preparedDpsId: 'pdps_test' })),
+    (error: any) => error?.code === 'TA_TRANSMISSION_PERMIT_SERVICE_UNAVAILABLE'
+      && error?.details?.fiscal_transmission_attempted === false,
+  );
+  assert.equal(f.findCalls(), 1);
+  assert.equal(f.issueCalls(), 0);
 });
