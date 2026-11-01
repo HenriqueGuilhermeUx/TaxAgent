@@ -47,8 +47,10 @@
     "typescript": "^5.9.2"
   },
   "overrides": {
-    "js-yaml": "5.2.2",
-    "multer": "2.3.0"
+    "js-yaml": "5.4.1",
+    "multer": "2.5.0"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }
