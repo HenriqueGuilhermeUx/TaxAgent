@@ -35,7 +35,17 @@ export function buildIbsCbsGroup(service: CanonicalService, environment: Canonic
   if (!/^\d{6}$/.test(service.operationIndicator!)) throw new BadRequestException('cIndOp must contain exactly 6 numeric positions');
   if (!/^\d{3}$/.test(service.taxSituation!)) throw new BadRequestException('CST IBS/CBS must contain exactly 3 numeric positions');
   if (!/^\d{6}$/.test(service.taxClassification!)) throw new BadRequestException('cClassTrib must contain exactly 6 numeric positions');
-  return { ...(environment === 'production' ? { finNFSe: 0 } : {}), ...(service.finalConsumption !== undefined ? { indFinal: service.finalConsumption } : {}), cIndOp: service.operationIndicator, indDest: 0, valores: { trib: { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } } } };
+  return {
+    ...(environment === 'production' ? { finNFSe: 0 } : {}),
+    ...(service.finalConsumption !== undefined ? { indFinal: service.finalConsumption } : {}),
+    cIndOp: service.operationIndicator,
+    indDest: 0,
+    valores: {
+      trib: environment === 'test'
+        ? { CST: service.taxSituation, cClassTrib: service.taxClassification }
+        : { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } },
+    },
+  };
 }
 export function buildRegularRegimeGroup(taxRegime?: string | null): Record<string, unknown> {
   if (String(taxRegime ?? '').toLowerCase() !== 'regular') throw new BadRequestException('Current verified live builder supports tax_regime=regular only');
@@ -89,7 +99,12 @@ export class DpsBuilderService {
           xBairro: input.customer.address.district,
         } } : {}),
       },
-      serv: { locPrest: { cLocPrestacao: serviceLocationCityCode }, cServ: { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description, ...(input.service.nbsCode ? { cNBS: input.service.nbsCode } : {}) } },
+      serv: {
+        locPrest: { cLocPrestacao: serviceLocationCityCode },
+        cServ: input.environment === 'test'
+          ? { cTribNac: input.service.nationalServiceCode, ...(input.service.nbsCode ? { cNBS: input.service.nbsCode } : {}), xDescServ: input.service.description }
+          : { cTribNac: input.service.nationalServiceCode, xDescServ: input.service.description, ...(input.service.nbsCode ? { cNBS: input.service.nbsCode } : {}) },
+      },
       valores: { vServPrest: { vServ: input.service.amount.toFixed(2) }, trib: municipalTax },
       ...(ibsCbs ? { IBSCBS: ibsCbs } : {}),
     } } };
