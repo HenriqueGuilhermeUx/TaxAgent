@@ -15,7 +15,8 @@
       "xsdLabel": "NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20261020",
       "officialUrl": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita/esquemas_prod_restrita_20261020.zip",
       "rtc": "NT009-v1.00-release1",
-      "notes": "Production Restricted release 1 of NT009, published 2026-10-20. Checksum intentionally unpinned only in this isolated upgrade branch until CI downloads and reports the official archive SHA-256."
+      "notes": "Production Restricted release 1 of NT009, published 2026-10-20. Archive SHA-256 observed from the official gov.br package and pinned after isolated CI download.",
+      "expectedArchiveSha256": "25fdcecc651a67a216496ab10d7566631e6ed10f721e37d62c7845dadb0ea267"
     },
     "nt009Preview": {
       "id": "nt009-preview-v1.04.00",
