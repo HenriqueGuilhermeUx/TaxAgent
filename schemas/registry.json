@@ -20,9 +20,9 @@
     },
     "nt009Preview": {
       "id": "nt009-preview-v1.04.00",
-      "status": "preview-not-active-aug-2026",
+      "status": "superseded-by-prodrest-release1",
       "rtc": "NT009",
-      "notes": "Published but explicitly not available in Production or Production Restricted during August 2026. Never auto-activate."
+      "notes": "Historical pre-activation preview retained for traceability. NT009 release 1 is active in Produção Restrita through sources.test as of 2026-10-20; production remains on its separately versioned schema."
     }
   }
 }
