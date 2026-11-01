@@ -26,7 +26,7 @@ export function buildDpsId(cityCode: string, taxId: string, series: string, sequ
   const normalizedSeries = normalizeDpsSeries(series);
   return `DPS${cityCode}${identity.typeCode}${identity.idValue}${normalizedSeries.padStart(5, '0')}${String(sequence).padStart(15, '0')}`;
 }
-export function buildIbsCbsGroup(service: CanonicalService): Record<string, unknown> | undefined {
+export function buildIbsCbsGroup(service: CanonicalService, environment: CanonicalInvoiceInput['environment'] = 'production'): Record<string, unknown> | undefined {
   const required = [service.operationIndicator, service.taxSituation, service.taxClassification];
   const anyRtc = required.some(Boolean) || service.finalConsumption !== undefined;
   if (!anyRtc) return undefined;
@@ -35,7 +35,7 @@ export function buildIbsCbsGroup(service: CanonicalService): Record<string, unkn
   if (!/^\d{6}$/.test(service.operationIndicator!)) throw new BadRequestException('cIndOp must contain exactly 6 numeric positions');
   if (!/^\d{3}$/.test(service.taxSituation!)) throw new BadRequestException('CST IBS/CBS must contain exactly 3 numeric positions');
   if (!/^\d{6}$/.test(service.taxClassification!)) throw new BadRequestException('cClassTrib must contain exactly 6 numeric positions');
-  return { finNFSe: 0, ...(service.finalConsumption !== undefined ? { indFinal: service.finalConsumption } : {}), cIndOp: service.operationIndicator, indDest: 0, valores: { trib: { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } } } };
+  return { ...(environment === 'production' ? { finNFSe: 0 } : {}), ...(service.finalConsumption !== undefined ? { indFinal: service.finalConsumption } : {}), cIndOp: service.operationIndicator, indDest: 0, valores: { trib: { gIBSCBS: { CST: service.taxSituation, cClassTrib: service.taxClassification } } } };
 }
 export function buildRegularRegimeGroup(taxRegime?: string | null): Record<string, unknown> {
   if (String(taxRegime ?? '').toLowerCase() !== 'regular') throw new BadRequestException('Current verified live builder supports tax_regime=regular only');
@@ -64,7 +64,7 @@ export class DpsBuilderService {
     const competence = input.competence ?? issuedAt.slice(0, 10);
     const serviceLocationCityCode = input.service.serviceLocationCityCode ?? input.customer.cityCode;
     const municipalTax = buildMunicipalTaxGroup(input.service, company.tax_regime);
-    const ibsCbs = buildIbsCbsGroup(input.service);
+    const ibsCbs = buildIbsCbsGroup(input.service, input.environment);
     if (ibsCbs && (!input.service.nbsCode || !/^[0-9]{9}$/.test(input.service.nbsCode))) throw new BadRequestException('IBS/CBS requires a 9-digit NBS 2.0 cNBS');
     const verifiedLayout = process.env.TAXAGENT_DPS_BUILDER_MODE === 'verified';
     const doc = { DPS: { '@_xmlns': 'http://www.sped.fazenda.gov.br/nfse', '@_versao': '1.01', infDPS: {
@@ -76,6 +76,7 @@ export class DpsBuilderService {
       nDPS: sequence,
       dCompet: competence,
       tpEmit: 1,
+      ...(input.environment === 'test' ? { finNFSe: 0 } : {}),
       cLocEmi: company.city_code,
       prest: { CNPJ: providerIdentity.xmlValue, ...(company.municipal_registration ? { IM: company.municipal_registration } : {}), regTrib: buildRegularRegimeGroup(company.tax_regime) },
       toma: {
