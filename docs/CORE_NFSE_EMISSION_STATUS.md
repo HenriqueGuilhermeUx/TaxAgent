@@ -1,6 +1,6 @@
 # TaxAgent — Core NFS-e Emission Status
 
-Atualizado em 2026-10-16.
+Atualizado em 2026-11-01.
 
 ## Resposta curta
 
@@ -15,6 +15,15 @@ Não confundir:
 - `homologated`: o ciclo autorizado foi repetido com sucesso e cancelamento/eventos também foram comprovados.
 
 Hoje o TaxAgent está entre **implemented** e **pilot/homologation-ready**, dependendo da Company. O marco `authorized/homologated` ainda exige prova externa real.
+
+## Schemas ativos por ambiente
+
+A evolução da NFS-e Nacional está deliberadamente separada por ambiente:
+
+- **Produção Restrita (TEST):** `NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20261020`, NT009 release 1. O Docker baixa o pacote oficial, exige SHA-256 `25fdcecc651a67a216496ab10d7566631e6ed10f721e37d62c7845dadb0ea267` e executa conformance de DPS unsigned/signed + XMLDSig + evento 101101.
+- **Produção:** permanece no schema de produção `NFSe-ESQUEMAS_XSD-v1.01-20260209` / regras vigentes do ciclo anterior. O builder não antecipa o layout NT009 de TEST para produção.
+
+No TEST, o builder usa o layout observado e validado contra o XSD de 20/10: `finNFSe` em `infDPS`, `cNBS` antes de `xDescServ`, e `CST/cClassTrib` diretamente em `IBSCBS/valores/trib`. A estrutura de produção permanece isolada.
 
 ## O que já existe no core
 
