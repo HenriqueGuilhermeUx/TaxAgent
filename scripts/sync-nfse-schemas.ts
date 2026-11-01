@@ -60,6 +60,7 @@ async function main() {
     let dpsXsd: string | undefined;
     let eventXsd: string | undefined;
     let registeredEventXsd: string | undefined;
+    let fallbackDpsXsd: string | undefined;
     for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
       const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -71,10 +72,15 @@ async function main() {
       if (!clean.toLowerCase().endsWith('.xsd')) continue;
       xsdFiles.push(clean);
       const text = data.toString('utf8');
-      if (!dpsXsd && /<(?:xs|xsd):element\s+name=["']DPS["']/.test(text)) dpsXsd = clean;
-      if (!eventXsd && /<(?:xs|xsd):element\s+name=["']pedRegEvento["']/.test(text)) eventXsd = clean;
-      if (!registeredEventXsd && /<(?:xs|xsd):element\s+name=["']evento["']/.test(text)) registeredEventXsd = clean;
+      const filename = clean.split('/').at(-1) ?? clean;
+      if (/^DPS_v\d+\.\d+\.xsd$/i.test(filename)) dpsXsd = clean;
+      else if (!fallbackDpsXsd && /<(?:xs|xsd):element\s+name=["']DPS["']/.test(text)) fallbackDpsXsd = clean;
+      if (/^pedRegEvento_v\d+\.\d+\.xsd$/i.test(filename)) eventXsd = clean;
+      else if (!eventXsd && /<(?:xs|xsd):element\s+name=["']pedRegEvento["']/.test(text)) eventXsd = clean;
+      if (/^evento_v\d+\.\d+\.xsd$/i.test(filename)) registeredEventXsd = clean;
+      else if (!registeredEventXsd && /<(?:xs|xsd):element\s+name=["']evento["']/.test(text)) registeredEventXsd = clean;
     }
+    dpsXsd ??= fallbackDpsXsd;
     if (!dpsXsd) throw new Error(`Could not locate DPS root XSD in official ${key} archive`);
     if (!eventXsd) throw new Error(`Could not locate pedRegEvento root XSD in official ${key} archive`);
     if (!registeredEventXsd) throw new Error(`Could not locate registered evento root XSD in official ${key} archive`);
