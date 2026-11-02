@@ -7,7 +7,8 @@ import { DpsBuilderService, FiscalCompany } from '../src/xml-engine/dps-builder.
 import { XmlSignatureService } from '../src/xml-engine/xml-signature.service';
 
 async function main() {
-  const vendor = join(process.cwd(), 'schemas', 'vendor', 'nfse-prodrest-v1.01-20260727');
+  const registry = JSON.parse(await readFile(join(process.cwd(), 'schemas', 'registry.json'), 'utf8')) as { sources: { test: { id: string } } };
+  const vendor = join(process.cwd(), 'schemas', 'vendor', registry.sources.test.id);
   const manifest = JSON.parse(await readFile(join(vendor, 'manifest.json'), 'utf8')) as { dpsXsd: string; archiveSha256: string };
   const builder = new DpsBuilderService(undefined as never);
   const company: FiscalCompany = { id: 'comp_schema_fixture', tax_id: '12345678000190', municipal_registration: '12345', city_code: '3550308', tax_regime: 'regular' };
