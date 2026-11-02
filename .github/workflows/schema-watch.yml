@@ -2,6 +2,13 @@ name: nfse-schema-watch
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/schema-watch.yml'
+      - 'schemas/registry.json'
+      - 'src/xml-engine/dps-builder.service.ts'
+      - 'src/xml-engine/nfse-datetime.ts'
+      - 'scripts/validate-prodrest-dps-schema.ts'
   push:
     branches: [agent/engine-v0.1]
     paths:
