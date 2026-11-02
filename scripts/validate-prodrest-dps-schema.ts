@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import * as forge from 'node-forge';
 import { DpsBuilderService, FiscalCompany } from '../src/xml-engine/dps-builder.service';
 import { XmlSignatureService } from '../src/xml-engine/xml-signature.service';
+import { loadPkcs12Identity } from '../src/certificates/pkcs12-identity';
 
 async function main() {
   const registry = JSON.parse(await readFile(join(process.cwd(), 'schemas', 'registry.json'), 'utf8')) as { sources: { test: { id: string } } };
@@ -35,8 +36,15 @@ async function main() {
 
   const fixturePassword = 'schema-watch-only';
   const fixturePfx = createEphemeralPfx(fixturePassword);
+  const identity = loadPkcs12Identity(fixturePfx, fixturePassword);
   const signer = new XmlSignatureService();
-  const signedXml = signer.sign(built.xml, built.id, 'infDPS', { pfx: fixturePfx, password: fixturePassword, fingerprint: 'ephemeral-schema-watch' });
+  const signedXml = signer.sign(built.xml, built.id, 'infDPS', {
+    pfx: fixturePfx,
+    password: fixturePassword,
+    fingerprint: 'ephemeral-schema-watch',
+    tlsCertificatePem: identity.certificatePem,
+    tlsPrivateKeyPem: identity.privateKeyPem,
+  });
 
   const dir = await mkdtemp(join(tmpdir(), 'taxagent-prodrest-fixture-'));
   try {
