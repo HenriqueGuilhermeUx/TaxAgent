@@ -26,14 +26,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
       - name: Download and inspect Produção Restrita NFS-e schemas
         run: npm run schemas:sync -- --environment=test
+      - name: Resolve pinned TEST schema directory
+        run: echo "TEST_SCHEMA_DIR=schemas/vendor/$(node -p \"require('./schemas/registry.json').sources.test.id\")" >> "$GITHUB_ENV"
       - name: Verify manifest was produced
-        run: test -f schemas/vendor/nfse-prodrest-v1.01-20260727/manifest.json
+        run: test -f "$TEST_SCHEMA_DIR/manifest.json"
       - name: Validate TaxAgent-generated DPS against official XSD
         run: npx tsx scripts/validate-prodrest-dps-schema.ts
       - name: Upload official schema snapshot for review
         uses: actions/upload-artifact@v4
         with:
           name: nfse-prodrest-schema-${{ github.sha }}
-          path: schemas/vendor/nfse-prodrest-v1.01-20260727/
+          path: ${{ env.TEST_SCHEMA_DIR }}/
           if-no-files-found: error
           retention-days: 14
