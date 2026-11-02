@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as forge from 'node-forge';
+import type { CertificateMaterial } from '../src/certificates/certificate-vault.service';
 import { DpsBuilderService, FiscalCompany } from '../src/xml-engine/dps-builder.service';
 import { XmlSignatureService } from '../src/xml-engine/xml-signature.service';
 
@@ -33,10 +34,8 @@ async function main() {
     },
   }, company, 1);
 
-  const fixturePassword = 'schema-watch-only';
-  const fixturePfx = createEphemeralPfx(fixturePassword);
   const signer = new XmlSignatureService();
-  const signedXml = signer.sign(built.xml, built.id, 'infDPS', { pfx: fixturePfx, password: fixturePassword, fingerprint: 'ephemeral-schema-watch' });
+  const signedXml = signer.sign(built.xml, built.id, 'infDPS', createEphemeralMaterial());
 
   const dir = await mkdtemp(join(tmpdir(), 'taxagent-prodrest-fixture-'));
   try {
@@ -64,7 +63,8 @@ function validate(vendor: string, dpsXsd: string, xmlPath: string) {
   if (result.status !== 0) throw new Error(result.stderr || `xmllint exited ${result.status}`);
 }
 
-function createEphemeralPfx(password: string): Buffer {
+function createEphemeralMaterial(): CertificateMaterial {
+  const password = 'schema-watch-only';
   const keys = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
@@ -77,7 +77,13 @@ function createEphemeralPfx(password: string): Buffer {
   cert.setExtensions([{ name: 'basicConstraints', cA: false }, { name: 'keyUsage', digitalSignature: true }]);
   cert.sign(keys.privateKey, forge.md.sha256.create());
   const p12 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], password, { algorithm: '3des' });
-  return Buffer.from(forge.asn1.toDer(p12).getBytes(), 'binary');
+  return {
+    pfx: Buffer.from(forge.asn1.toDer(p12).getBytes(), 'binary'),
+    password,
+    fingerprint: 'ephemeral-schema-watch',
+    tlsCertificatePem: forge.pki.certificateToPem(cert),
+    tlsPrivateKeyPem: forge.pki.privateKeyToPem(keys.privateKey),
+  };
 }
 
 void main();
