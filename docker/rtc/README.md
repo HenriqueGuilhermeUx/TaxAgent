@@ -14,6 +14,12 @@ They are intentionally separate from the TaxAgent API image. TaxAgent consumes t
 
 The Simples image generates its read-only SQLite database from the regular engine Flyway dataset at the same pinned regular release, matching the official repository architecture.
 
+## CI conformance
+
+The `official-rtc-conformance` workflow builds every sidecar from its exact SHA, boots it, checks the official health/version contract and, for the regular engine, performs a real official observability calculation.
+
+A successful HTTP response is not enough: the calculation smoke test requires an item state of `CALCULADO` or `CALCULO_SIMULADO` and verifies the returned CST/cClassTrib.
+
 ## Safety
 
 These images do not transmit NFS-e, hold TaxAgent A1 certificates or connect to the TaxAgent database. They are deterministic calculation/rendering dependencies. CI builds and probes them before any hosting decision.
