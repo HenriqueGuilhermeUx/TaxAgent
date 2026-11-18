@@ -28,7 +28,7 @@ jobs:
       - name: Build pinned official regular engine
         run: docker build -f docker/rtc/regular.Dockerfile -t taxagent-rtc-regular:ci .
 
-      - name: Boot and probe regular engine
+      - name: Boot, probe and calculate with regular engine
         run: |
           set -euo pipefail
           docker run -d --rm --name taxagent-rtc-regular -p 18080:8080 -p 19101:9101 taxagent-rtc-regular:ci
@@ -41,12 +41,10 @@ jobs:
             sleep 2
           done
           jq -e '.status == "UP"' /tmp/rtc-regular-health.json
-          curl -fsS http://127.0.0.1:18080/api/calculadora/dados-abertos/versao >/tmp/rtc-regular-version.json
-          jq . /tmp/rtc-regular-version.json
 
-      - name: Run official service calculation example
-        run: |
-          set -euo pipefail
+          curl -fsS http://127.0.0.1:18080/api/calculadora/dados-abertos/versao >/tmp/rtc-regular-version.json
+          jq -e '.versaoApp == "1.6.1"' /tmp/rtc-regular-version.json
+
           cat >/tmp/rtc-operation.json <<'JSON'
           {
             "id": "taxagent-official-rtc-ci",
@@ -70,6 +68,7 @@ jobs:
             ]
           }
           JSON
+
           curl -fsS -X POST             http://127.0.0.1:18080/api/calculadora/observabilidade/regime-geral             -H 'Content-Type: application/json'             --data-binary @/tmp/rtc-operation.json             >/tmp/rtc-result.json
           jq . /tmp/rtc-result.json
           jq -e '.objetos | length == 1' /tmp/rtc-result.json
@@ -87,7 +86,7 @@ jobs:
       - name: Build pinned official Simples engine
         run: docker build -f docker/rtc/simples.Dockerfile -t taxagent-rtc-simples:ci .
 
-      - name: Boot and probe Simples engine
+      - name: Boot, probe and calculate with Simples engine
         run: |
           set -euo pipefail
           docker run -d --rm --name taxagent-rtc-simples -p 18082:8082 -p 19103:9103 taxagent-rtc-simples:ci
@@ -100,8 +99,39 @@ jobs:
             sleep 2
           done
           jq -e '.status == "UP"' /tmp/rtc-simples-health.json
+
           curl -fsS http://127.0.0.1:18082/api/versao >/tmp/rtc-simples-version.json
           jq . /tmp/rtc-simples-version.json
+
+          cat >/tmp/rtc-simples-operation.json <<'JSON'
+          {
+            "id": "507f1f77bcf86cd799439011",
+            "versao": "2.0.0",
+            "data": "2027-03-15",
+            "tpDoc": "55",
+            "CRT": "1",
+            "itens": [
+              {
+                "numero": 1,
+                "cAtivSN": "01",
+                "cClassTrib": "000001",
+                "baseCalculo": "950.00",
+                "valorImpostoSeletivo": "50.00",
+                "pIBSSN": "1.25",
+                "pCBSSN": "2.75"
+              }
+            ]
+          }
+          JSON
+
+          curl -fsS -X POST             http://127.0.0.1:18082/api/calculadora/observabilidade/simples-nacional             -H 'Content-Type: application/json'             --data-binary @/tmp/rtc-simples-operation.json             >/tmp/rtc-simples-result.json
+          jq . /tmp/rtc-simples-result.json
+          jq -e '.objetos | length == 1' /tmp/rtc-simples-result.json
+          jq -e '.objetos[0].estadoItem == "CALCULADO"' /tmp/rtc-simples-result.json
+          jq -e '.objetos[0].tribCalc.vRBSNitem == "950.00"' /tmp/rtc-simples-result.json
+          jq -e '.objetos[0].tribCalc.vIBSSN == "11.88"' /tmp/rtc-simples-result.json
+          jq -e '.objetos[0].tribCalc.vCBSSN == "26.12"' /tmp/rtc-simples-result.json
+          jq -e '.total.totalTributos == "88.00"' /tmp/rtc-simples-result.json
 
   danfse:
     name: DANFSe 1.0.0
