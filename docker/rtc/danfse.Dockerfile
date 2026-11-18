@@ -9,7 +9,7 @@ RUN git init /src \
  && git remote add origin https://github.com/ReceitaFederal/calculadora-rtc-gerador-danfse.git \
  && git fetch --depth 1 origin "${RTC_DANFSE_COMMIT}" \
  && git checkout --detach FETCH_HEAD \
- && test "$(git rev-parse HEAD)" = "${RTC_DANFSE_COMMIT"
+ && test "$(git rev-parse HEAD)" = "${RTC_DANFSE_COMMIT}"
 
 WORKDIR /src
 
