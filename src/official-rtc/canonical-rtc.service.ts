@@ -79,14 +79,16 @@ export class CanonicalRtcService {
       calculated_at: calculation.calculated_at,
       ...(freshness ? { freshness } : {}),
     };
+    const freshnessEligible = regime === 'regular'
+      ? (freshness as any)?.regular?.authoritative_eligible === true
+      : false;
+    const authoritative = calculation.assessment?.authoritative_eligible === true && freshnessEligible;
     const output = {
       status,
       decision_kind: 'rtc_calculation',
       regime,
-      authoritative: calculation.assessment?.authoritative_eligible === true
-        && (regime !== 'regular' || (freshness as any)?.regular?.authoritative_eligible === true),
-      reference_only: calculation.assessment?.authoritative_eligible !== true
-        || (regime === 'regular' && (freshness as any)?.regular?.authoritative_eligible !== true),
+      authoritative,
+      reference_only: !authoritative,
       assessment: calculation.assessment,
       freshness,
       engine: calculation.engine,
@@ -95,6 +97,8 @@ export class CanonicalRtcService {
         ai_authoritative: false,
         http_success_is_fiscal_success: false,
         issuance_binding_allowed: false,
+        authoritative_requires_freshness: true,
+        simples_freshness_implemented: false,
       },
     };
 
