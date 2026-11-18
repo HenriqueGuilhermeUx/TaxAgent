@@ -25,6 +25,7 @@ export class TaxEngineService {
 
   async hydrateServiceFromDecision(companyId: string, decisionId: string, service: CanonicalService): Promise<CanonicalService> {
     const decision = await this.position.getDecision(decisionId, companyId);
+    if (decision.decision_kind !== 'issuance') throw new BadRequestException('RTC calculation decisions cannot be bound to invoice issuance');
     if (decision.status !== 'resolved') throw new BadRequestException('Tax decision must be resolved before it can be bound to an invoice');
     const classification = decision.output?.classification ?? {};
     const municipalTax = decision.output?.municipal_tax ?? {};
