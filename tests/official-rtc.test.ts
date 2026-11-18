@@ -3,6 +3,7 @@ import test from 'node:test';
 import { officialRtcMode, resolveOfficialRtcBaseUrl } from '../src/official-rtc/official-rtc.client';
 import { OFFICIAL_RTC_MANIFEST } from '../src/official-rtc/official-rtc.manifest';
 import { officialRtcInputSha256 } from '../src/official-rtc/official-rtc.service';
+import { assessOfficialRtcObservability } from '../src/official-rtc/official-rtc-observability';
 
 test('pins the three Receita Federal MIT engines to exact release tag commits', () => {
   assert.deepEqual(
@@ -59,4 +60,52 @@ test('official RTC input hash is deterministic across JSON key order', () => {
     officialRtcInputSha256({ item: { nbs: '1.01', cst: '000' }, amount: 100 }),
   );
   assert.notEqual(officialRtcInputSha256({ amount: 100 }), officialRtcInputSha256({ amount: 101 }));
+});
+
+
+test('official observability assessment accepts only calculated/simulated items as usable', () => {
+  const assessment = assessOfficialRtcObservability({
+    objetos: [
+      { nObj: 1, estadoItem: 'CALCULADO', tribCalc: { value: 1 } },
+      { nObj: 2, estadoItem: 'CALCULO_SIMULADO', tribCalc: { value: 2 } },
+    ],
+  });
+  assert.equal(assessment.response_valid, true);
+  assert.equal(assessment.all_items_usable, true);
+  assert.equal(assessment.authoritative_eligible, false);
+  assert.equal(assessment.simulation_only, true);
+  assert.equal(assessment.counts.calculated, 1);
+  assert.equal(assessment.counts.simulated, 1);
+});
+
+test('official observability assessment fails closed on fiscal item errors even under HTTP 200', () => {
+  const assessment = assessOfficialRtcObservability({
+    objetos: [
+      { nObj: 1, estadoItem: 'CALCULADO', tribCalc: { value: 1 } },
+      { nObj: 2, estadoItem: 'INCONSISTENCIA_ENTRADA', erros: [{ code: 'REG-011' }] },
+      { nObj: 3, estadoItem: 'NAO_IMPLEMENTADO', erros: [{ code: 'CAL-007' }] },
+      { nObj: 4, estadoItem: 'NAO_CALCULADO' },
+      { nObj: 5, estadoItem: 'FALHA_TECNICA' },
+    ],
+  });
+  assert.equal(assessment.all_items_usable, false);
+  assert.equal(assessment.authoritative_eligible, false);
+  assert.equal(assessment.counts.input_error, 1);
+  assert.equal(assessment.counts.unsupported, 1);
+  assert.equal(assessment.counts.not_calculated, 1);
+  assert.equal(assessment.counts.technical_failure, 1);
+  assert.deepEqual(assessment.items[1].errors, [{ code: 'REG-011' }]);
+});
+
+test('official observability assessment treats unknown/malformed states as unusable', () => {
+  const unknown = assessOfficialRtcObservability({ objetos: [{ nObj: 1, estadoItem: 'NEW_STATE_FROM_UPSTREAM' }] });
+  assert.equal(unknown.response_valid, true);
+  assert.equal(unknown.all_items_usable, false);
+  assert.equal(unknown.counts.unknown, 1);
+  assert.equal(unknown.items[0].state, 'UNKNOWN');
+
+  const malformed = assessOfficialRtcObservability({ total: {} });
+  assert.equal(malformed.response_valid, false);
+  assert.equal(malformed.all_items_usable, false);
+  assert.equal(malformed.authoritative_eligible, false);
 });
