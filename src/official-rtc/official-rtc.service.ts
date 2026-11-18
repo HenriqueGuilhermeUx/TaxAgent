@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, ServiceUnavailableException } from '@n
 import { createHash } from 'node:crypto';
 import { OfficialRtcClient, officialRtcMode } from './official-rtc.client';
 import { OFFICIAL_RTC_MANIFEST, OfficialRtcEngineId } from './official-rtc.manifest';
+import { assessOfficialRtcObservability } from './official-rtc-observability';
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -51,6 +52,7 @@ export class OfficialRtcService {
       mode: officialRtcMode(),
       input_sha256: inputSha256,
       calculated_at: new Date().toISOString(),
+      assessment: assessOfficialRtcObservability(result),
       result,
     };
   }
