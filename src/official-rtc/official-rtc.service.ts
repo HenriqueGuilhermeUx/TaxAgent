@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { RtcOpenDataClient } from '../tax-engine/rtc-open-data.client';
 import { OfficialRtcClient, officialRtcMode } from './official-rtc.client';
 import { OFFICIAL_RTC_MANIFEST, OfficialRtcEngineId } from './official-rtc.manifest';
 import { assessOfficialRtcObservability } from './official-rtc-observability';
+import { assessOfficialRtcFreshness } from './official-rtc-freshness';
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -18,13 +20,14 @@ export function officialRtcInputSha256(payload: unknown): string {
 
 @Injectable()
 export class OfficialRtcService {
-  constructor(private readonly client: OfficialRtcClient) {}
+  constructor(private readonly client: OfficialRtcClient, private readonly reference: RtcOpenDataClient) {}
 
   status() {
     const mode = officialRtcMode();
     return {
       mode,
-      authoritative: mode === 'official',
+      authoritative: false,
+      authoritative_requested: mode === 'official',
       engines: {
         regular: { ...OFFICIAL_RTC_MANIFEST.regular, configured: this.client.regularConfigured() },
         simples: { ...OFFICIAL_RTC_MANIFEST.simples, configured: this.client.simplesConfigured() },
@@ -33,13 +36,35 @@ export class OfficialRtcService {
       policy: {
         ai_authoritative: false,
         official_engine_authoritative_only_when_mode_official: true,
+        authoritative_requires_current_reference_version: true,
         raw_upstream_payload_persistable_for_audit: true,
       },
     };
   }
 
+  async freshness() {
+    try {
+      const reference = await this.reference.getVersion();
+      return {
+        regular: assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, reference.payload),
+        source: { url: reference.url, fetched_at: reference.fetchedAt },
+      };
+    } catch (error) {
+      return {
+        regular: assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, null),
+        source: { error: error instanceof Error ? error.message : 'Official RTC reference version lookup failed' },
+      };
+    }
+  }
+
   async calculate(engine: 'regular' | 'simples', payload: Record<string, unknown>) {
     this.assertCallable(engine);
+    if (officialRtcMode() === 'official' && engine === 'regular') {
+      const freshness = await this.freshness();
+      if (!freshness.regular.authoritative_eligible) {
+        throw new ServiceUnavailableException('Official RTC regular engine is not authoritative because the pinned open-source release does not match the current Receita reference version');
+      }
+    }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Object.keys(payload).length) {
       throw new BadRequestException('Official RTC payload must be a non-empty JSON object');
     }
