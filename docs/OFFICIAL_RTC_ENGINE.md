@@ -43,3 +43,8 @@ Official engine service URLs are configuration-only and never supplied by end us
 4. Persist full engine provenance inside Tax Decisions.
 5. Switch DANFSe generation to the official renderer after byte/document conformance tests.
 6. Add public simulator and batch CSV/XLSX workflow above the same gateway.
+
+
+## Golden conformance sources
+
+The regular smoke case is copied from the official Receita Federal `docs/exemplos.md` for the pinned regular release. The Simples smoke case is copied from the pinned upstream `SimplesNacionalControllerTest.deveCalcularCaminhoFelizCrt1ComImpostoSeletivoForaDaReceitaBruta` integration test. These fixtures are kept as upstream-derived conformance evidence; TaxAgent does not invent nominal rates or expected tax outcomes.
