@@ -43,21 +43,22 @@ export class CanonicalRtcService {
     private readonly rtc: OfficialRtcService,
   ) {}
 
-  async calculateRegular(companyId: string, dto: CanonicalRegularCalculationDto) {
+  async calculateRegular(companyId: string, environment: 'test' | 'production', dto: CanonicalRegularCalculationDto) {
     const mapped = mapCanonicalRegular(dto);
     const calculation = await this.rtc.calculate('regular', mapped) as OfficialRtcCalculationResult;
     const freshness = await this.rtc.freshness();
-    return this.persist(companyId, dto.effective_at.slice(0, 10), 'regular', dto, mapped, calculation, freshness);
+    return this.persist(companyId, environment, dto.effective_at.slice(0, 10), 'regular', dto, mapped, calculation, freshness);
   }
 
-  async calculateSimples(companyId: string, dto: CanonicalSimplesCalculationDto) {
+  async calculateSimples(companyId: string, environment: 'test' | 'production', dto: CanonicalSimplesCalculationDto) {
     const mapped = mapCanonicalSimples(dto);
     const calculation = await this.rtc.calculate('simples', mapped) as OfficialRtcCalculationResult;
-    return this.persist(companyId, dto.effective_date.slice(0, 10), 'simples', dto, mapped, calculation);
+    return this.persist(companyId, environment, dto.effective_date.slice(0, 10), 'simples', dto, mapped, calculation);
   }
 
   private async persist(
     companyId: string,
+    environment: 'test' | 'production',
     effectiveAt: string,
     regime: 'regular' | 'simples',
     canonicalInput: unknown,
@@ -87,6 +88,7 @@ export class CanonicalRtcService {
       status,
       decision_kind: 'rtc_calculation',
       regime,
+      environment,
       authoritative,
       reference_only: !authoritative,
       assessment: calculation.assessment,
@@ -110,7 +112,7 @@ export class CanonicalRtcService {
         companyId,
         effectiveAt,
         status,
-        JSON.stringify({ canonical: canonicalInput, mapped_official: mappedInput }),
+        JSON.stringify({ environment, canonical: canonicalInput, mapped_official: mappedInput }),
         JSON.stringify(output),
         JSON.stringify([source]),
       ],
