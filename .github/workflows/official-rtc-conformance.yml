@@ -7,7 +7,6 @@ on:
       - "tests/official-rtc.test.ts"
       - "docker/rtc/**"
       - "docs/OFFICIAL_RTC_ENGINE.md"
-      - ".github/workflows/official-rtc-conformance.yml"
   workflow_dispatch:
 
 permissions:
