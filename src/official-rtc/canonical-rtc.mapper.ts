@@ -10,9 +10,9 @@ function yearFromIso(value: string): number {
   return Number(match[1]);
 }
 
-function decimal(value: number, places = 2): string {
+function decimal(value: number): string {
   if (!Number.isFinite(value)) throw new BadRequestException('Fiscal numeric values must be finite');
-  return value.toFixed(places).replace(/\.?0+$/, (suffix) => suffix.startsWith('.') ? '' : suffix);
+  return String(value);
 }
 
 export function mapCanonicalRegular(dto: CanonicalRegularCalculationDto): Record<string, unknown> {
@@ -69,8 +69,8 @@ export function mapCanonicalSimples(dto: CanonicalSimplesCalculationDto): Record
       cClassTrib: item.tax_classification,
       baseCalculo: item.tax_base.toFixed(2),
       valorImpostoSeletivo: item.selective_tax_amount.toFixed(2),
-      ...(item.ibs_effective_rate !== undefined ? { pIBSSN: decimal(item.ibs_effective_rate, 6) } : {}),
-      ...(item.cbs_effective_rate !== undefined ? { pCBSSN: decimal(item.cbs_effective_rate, 6) } : {}),
+      ...(item.ibs_effective_rate !== undefined ? { pIBSSN: decimal(item.ibs_effective_rate) } : {}),
+      ...(item.cbs_effective_rate !== undefined ? { pCBSSN: decimal(item.cbs_effective_rate) } : {}),
     })),
   };
 }
