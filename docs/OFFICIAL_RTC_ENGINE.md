@@ -4,10 +4,12 @@ TaxAgent treats the Receita Federal open-source RTC engines as deterministic fis
 
 ## Pinned upstreams
 
-- Regular regime: `ReceitaFederal/calculadora-rtc-regime-regular` release 1.6.1, pinned commit `0accf834b76a2ce86ad1ad80ec61bbe070ae414e`.
-- Simples Nacional: `ReceitaFederal/calculadora-rtc-simples-nacional` release 0.0.6, pinned commit `c5b0f01c8351c3f0d0795cc617b29d233e9f98df`.
-- DANFSe: `ReceitaFederal/calculadora-rtc-gerador-danfse` release 1.0.0, pinned commit `8d79e6b2f7fad6375340afcb51c85ed370c64a14`.
+- Regular regime: `ReceitaFederal/calculadora-rtc-regime-regular` release 1.6.1, exact tag commit `150cccbe414d4a5edea703e4f7a424af5aa222c7`.
+- Simples Nacional: `ReceitaFederal/calculadora-rtc-simples-nacional` release 0.0.6, exact tag commit `c5b0f01c8351c3f0d0795cc617b29d233e9f98df`.
+- DANFSe: `ReceitaFederal/calculadora-rtc-gerador-danfse` release 1.0.0, exact tag commit `8d79e6b2f7fad6375340afcb51c85ed370c64a14`.
 - License: MIT for all three upstream repositories.
+
+Pins must follow the commit referenced by the published Git tag, not an intermediate merge commit or a moving `main`.
 
 ## Activation modes
 
@@ -23,6 +25,12 @@ TaxAgent exposes an authenticated reusable boundary under `/v1/rtc/official` so 
 
 Responses include upstream repository, release, exact commit, input SHA-256 and calculation timestamp. The TaxAgent layer remains responsible for tenancy, authorization, audit, input collection and fail-closed behavior.
 
+## Sidecar policy
+
+The official upstream applications run as isolated sidecars built from exact pinned commits. The regular and Simples engines run with their official `offline` profiles and a read-only SQLite database generated at build time. The Simples application intentionally reuses the regular engine's Flyway dataset, matching the Receita Federal repository architecture.
+
+Sidecars are tested in CI before any hosting decision. No paid runtime is created automatically.
+
 ## Security
 
 Official engine service URLs are configuration-only and never supplied by end users. Remote endpoints must use HTTPS; loopback HTTP is permitted for local containers. Credentials embedded in URLs are rejected. No production NFS-e transmission gate is changed by this module.
@@ -35,3 +43,8 @@ Official engine service URLs are configuration-only and never supplied by end us
 4. Persist full engine provenance inside Tax Decisions.
 5. Switch DANFSe generation to the official renderer after byte/document conformance tests.
 6. Add public simulator and batch CSV/XLSX workflow above the same gateway.
+
+
+## Golden conformance sources
+
+The regular smoke case is copied from the official Receita Federal `docs/exemplos.md` for the pinned regular release. The Simples smoke case is copied from the pinned upstream `SimplesNacionalControllerTest.deveCalcularCaminhoFelizCrt1ComImpostoSeletivoForaDaReceitaBruta` integration test. These fixtures are kept as upstream-derived conformance evidence; TaxAgent does not invent nominal rates or expected tax outcomes.

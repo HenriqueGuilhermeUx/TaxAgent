@@ -16,6 +16,13 @@ export class OfficialRtcController {
   @ApiOperation({ summary: 'Inspect pinned Receita Federal RTC engines and TaxAgent activation mode' })
   status() { return this.rtc.status(); }
 
+  @Get('freshness')
+  @ApiBearerAuth()
+  @UseGuards(ApiKeyGuard)
+  @RequireScope('tax:read')
+  @ApiOperation({ summary: 'Compare pinned open-source RTC release against the current Receita reference version' })
+  freshness() { return this.rtc.freshness(); }
+
   @Post('regular/calculate')
   @ApiBearerAuth()
   @UseGuards(ApiKeyGuard)

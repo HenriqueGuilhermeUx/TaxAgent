@@ -14,7 +14,7 @@ export const OFFICIAL_RTC_MANIFEST: Record<OfficialRtcEngineId, OfficialRtcEngin
   regular: {
     id: 'regular',
     upstreamRepository: 'ReceitaFederal/calculadora-rtc-regime-regular',
-    upstreamCommit: '0accf834b76a2ce86ad1ad80ec61bbe070ae414e',
+    upstreamCommit: '150cccbe414d4a5edea703e4f7a424af5aa222c7',
     upstreamRelease: '1.6.1',
     license: 'MIT',
     runtime: 'java21',
