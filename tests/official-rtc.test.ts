@@ -4,10 +4,28 @@ import { officialRtcMode, resolveOfficialRtcBaseUrl } from '../src/official-rtc/
 import { OFFICIAL_RTC_MANIFEST } from '../src/official-rtc/official-rtc.manifest';
 import { officialRtcInputSha256 } from '../src/official-rtc/official-rtc.service';
 
-test('pins the three Receita Federal MIT engines to explicit upstream releases and commits', () => {
-  assert.equal(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, '1.6.1');
-  assert.equal(OFFICIAL_RTC_MANIFEST.simples.upstreamRelease, '0.0.6');
-  assert.equal(OFFICIAL_RTC_MANIFEST.danfse.upstreamRelease, '1.0.0');
+test('pins the three Receita Federal MIT engines to exact release tag commits', () => {
+  assert.deepEqual(
+    {
+      release: OFFICIAL_RTC_MANIFEST.regular.upstreamRelease,
+      commit: OFFICIAL_RTC_MANIFEST.regular.upstreamCommit,
+    },
+    { release: '1.6.1', commit: '150cccbe414d4a5edea703e4f7a424af5aa222c7' },
+  );
+  assert.deepEqual(
+    {
+      release: OFFICIAL_RTC_MANIFEST.simples.upstreamRelease,
+      commit: OFFICIAL_RTC_MANIFEST.simples.upstreamCommit,
+    },
+    { release: '0.0.6', commit: 'c5b0f01c8351c3f0d0795cc617b29d233e9f98df' },
+  );
+  assert.deepEqual(
+    {
+      release: OFFICIAL_RTC_MANIFEST.danfse.upstreamRelease,
+      commit: OFFICIAL_RTC_MANIFEST.danfse.upstreamCommit,
+    },
+    { release: '1.0.0', commit: '8d79e6b2f7fad6375340afcb51c85ed370c64a14' },
+  );
   for (const engine of Object.values(OFFICIAL_RTC_MANIFEST)) {
     assert.equal(engine.license, 'MIT');
     assert.match(engine.upstreamCommit, /^[0-9a-f]{40}$/);
