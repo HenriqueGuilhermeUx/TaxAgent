@@ -3,7 +3,7 @@ import { createId } from '../common/id';
 import { DatabaseService } from '../database/database.service';
 import { FiscalEnvironment } from '../fiscal-core/fiscal.types';
 
-interface DecisionRow { id: string; company_id: string | null; effective_at: string | Date; status: string; output: any; sources: any }
+interface DecisionRow { id: string; company_id: string | null; effective_at: string | Date; status: string; decision_kind: 'issuance' | 'rtc_calculation'; output: any; sources: any }
 interface InvoiceRow { id: string; company_id: string; environment: FiscalEnvironment; tax_decision_id: string | null; status: string }
 
 @Injectable()
@@ -15,6 +15,7 @@ export class TaxPositionService {
     const invoice = rows[0];
     if (!invoice || invoice.status !== 'authorized' || !invoice.tax_decision_id) return;
     const decision = await this.getDecision(invoice.tax_decision_id, invoice.company_id);
+    if (decision.decision_kind !== 'issuance') return;
     const calculation = decision.output?.calculation;
     if (!calculation || calculation.kind !== '2026-test-reference' || !calculation.amounts || !calculation.rates) return;
 
@@ -92,7 +93,7 @@ export class TaxPositionService {
   }
 
   async getDecision(id: string, companyId?: string): Promise<DecisionRow> {
-    const { rows } = await this.db.query<DecisionRow>('SELECT id, company_id, effective_at, status, output, sources FROM tax_decisions WHERE id=$1', [id]);
+    const { rows } = await this.db.query<DecisionRow>('SELECT id, company_id, effective_at, status, decision_kind, output, sources FROM tax_decisions WHERE id=$1', [id]);
     const decision = rows[0];
     if (!decision) throw new NotFoundException('Tax decision not found');
     if (companyId && decision.company_id && decision.company_id !== companyId) throw new NotFoundException('Tax decision not found');

@@ -85,6 +85,7 @@ test('TaxEngine hydrates municipal ISS fields from a resolved profile decision',
   const position = {
     async getDecision() {
       return {
+        decision_kind: 'issuance',
         status: 'resolved',
         output: {
           classification: {

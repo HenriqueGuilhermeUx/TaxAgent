@@ -103,3 +103,23 @@ Consumers should prefer the stable TaxAgent canonical endpoints instead of the r
   - `cAtivSN`, `cClassTrib`, base, selective-tax amount and effective Simples rates (when applicable) are facts supplied by the consumer; TaxAgent does not guess them.
 
 The raw endpoints under `/v1/rtc/official/*` remain useful for internal conformance/debugging, but new product integrations should target the canonical boundary.
+
+
+## Persisted decision provenance
+
+Canonical RTC calculations are persisted in `tax_decisions` with `decision_kind=rtc_calculation`.
+
+The persisted record contains:
+
+- canonical consumer input;
+- mapped official-engine payload;
+- engine repository/release/exact commit;
+- input SHA-256 and calculation timestamp;
+- normalized assessment;
+- regular-engine freshness evidence when available;
+- raw official calculation output;
+- explicit `authoritative` and `reference_only` flags.
+
+Existing issuance decisions remain `decision_kind=issuance` by default. The invoice flow rejects `rtc_calculation` decisions even when their calculation status is `resolved`, preventing a simulator/batch result from being reused as an issuance decision.
+
+Until a freshness mechanism is implemented for the pinned Simples engine, persisted Simples calculations remain `reference_only=true`.
