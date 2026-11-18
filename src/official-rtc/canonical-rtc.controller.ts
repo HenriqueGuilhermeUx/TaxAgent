@@ -19,7 +19,7 @@ export class CanonicalRtcController {
   @ApiOperation({ summary: 'Calculate regular-regime RTC from the stable TaxAgent canonical contract' })
   calculateRegular(@Body() dto: CanonicalRegularCalculationDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
     if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
-    return this.rtc.calculateRegular(auth.companyId, dto);
+    return this.rtc.calculateRegular(auth.companyId, auth.environment, dto);
   }
 
   @Post('simples/calculate')
@@ -29,6 +29,6 @@ export class CanonicalRtcController {
   @ApiOperation({ summary: 'Calculate Simples Nacional RTC from the stable TaxAgent canonical contract' })
   calculateSimples(@Body() dto: CanonicalSimplesCalculationDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
     if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
-    return this.rtc.calculateSimples(auth.companyId, dto);
+    return this.rtc.calculateSimples(auth.companyId, auth.environment, dto);
   }
 }
