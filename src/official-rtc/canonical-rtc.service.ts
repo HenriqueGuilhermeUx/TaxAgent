@@ -120,8 +120,6 @@ export class CanonicalRtcService {
 
     return {
       decision_id: id,
-      decision_kind: 'rtc_calculation',
-      status,
       ...output,
       sources: [source],
     };
