@@ -86,3 +86,20 @@ Use TaxAgent for tax simulation/explanation adjacent to PJ financial flows. Fina
 5. only then consider `official` mode for a supported flow.
 
 NFS-e production transmission remains governed by its independent homologation and A1/readiness controls.
+
+
+## Canonical consumer API
+
+Consumers should prefer the stable TaxAgent canonical endpoints instead of the raw Receita-shaped endpoints:
+
+- `POST /v1/rtc/canonical/regular/calculate`
+  - V1 supports `document_kind=nfse` and maps it to official `tpDoc=91`.
+  - TaxAgent owns the upstream ROC version field.
+  - For facts before 2027, nominal rates are forbidden by the pinned engine.
+  - From 2027 onward, nominal CBS/IBS state/IBS municipal rates are required by the pinned engine and must be supplied explicitly from a verified source.
+- `POST /v1/rtc/canonical/simples/calculate`
+  - V1 supports `document_kind=nfe|nfce`, matching the current pinned Simples engine document support (55/65).
+  - It does **not** claim NFS-e support for Simples until the official engine contract supports it.
+  - `cAtivSN`, `cClassTrib`, base, selective-tax amount and effective Simples rates (when applicable) are facts supplied by the consumer; TaxAgent does not guess them.
+
+The raw endpoints under `/v1/rtc/official/*` remain useful for internal conformance/debugging, but new product integrations should target the canonical boundary.
