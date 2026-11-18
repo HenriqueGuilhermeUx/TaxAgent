@@ -28,7 +28,7 @@ test('TaxPosition writes authorized invoice ledger entries with invoice environm
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const responses = [
     { rows: [{ id: 'inv_1', company_id: 'co_1', environment: 'test', tax_decision_id: 'dec_1', status: 'authorized' }] },
-    { rows: [{ id: 'dec_1', company_id: 'co_1', effective_at: '2026-09-10', status: 'resolved', output: { calculation: { kind: '2026-test-reference', base: 100, amounts: { ibs: 1, cbs: 2 }, rates: { ibs: 0.01, cbs: 0.02 } } }, sources: [] }] },
+    { rows: [{ id: 'dec_1', decision_kind: 'issuance', company_id: 'co_1', effective_at: '2026-09-10', status: 'resolved', output: { calculation: { kind: '2026-test-reference', base: 100, amounts: { ibs: 1, cbs: 2 }, rates: { ibs: 0.01, cbs: 0.02 } } }, sources: [] }] },
     { rows: [] },
     { rows: [] },
   ];
