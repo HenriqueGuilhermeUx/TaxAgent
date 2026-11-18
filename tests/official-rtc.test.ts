@@ -4,6 +4,7 @@ import { officialRtcMode, resolveOfficialRtcBaseUrl } from '../src/official-rtc/
 import { OFFICIAL_RTC_MANIFEST } from '../src/official-rtc/official-rtc.manifest';
 import { officialRtcInputSha256 } from '../src/official-rtc/official-rtc.service';
 import { assessOfficialRtcObservability } from '../src/official-rtc/official-rtc-observability';
+import { assessOfficialRtcFreshness } from '../src/official-rtc/official-rtc-freshness';
 
 test('pins the three Receita Federal MIT engines to exact release tag commits', () => {
   assert.deepEqual(
@@ -108,4 +109,31 @@ test('official observability assessment treats unknown/malformed states as unusa
   assert.equal(malformed.response_valid, false);
   assert.equal(malformed.all_items_usable, false);
   assert.equal(malformed.authoritative_eligible, false);
+});
+
+
+test('official freshness blocks authoritative use when Receita reference is ahead', () => {
+  const assessment = assessOfficialRtcFreshness('1.6.1', {
+    versaoApp: '1.7.1-2beedf45',
+    versaoDb: 'V0073',
+    dataVersaoDb: '2026-11-09',
+    ambiente: 'online',
+  });
+  assert.equal(assessment.status, 'reference_ahead');
+  assert.equal(assessment.authoritative_eligible, false);
+  assert.equal(assessment.reference.app, '1.7.1-2beedf45');
+  assert.equal(assessment.reference.database, 'V0073');
+});
+
+test('official freshness allows authoritative eligibility only on matching core release', () => {
+  const matching = assessOfficialRtcFreshness('1.6.1', {
+    versaoApp: '1.6.1-build123',
+    versaoDb: 'V0059',
+  });
+  assert.equal(matching.status, 'match');
+  assert.equal(matching.authoritative_eligible, true);
+
+  const unknown = assessOfficialRtcFreshness('1.6.1', { versaoApp: 'development' });
+  assert.equal(unknown.status, 'unknown');
+  assert.equal(unknown.authoritative_eligible, false);
 });
