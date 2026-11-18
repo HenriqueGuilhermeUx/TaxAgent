@@ -1,0 +1,128 @@
+name: official-rtc-conformance
+
+on:
+  pull_request:
+    paths:
+      - "src/official-rtc/**"
+      - "tests/official-rtc.test.ts"
+      - "docker/rtc/**"
+      - "docs/OFFICIAL_RTC_ENGINE.md"
+      - ".github/workflows/official-rtc-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: official-rtc-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regular:
+    name: Regular 1.6.1
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build pinned official regular engine
+        run: docker build -f docker/rtc/regular.Dockerfile -t taxagent-rtc-regular:ci .
+
+      - name: Boot and probe regular engine
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name taxagent-rtc-regular -p 18080:8080 -p 19101:9101 taxagent-rtc-regular:ci
+          trap 'docker logs taxagent-rtc-regular || true; docker rm -f taxagent-rtc-regular >/dev/null 2>&1 || true' EXIT
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:19101/health >/tmp/rtc-regular-health.json; then
+              break
+            fi
+            sleep 2
+          done
+          jq -e '.status == "UP"' /tmp/rtc-regular-health.json
+          curl -fsS http://127.0.0.1:18080/api/calculadora/dados-abertos/versao >/tmp/rtc-regular-version.json
+          jq . /tmp/rtc-regular-version.json
+
+      - name: Run official service calculation example
+        run: |
+          set -euo pipefail
+          cat >/tmp/rtc-operation.json <<'JSON'
+          {
+            "id": "taxagent-official-rtc-ci",
+            "versao": "1.0.0",
+            "dhFatoGerador": "2027-03-10T10:00:00-03:00",
+            "municipio": 4314902,
+            "uf": "RS",
+            "itens": [
+              {
+                "numero": 1,
+                "nbs": "122011200",
+                "cst": "200",
+                "cClassTrib": "200028",
+                "baseCalculo": 1200.00,
+                "aliquotasNominais": {
+                  "cbs": 8.8,
+                  "ibsEstadual": 0.05,
+                  "ibsMunicipal": 0.05
+                }
+              }
+            ]
+          }
+          JSON
+          curl -fsS -X POST             http://127.0.0.1:18080/api/calculadora/observabilidade/regime-geral             -H 'Content-Type: application/json'             --data-binary @/tmp/rtc-operation.json             >/tmp/rtc-result.json
+          jq . /tmp/rtc-result.json
+          jq -e '.objetos | length == 1' /tmp/rtc-result.json
+          jq -e '.objetos[0].estadoItem == "CALCULO_SIMULADO" or .objetos[0].estadoItem == "CALCULADO"' /tmp/rtc-result.json
+          jq -e '.objetos[0].tribCalc.IBSCBS.CST == "200"' /tmp/rtc-result.json
+          jq -e '.objetos[0].tribCalc.IBSCBS.cClassTrib == "200028"' /tmp/rtc-result.json
+
+  simples:
+    name: Simples 0.0.6
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build pinned official Simples engine
+        run: docker build -f docker/rtc/simples.Dockerfile -t taxagent-rtc-simples:ci .
+
+      - name: Boot and probe Simples engine
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name taxagent-rtc-simples -p 18082:8082 -p 19103:9103 taxagent-rtc-simples:ci
+          trap 'docker logs taxagent-rtc-simples || true; docker rm -f taxagent-rtc-simples >/dev/null 2>&1 || true' EXIT
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:19103/health >/tmp/rtc-simples-health.json; then
+              break
+            fi
+            sleep 2
+          done
+          jq -e '.status == "UP"' /tmp/rtc-simples-health.json
+          curl -fsS http://127.0.0.1:18082/api/versao >/tmp/rtc-simples-version.json
+          jq . /tmp/rtc-simples-version.json
+
+  danfse:
+    name: DANFSe 1.0.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build pinned official DANFSe engine
+        run: docker build -f docker/rtc/danfse.Dockerfile -t taxagent-rtc-danfse:ci .
+
+      - name: Boot and probe DANFSe engine
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name taxagent-rtc-danfse -p 18083:8080 taxagent-rtc-danfse:ci
+          trap 'docker logs taxagent-rtc-danfse || true; docker rm -f taxagent-rtc-danfse >/dev/null 2>&1 || true' EXIT
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18083/health/ready >/tmp/rtc-danfse-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          jq -e '.status == "ok"' /tmp/rtc-danfse-health.json
