@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validateSync, ValidationError } from 'class-validator';
 import { CanonicalRegularCalculationDto, CanonicalSimplesCalculationDto } from './canonical-rtc.dto';
 import { CanonicalRtcService } from './canonical-rtc.service';
+import { mapCanonicalRegular, mapCanonicalSimples } from './canonical-rtc.mapper';
 import { ParsedBatchRow, RtcBatchUploadedFile, parseRtcBatchFile } from './rtc-batch-file.parser';
 
 type Environment = 'test' | 'production';
@@ -112,15 +113,21 @@ function batchFields(error: unknown): Array<{ field: string; rules: string[] }> 
 export class RtcBatchService {
   constructor(private readonly rtc: CanonicalRtcService) {}
 
-  async regular(companyId: string, environment: Environment, file: RtcBatchUploadedFile | undefined) {
-    return this.process('regular', companyId, environment, file);
+  async regular(companyId: string, environment: Environment, file: RtcBatchUploadedFile | undefined, execution: 'validate' | 'calculate' = 'validate') {
+    return this.process('regular', companyId, environment, file, execution);
   }
 
-  async simples(companyId: string, environment: Environment, file: RtcBatchUploadedFile | undefined) {
-    return this.process('simples', companyId, environment, file);
+  async simples(companyId: string, environment: Environment, file: RtcBatchUploadedFile | undefined, execution: 'validate' | 'calculate' = 'validate') {
+    return this.process('simples', companyId, environment, file, execution);
   }
 
-  private async process(regime: Regime, companyId: string, environment: Environment, file: RtcBatchUploadedFile | undefined) {
+  private async process(
+    regime: Regime,
+    companyId: string,
+    environment: Environment,
+    file: RtcBatchUploadedFile | undefined,
+    execution: 'validate' | 'calculate',
+  ) {
     const parsed = parseRtcBatchFile(file);
     const results: any[] = [];
 
@@ -130,13 +137,23 @@ export class RtcBatchService {
         if (regime === 'regular') {
           const dto = regularDtoFromBatchRow(row);
           operationId = dto.operation_id;
-          const decision: any = await this.rtc.calculateRegular(companyId, environment, dto);
-          results.push(this.successRow(row.row_number, operationId, decision));
+          mapCanonicalRegular(dto);
+          if (execution === 'validate') {
+            results.push(this.validRow(row.row_number, operationId));
+          } else {
+            const decision: any = await this.rtc.calculateRegular(companyId, environment, dto);
+            results.push(this.successRow(row.row_number, operationId, decision));
+          }
         } else {
           const dto = simplesDtoFromBatchRow(row);
           operationId = dto.operation_id;
-          const decision: any = await this.rtc.calculateSimples(companyId, environment, dto);
-          results.push(this.successRow(row.row_number, operationId, decision));
+          mapCanonicalSimples(dto);
+          if (execution === 'validate') {
+            results.push(this.validRow(row.row_number, operationId));
+          } else {
+            const decision: any = await this.rtc.calculateSimples(companyId, environment, dto);
+            results.push(this.successRow(row.row_number, operationId, decision));
+          }
         }
       } catch (error) {
         results.push({
@@ -150,6 +167,7 @@ export class RtcBatchService {
     }
 
     const counts = {
+      valid: results.filter((row) => row.status === 'valid').length,
       resolved: results.filter((row) => row.status === 'resolved').length,
       requires_input: results.filter((row) => row.status === 'requires_input').length,
       unsupported: results.filter((row) => row.status === 'unsupported').length,
@@ -158,6 +176,7 @@ export class RtcBatchService {
 
     return {
       regime,
+      execution,
       format: parsed.format,
       row_count: parsed.rows.length,
       processed_sequentially: true,
@@ -166,10 +185,21 @@ export class RtcBatchService {
       policy: {
         max_rows: 100,
         no_parallel_sidecar_burst: true,
-        each_success_persists_rtc_tax_decision: true,
+        each_success_persists_rtc_tax_decision: execution === 'calculate',
         financial_action_allowed: false,
         issuance_binding_allowed: false,
       },
+    };
+  }
+
+  private validRow(rowNumber: number, operationId: string) {
+    return {
+      row_number: rowNumber,
+      operation_id: operationId,
+      outcome: 'validated',
+      status: 'valid',
+      authoritative: false,
+      reference_only: true,
     };
   }
 
