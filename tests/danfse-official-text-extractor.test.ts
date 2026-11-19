@@ -122,3 +122,11 @@ test('unknown text and apparent secrets are not copied into the bounded result',
   assert.equal(serialized.includes('SUPER-SECRETO'), false);
   assert.equal(serialized.includes('abcdef123456'), false);
 });
+
+
+test('longer exact official label is not consumed as an inline value of its shorter prefix', () => {
+  const result = extractOfficialDanfseTextFields(fixture);
+  assert.equal(result.fields['totals.net'], '950.00');
+  assert.equal(result.fields['totals.net_plus_ibs_cbs'], '1010.00');
+  assert.equal(result.ambiguousFields?.includes('totals.net'), false);
+});
