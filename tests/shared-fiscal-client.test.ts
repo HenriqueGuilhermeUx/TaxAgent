@@ -157,3 +157,77 @@ test('malformed successful decision responses fail closed', async () => {
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared client exposes simulator readiness and validates batch safety envelope', async () => {
+  const calls: string[] = [];
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async (input: URL | RequestInfo, init?: RequestInit) => {
+      calls.push(String(input));
+      if (String(input).endsWith('/v1/rtc/simulator/readiness')) {
+        return response({ mode: 'off', policy: { financial_action_allowed: false, issuance_binding_allowed: false } });
+      }
+      return response({
+        regime: 'regular',
+        execution: 'validate',
+        rows: [{ operation_id: 'op-1', status: 'valid', reference_only: true }],
+        counts: { valid: 1 },
+        total: 1,
+        policy: { partial_results: true, zero_tax_on_error: false, financial_action_allowed: false, issuance_binding_allowed: false },
+      });
+    }) as typeof fetch,
+  });
+
+  await client.simulatorReadiness();
+  const result = await client.batchRegular('validate', [{
+    operation_id: 'op-1',
+    effective_at: '2026-03-10T10:00:00-03:00',
+    municipality_code: '4314902',
+    uf: 'RS',
+    document_kind: 'nfse',
+    items: [{ number: 1, nbs: '115012000', cst: '200', tax_classification: '200043', tax_base: 200 }],
+  }]);
+
+  assert.equal(result.total, 1);
+  assert.equal(result.rows[0].status, 'valid');
+  assert.equal(result.policy.financial_action_allowed, false);
+  assert.equal(result.policy.issuance_binding_allowed, false);
+  assert.equal(calls.some((url) => url.endsWith('/v1/rtc/simulator/readiness')), true);
+  assert.equal(calls.some((url) => url.endsWith('/v1/rtc/simulator/regular/batch')), true);
+});
+
+test('shared client rejects unsafe or malformed batch envelopes', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => response({
+      regime: 'regular',
+      execution: 'calculate',
+      rows: [{ operation_id: 'op-1', status: 'calculated', reference_only: false }],
+      counts: { calculated: 1 },
+      total: 1,
+      policy: { financial_action_allowed: true, issuance_binding_allowed: false },
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.batchRegular('calculate', [{
+      operation_id: 'op-1',
+      effective_at: '2027-03-10T10:00:00-03:00',
+      municipality_code: '4314902',
+      uf: 'RS',
+      document_kind: 'nfse',
+      items: [{
+        number: 1,
+        nbs: '122011200',
+        cst: '200',
+        tax_classification: '200028',
+        tax_base: 1200,
+        nominal_rates: { cbs: 8.8, ibs_state: 0.05, ibs_municipal: 0.05 },
+      }],
+    }]),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
