@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM maven:3.9.5-eclipse-temurin-21 AS build
 
 ARG RTC_REGULAR_COMMIT=150cccbe414d4a5edea703e4f7a424af5aa222c7
 
@@ -16,11 +16,11 @@ RUN git init /src \
 WORKDIR /src
 
 RUN mkdir -p ./calculadora/db \
- && ./mvnw flyway:migrate \
+ && mvn flyway:migrate \
       -Dflyway.configFiles=./flyway/flyway-pro.conf \
       --batch-mode --errors
 
-RUN ./mvnw --batch-mode --errors -ntp -DskipTests clean package \
+RUN mvn --batch-mode --errors -ntp -DskipTests clean package \
  && test -s target/api-regime-geral.jar \
  && test -s calculadora/db/calculadora-pro.db
 
