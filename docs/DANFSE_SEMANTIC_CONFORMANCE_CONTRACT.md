@@ -43,3 +43,17 @@ A missing canonical value is **not** evidence that either PDF is correct. A fiel
 
 ## Existing implementation
 `src/danfse/danfse.service.ts` records `official_shadow.byte_comparison` and `semantic_assessment: not_assessed` in TEST shadow, and `tests/danfse-shadow-evidence.test.ts` checks equality, inequality, upstream failure and off/production isolation. This document does not change runtime behavior. `src/danfse/danfse-semantic-comparator.ts` implements the isolated field-comparison core. `src/danfse/danfse-official-text-extractor.ts` implements a bounded official-label parser. `src/danfse/danfse-pdf-text-adapter.ts` adds bounded in-memory PDF text extraction using pinned pdf-parse 2.4.5 with size/error controls. Runtime shadow wiring and visual validation remain pending.
+
+
+## Runtime semantic shadow gate
+
+The semantic runtime path is separately gated by `TAXAGENT_DANFSE_SEMANTIC_SHADOW_ENABLED=true` and remains disabled by default.
+
+When both TEST-shadow PDFs are available, TaxAgent extracts each PDF independently in memory, maps only official-label allowlisted fields, and compares each field set independently to the same authorized-XML `DanfseModel`.
+
+Aggregate semantics:
+- any `different` side => `different`;
+- both sides `matched_fields` => `matched_fields`;
+- otherwise => `inconclusive`.
+
+The runtime metadata stores only bounded assessment state, field IDs/error codes/counts, adapter/extractor versions, page counts, and existing hashes/sizes. It never stores raw extracted text or extracted fiscal values. `matched_fields` remains non-authoritative and visual conformance remains `not_assessed`.
