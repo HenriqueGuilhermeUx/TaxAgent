@@ -22,7 +22,7 @@ export class DanfseService {
     if (!source) throw new NotFoundException('Authorized NFS-e XML not found for invoice');
     const model = this.parser.parse(source.content.toString('utf8'));
     // Shadow evidence is non-authoritative: never persist the upstream PDF or its raw error.
-    const shadowEvidence: { mode: 'shadow'; status: 'success' | 'failure'; official_pdf_sha256?: string; official_pdf_bytes?: number; byte_comparison?: 'identical' | 'different' } | undefined =
+    const shadowEvidence: { mode: 'shadow'; status: 'success' | 'failure'; official_pdf_sha256?: string; official_pdf_bytes?: number; byte_comparison?: 'identical' | 'different'; semantic_assessment?: 'not_assessed' } | undefined =
       invoice.environment === 'test' && officialRtcMode() === 'shadow' && this.officialRtc.danfseConfigured()
         ? { mode: 'shadow', status: 'failure' }
         : undefined;
@@ -42,6 +42,8 @@ export class DanfseService {
     // Never interpret this result as visual/semantic conformance or renderer promotion eligibility.
     if (shadowEvidence?.status === 'success' && shadowEvidence.official_pdf_sha256) {
       shadowEvidence.byte_comparison = shadowEvidence.official_pdf_sha256 === createHash('sha256').update(pdf).digest('hex') ? 'identical' : 'different';
+      // Byte equality cannot establish semantic/visual equivalence; explicit fail-closed gate.
+      shadowEvidence.semantic_assessment = 'not_assessed';
     }
     return this.documents.save({ invoiceId, kind: 'danfse-pdf', content: pdf, contentType: 'application/pdf', metadata: { specification: model.specVersion, compliance_mode: process.env.TAXAGENT_DANFSE_RENDERER_MODE ?? 'draft', source_sha256: source.sha256, ...(shadowEvidence ? { official_shadow: { ...shadowEvidence, local_pdf_sha256: createHash('sha256').update(pdf).digest('hex'), local_pdf_bytes: pdf.length } } : {}) } });
   }
