@@ -47,6 +47,7 @@ test('DANFSe TEST shadow records only PDF fingerprints and keeps local PDF', asy
   assert.deepEqual(saved.metadata.official_shadow, {
     mode: 'shadow', status: 'success',
     official_pdf_sha256: sha(officialPdf), official_pdf_bytes: officialPdf.length,
+    byte_comparison: 'different',
     local_pdf_sha256: sha(localPdf), local_pdf_bytes: localPdf.length,
   });
   assert.equal(JSON.stringify(saved.metadata).includes('official'), true);
@@ -70,4 +71,9 @@ test('DANFSe production and off mode never call official shadow renderer', async
     assert.deepEqual(calls, ['local']);
     assert.equal(saved.metadata.official_shadow, undefined);
   }
+});
+
+test('DANFSe byte comparison is not emitted when official rendering fails', async () => {
+  const { saved } = await exercise('test', 'shadow', true);
+  assert.equal(saved.metadata.official_shadow.byte_comparison, undefined);
 });
