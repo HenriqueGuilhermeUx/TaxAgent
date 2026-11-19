@@ -231,3 +231,70 @@ test('shared client rejects unsafe or malformed batch envelopes', async () => {
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared client accepts only bounded safe agent summaries', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => response({
+      decision_id: 'taxdec_1',
+      decision_kind: 'rtc_calculation',
+      effective_at: '2026-11-19',
+      status: 'resolved',
+      regime: 'regular',
+      environment: 'test',
+      use: 'reference_only',
+      authoritative: false,
+      reference_only: true,
+      next_action: 'explain_reference_only_no_execution',
+      message: { locale: 'pt-BR', text: 'Resultado apenas de referência.' },
+      policy: {
+        ai_authoritative: false,
+        financial_action_allowed: false,
+        issuance_binding_allowed: false,
+        raw_fiscal_payload_exposed: false,
+        raw_document_content_exposed: false,
+        taxpayer_pii_exposed: false,
+      },
+    })) as typeof fetch,
+  });
+
+  const summary = await client.agentSummary('taxdec_1');
+  assert.equal(summary.use, 'reference_only');
+  assert.equal(summary.policy.financial_action_allowed, false);
+  assert.equal(summary.policy.issuance_binding_allowed, false);
+});
+
+test('shared client rejects agent summaries that claim execution authority', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => response({
+      decision_id: 'taxdec_1',
+      decision_kind: 'rtc_calculation',
+      effective_at: '2026-11-19',
+      status: 'resolved',
+      regime: 'regular',
+      environment: 'test',
+      use: 'reference_only',
+      authoritative: false,
+      reference_only: true,
+      next_action: 'execute_payment',
+      message: { locale: 'pt-BR', text: 'unsafe' },
+      policy: {
+        ai_authoritative: false,
+        financial_action_allowed: true,
+        issuance_binding_allowed: false,
+        raw_fiscal_payload_exposed: false,
+        raw_document_content_exposed: false,
+        taxpayer_pii_exposed: false,
+      },
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.agentSummary('taxdec_1'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
