@@ -7,7 +7,8 @@ import { DanfseController } from './danfse.controller';
 import { DanfseParserService } from './danfse-parser.service';
 import { DanfseRendererService } from './danfse-renderer.service';
 import { DanfseService } from './danfse.service';
+import { DanfseVisualConformanceService } from './danfse-visual-conformance.service';
 import { DanfseWorkerService } from './danfse-worker.service';
 
-@Module({ imports: [AuthModule, DocumentsModule, JobsModule], controllers: [DanfseController], providers: [OfficialRtcClient, DanfseParserService, DanfseRendererService, DanfseService, DanfseWorkerService], exports: [DanfseService] })
+@Module({ imports: [AuthModule, DocumentsModule, JobsModule], controllers: [DanfseController], providers: [OfficialRtcClient, DanfseParserService, DanfseRendererService, DanfseService, DanfseVisualConformanceService, DanfseWorkerService], exports: [DanfseService] })
 export class DanfseModule {}
