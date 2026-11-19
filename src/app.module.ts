@@ -17,11 +17,12 @@ import { MunicipalParametersModule } from './municipal-parameters/municipal-para
 import { OperationsModule } from './operations/operations.module';
 import { OfficialRtcModule } from './official-rtc/official-rtc.module';
 import { ProviderCredentialsModule } from './provider-credentials/provider-credentials.module';
+import { PublicSimulatorModule } from './public-simulator/public-simulator.module';
 import { SchemaRegistryModule } from './schema-registry/schema-registry.module';
 import { SecurityModule } from './security/security.module';
 import { TaxEngineModule } from './tax-engine/tax-engine.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
-@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, CustomerPortalModule, EvidenceModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, OfficialRtcModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
+@Module({ imports: [SecurityModule, DatabaseModule, AuthModule, HealthModule, HomologationConsoleModule, CustomerPortalModule, EvidenceModule, TenancyModule, CustomersModule, CertificatesModule, ProviderCredentialsModule, SchemaRegistryModule, MunicipalParametersModule, OperationsModule, OfficialRtcModule, PublicSimulatorModule, DocumentsModule, DocumentIntakeModule, WebhooksModule, FiscalInboxModule, DanfseModule, TaxEngineModule, InvoicesModule, FiscalAutopilotModule] })
 export class AppModule {}
