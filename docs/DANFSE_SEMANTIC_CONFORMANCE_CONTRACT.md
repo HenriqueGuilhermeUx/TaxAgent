@@ -31,7 +31,7 @@ A missing canonical value is **not** evidence that either PDF is correct. A fiel
 - Proposed future `matched_fields`: all required machine-checkable fields agree with XML **but visual conformance remains unverified**; never equivalent to `verified`.
 - Upstream renderer failure: preserve `status=failure`, omit semantic assessment (current behavior).
 
-Only `not_assessed` is currently implemented. The other states must not be emitted until separately tested, reviewed and merged. Any unexpected state fails closed.
+`not_assessed` remains the only state emitted by the runtime shadow path. The pure comparator core can now return `inconclusive`, `different` or `matched_fields` in isolation, but those states are not wired to runtime metadata until an independent PDF extraction layer is separately tested, reviewed and merged. Any unexpected state fails closed.
 
 ## Acceptance gates for future comparator PRs
 1. Exact-head CI and `official-rtc-conformance` green; TEST shadow only.
@@ -42,4 +42,4 @@ Only `not_assessed` is currently implemented. The other states must not be emitt
 6. Any official regular RTC result remains non-authoritative unless `freshness=match` and assessment is eligible; HTTP 200 alone is never success.
 
 ## Existing implementation
-`src/danfse/danfse.service.ts` records `official_shadow.byte_comparison` and `semantic_assessment: not_assessed` in TEST shadow, and `tests/danfse-shadow-evidence.test.ts` checks equality, inequality, upstream failure and off/production isolation. This document does not change runtime behavior.
+`src/danfse/danfse.service.ts` records `official_shadow.byte_comparison` and `semantic_assessment: not_assessed` in TEST shadow, and `tests/danfse-shadow-evidence.test.ts` checks equality, inequality, upstream failure and off/production isolation. This document does not change runtime behavior. `src/danfse/danfse-semantic-comparator.ts` implements the isolated field-comparison core only; runtime wiring and PDF extraction remain pending.
