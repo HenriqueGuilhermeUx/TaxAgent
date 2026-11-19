@@ -123,3 +123,19 @@ The persisted record contains:
 Existing issuance decisions remain `decision_kind=issuance` by default. The invoice flow rejects `rtc_calculation` decisions even when their calculation status is `resolved`, preventing a simulator/batch result from being reused as an issuance decision.
 
 Until a freshness mechanism is implemented for the pinned Simples engine, persisted Simples calculations remain `reference_only=true`.
+
+
+## TypeScript integration client
+
+TaxAgent ships a framework-neutral TypeScript reference client in `src/integrations/shared-fiscal-client.ts`. It is intended to be copied/packaged through the product-specific integration process rather than by duplicating fiscal rules.
+
+The client:
+- calls only TaxAgent status/freshness/canonical endpoints;
+- rejects insecure remote HTTP and URLs containing credentials;
+- uses a dedicated server-to-server bearer key;
+- applies bounded timeout/network/HTTP errors without exposing response bodies;
+- validates the minimum canonical decision envelope;
+- returns a safety classification of `authoritative`, `reference_only` or `review_required`;
+- always returns `financial_action_allowed=false` and `issuance_binding_allowed=false`.
+
+This means NexOffices can orchestrate fiscal UX while TaxAgent remains the tax authority, and Nexa PJ can show calculations beside financial workflows without a calculation silently authorizing a transfer, payment or tax remittance.
