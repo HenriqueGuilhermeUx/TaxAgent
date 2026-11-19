@@ -80,6 +80,7 @@ jobs:
 
   simples:
     name: Simples 0.0.6
+    needs: regular
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
