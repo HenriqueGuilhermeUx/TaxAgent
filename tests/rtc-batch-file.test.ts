@@ -3,7 +3,7 @@ import test from 'node:test';
 import AdmZip from 'adm-zip';
 import { BadRequestException } from '@nestjs/common';
 import { parseCsvBatch, parseXlsxBatch } from '../src/official-rtc/rtc-batch-file.parser';
-import { regularDtoFromBatchRow, simplesDtoFromBatchRow } from '../src/official-rtc/rtc-batch.service';
+import { RtcBatchService, regularDtoFromBatchRow, simplesDtoFromBatchRow } from '../src/official-rtc/rtc-batch.service';
 
 test('CSV batch parses semicolon-delimited rows and normalizes headers', () => {
   const parsed = parseCsvBatch(Buffer.from(
@@ -130,4 +130,57 @@ test('file batch Simples row maps into canonical NF-e contract', () => {
   assert.equal(dto.document_kind, 'nfe');
   assert.equal(dto.items[0].ibs_effective_rate, 1.25);
   assert.equal(dto.items[0].cbs_effective_rate, 2.75);
+});
+
+
+test('CSV/XLSX file batch defaults can validate without calling an RTC sidecar', async () => {
+  let calls = 0;
+  const service = new RtcBatchService({
+    calculateRegular: async () => { calls += 1; throw new Error('must not run in validate mode'); },
+  } as any);
+  const file = {
+    originalname: 'regular.csv',
+    buffer: Buffer.from(
+      'operation_id,effective_at,municipality_code,uf,nbs,cst,tax_classification,tax_base\n'
+      + 'op-validate,2026-03-10T10:00:00-03:00,4314902,RS,115012000,200,200043,200.00\n',
+    ),
+  };
+  const result = await service.regular('company', 'test', file, 'validate');
+  assert.equal(calls, 0);
+  assert.equal(result.execution, 'validate');
+  assert.equal(result.counts.valid, 1);
+  assert.equal(result.rows[0].outcome, 'validated');
+  assert.equal(result.rows[0].reference_only, true);
+  assert.equal(result.policy.each_success_persists_rtc_tax_decision, false);
+});
+
+test('file batch calculate mode still delegates only canonical validated rows', async () => {
+  let calls = 0;
+  const service = new RtcBatchService({
+    calculateRegular: async (_company: string, _environment: string, dto: any) => {
+      calls += 1;
+      return {
+        decision_id: 'taxdec_batch',
+        status: 'resolved',
+        authoritative: false,
+        reference_only: true,
+        assessment: { all_items_usable: true, simulation_only: true, counts: { simulated: 1 } },
+        engine: { id: 'regular', upstreamRelease: '1.6.1', upstreamCommit: '150cccbe414d4a5edea703e4f7a424af5aa222c7' },
+        input: dto,
+      };
+    },
+  } as any);
+  const file = {
+    originalname: 'regular.csv',
+    buffer: Buffer.from(
+      'operation_id,effective_at,municipality_code,uf,nbs,cst,tax_classification,tax_base\n'
+      + 'op-calc,2026-03-10T10:00:00-03:00,4314902,RS,115012000,200,200043,200.00\n',
+    ),
+  };
+  const result = await service.regular('company', 'test', file, 'calculate');
+  assert.equal(calls, 1);
+  assert.equal(result.execution, 'calculate');
+  assert.equal(result.rows[0].decision_id, 'taxdec_batch');
+  assert.equal(result.rows[0].reference_only, true);
+  assert.equal(result.policy.each_success_persists_rtc_tax_decision, true);
 });
