@@ -50,12 +50,12 @@ function semanticText(providerTaxId = '12.345.678/0001-90'): string {
   ].join('\n');
 }
 
-async function exercise(officialPdf: Buffer, localPdf: Buffer, environment: 'test' | 'production' = 'test') {
+async function exercise(officialPdf: Buffer, localPdf: Buffer, environment: 'test' | 'production' = 'test', semanticEnabled = true) {
   const beforeRtc = process.env.TAXAGENT_RTC_ENGINE_MODE;
   const beforeSemantic = process.env.TAXAGENT_DANFSE_SEMANTIC_SHADOW_ENABLED;
   const beforeRenderer = process.env.TAXAGENT_DANFSE_RENDERER_MODE;
   process.env.TAXAGENT_RTC_ENGINE_MODE = 'shadow';
-  process.env.TAXAGENT_DANFSE_SEMANTIC_SHADOW_ENABLED = 'true';
+  process.env.TAXAGENT_DANFSE_SEMANTIC_SHADOW_ENABLED = semanticEnabled ? 'true' : 'false';
   process.env.TAXAGENT_DANFSE_RENDERER_MODE = 'verified';
 
   let saved: any;
@@ -145,4 +145,14 @@ test('semantic gate never makes production call the optional official shadow ren
 
   assert.deepEqual(calls, ['local']);
   assert.equal(saved.metadata.official_shadow, undefined);
+});
+
+
+test('explicitly disabled semantic gate preserves legacy not_assessed shadow behavior', async () => {
+  const official = await pdf(semanticText());
+  const local = await pdf(semanticText());
+  const { saved } = await exercise(official, local, 'test', false);
+
+  assert.equal(saved.metadata.official_shadow.semantic_assessment, 'not_assessed');
+  assert.equal(saved.metadata.official_shadow.semantic, undefined);
 });
