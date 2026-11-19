@@ -63,7 +63,18 @@ export class OfficialRtcClient {
       throw new BadGatewayException(`Official DANFSe engine network failure: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
     if (!response.ok) throw new BadGatewayException(`Official DANFSe engine HTTP ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
+    // HTTP 200 alone is not evidence that the upstream returned a valid PDF.
+    // Fail closed on HTML/JSON error pages and oversized documents.
+    const maxBytes = 10 * 1024 * 1024;
+    const declaredLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      throw new BadGatewayException('Official DANFSe PDF exceeds the maximum allowed size');
+    }
+    const pdf = Buffer.from(await response.arrayBuffer());
+    if (pdf.length < 8 || pdf.length > maxBytes || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
+      throw new BadGatewayException('Official DANFSe engine did not return a valid PDF header or size');
+    }
+    return pdf;
   }
 
   private required(raw: string | undefined, engine: string): URL {
