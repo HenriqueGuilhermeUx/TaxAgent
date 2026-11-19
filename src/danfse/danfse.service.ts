@@ -2,12 +2,13 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { DatabaseService } from '../database/database.service';
 import { FiscalDocumentsService } from '../documents/fiscal-documents.service';
 import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
+import { OfficialRtcClient, officialRtcMode } from '../official-rtc/official-rtc.client';
 import { DanfseParserService } from './danfse-parser.service';
 import { DanfseRendererService } from './danfse-renderer.service';
 
 @Injectable()
 export class DanfseService {
-  constructor(private readonly db: DatabaseService, private readonly documents: FiscalDocumentsService, private readonly parser: DanfseParserService, private readonly renderer: DanfseRendererService) {}
+  constructor(private readonly db: DatabaseService, private readonly documents: FiscalDocumentsService, private readonly parser: DanfseParserService, private readonly renderer: DanfseRendererService, private readonly officialRtc: OfficialRtcClient) {}
 
   async generate(invoiceId: string, companyId?: string) {
     const { rows } = await this.db.query<{ company_id: string; status: string; environment: string }>('SELECT company_id, status, environment FROM invoices WHERE id=$1', [invoiceId]);
@@ -19,6 +20,15 @@ export class DanfseService {
     const source = await this.documents.latestContent(invoiceId, 'nfse-authorized-xml');
     if (!source) throw new NotFoundException('Authorized NFS-e XML not found for invoice');
     const model = this.parser.parse(source.content.toString('utf8'));
+    // Shadow comparison is non-authoritative: keep the existing stored PDF.
+    // Never send production taxpayer XML to an optional shadow sidecar.
+    if (invoice.environment === 'test' && officialRtcMode() === 'shadow' && this.officialRtc.danfseConfigured()) {
+      try {
+        await this.officialRtc.renderDanfse(source.content.toString('utf8'));
+      } catch {
+        // Optional shadow failure must not interrupt the existing renderer.
+      }
+    }
     const pdf = await this.renderer.render(model, invoice.status);
     return this.documents.save({ invoiceId, kind: 'danfse-pdf', content: pdf, contentType: 'application/pdf', metadata: { specification: model.specVersion, compliance_mode: process.env.TAXAGENT_DANFSE_RENDERER_MODE ?? 'draft', source_sha256: source.sha256 } });
   }
