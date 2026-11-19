@@ -11,16 +11,16 @@ import { SimulatorBatchService } from './simulator-batch.service';
 import { RtcBatchService } from './rtc-batch.service';
 import { RtcBatchUploadedFile } from './rtc-batch-file.parser';
 
-@ApiTags('rtc-simulator')
-@ApiBearerAuth()
-@UseGuards(ApiKeyGuard)
-@Controller('rtc/simulator')
 function fileExecution(raw: string | undefined): 'validate' | 'calculate' {
   const value = String(raw ?? 'validate').trim().toLowerCase();
   if (value !== 'validate' && value !== 'calculate') throw new BadRequestException('execution must be validate or calculate');
   return value;
 }
 
+@ApiTags('rtc-simulator')
+@ApiBearerAuth()
+@UseGuards(ApiKeyGuard)
+@Controller('rtc/simulator')
 export class SimulatorBatchController {
   constructor(private readonly simulator: SimulatorBatchService, private readonly files: RtcBatchService) {}
 
