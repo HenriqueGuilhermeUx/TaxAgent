@@ -47,7 +47,7 @@ Authenticated consumers may also upload a bounded file:
 - `POST /v1/rtc/simulator/regular/batch-file`
 - `POST /v1/rtc/simulator/simples/batch-file`
 
-The upload field is `file`. Supported formats: UTF-8 CSV and XLSX.
+The upload field is `file`. Supported formats: UTF-8 CSV and XLSX. Use query `execution=validate|calculate`; the safe default is `validate`, which does not call a sidecar or persist a TaxDecision.
 
 Safety limits:
 
@@ -58,7 +58,8 @@ Safety limits:
 - XLSX max 10 MiB declared uncompressed content and 100 ZIP entries;
 - formulas, VBA/macros, OLE/embedded objects and external-link parts are refused;
 - only the first worksheet is processed;
-- rows are calculated sequentially to avoid sidecar bursts.
+- validate mode works while engines are off/unhosted;
+- calculate rows are processed sequentially to avoid sidecar bursts.
 
 The importer is only a transport adapter. Each valid row is converted to the same canonical TaxAgent contract and a successful calculation persists the same audited `rtc_calculation` TaxDecision used by JSON callers. Invalid rows remain explicit failures; they never become zero-tax results and never authorize financial or issuance actions.
 
