@@ -5,13 +5,13 @@ import { DanfseService } from '../src/danfse/danfse.service';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
-async function exercise(environment: 'test' | 'production', mode: 'shadow' | 'off', fail = false) {
+async function exercise(environment: 'test' | 'production', mode: 'shadow' | 'off', fail = false, identical = false) {
   const oldRtc = process.env.TAXAGENT_RTC_ENGINE_MODE;
   const oldRenderer = process.env.TAXAGENT_DANFSE_RENDERER_MODE;
   process.env.TAXAGENT_RTC_ENGINE_MODE = mode;
   process.env.TAXAGENT_DANFSE_RENDERER_MODE = 'verified';
   const officialPdf = Buffer.from('%PDF-1.7 official');
-  const localPdf = Buffer.from('%PDF-1.7 local');
+  const localPdf = identical ? Buffer.from(officialPdf) : Buffer.from('%PDF-1.7 local');
   const calls: string[] = [];
   let saved: any;
   const service = new DanfseService(
@@ -76,4 +76,16 @@ test('DANFSe production and off mode never call official shadow renderer', async
 test('DANFSe byte comparison is not emitted when official rendering fails', async () => {
   const { saved } = await exercise('test', 'shadow', true);
   assert.equal(saved.metadata.official_shadow.byte_comparison, undefined);
+});
+
+
+test('DANFSe identical bytes remain diagnostic and local PDF is still persisted', async () => {
+  const { saved, calls, localPdf, officialPdf } = await exercise('test', 'shadow', false, true);
+  assert.deepEqual(calls, ['official', 'local']);
+  assert.deepEqual(saved.content, localPdf);
+  assert.equal(saved.metadata.official_shadow.byte_comparison, 'identical');
+  assert.equal(saved.metadata.official_shadow.local_pdf_sha256, sha(localPdf));
+  assert.equal(saved.metadata.official_shadow.official_pdf_sha256, sha(officialPdf));
+  assert.equal(saved.metadata.official_shadow.mode, 'shadow');
+  assert.equal(saved.metadata.compliance_mode, 'verified');
 });
