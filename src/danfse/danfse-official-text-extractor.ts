@@ -135,6 +135,10 @@ function candidateFor(lines: string[], label: string, start = 0, end = lines.len
       }
       continue;
     }
+    // A longer exact official label may start with a shorter label
+    // (for example "VALOR LÍQUIDO DA NFS-e + IBS/CBS"). Never treat
+    // an exact known label as an inline value of its shorter prefix.
+    if (allLabels.has(line)) continue;
     if (line.startsWith(`${label} `)) {
       const rest = line.slice(label.length).trim();
       if (rest) values.push(rest);
