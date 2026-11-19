@@ -112,7 +112,7 @@ export interface AgentSafeFiscalSummary {
   use: 'authoritative_calculation_only' | 'reference_only' | 'review_required';
   authoritative: boolean;
   reference_only: boolean;
-  next_action: string;
+  next_action: 'collect_or_correct_fiscal_inputs' | 'route_to_manual_fiscal_review' | 'explain_calculation_only_no_execution' | 'explain_reference_only_no_execution';
   message: { locale: 'pt-BR'; text: string };
   policy: {
     ai_authoritative: false;
@@ -257,6 +257,7 @@ export class TaxAgentFiscalClient {
       || !['resolved', 'requires_input', 'unsupported'].includes(String(value.status))
       || !['regular', 'simples'].includes(String(value.regime))
       || !['authoritative_calculation_only', 'reference_only', 'review_required'].includes(String(value.use))
+      || !['collect_or_correct_fiscal_inputs', 'route_to_manual_fiscal_review', 'explain_calculation_only_no_execution', 'explain_reference_only_no_execution'].includes(String(value.next_action))
       || typeof value.authoritative !== 'boolean'
       || typeof value.reference_only !== 'boolean'
       || !isObject(value.message)
