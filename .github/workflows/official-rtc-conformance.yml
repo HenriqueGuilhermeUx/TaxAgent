@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "src/official-rtc/**"
+      - "src/danfse/**"
+      - "tests/danfse-*.test.ts"
       - "tests/official-rtc.test.ts"
       - "docker/rtc/**"
       - "docs/OFFICIAL_RTC_ENGINE.md"
