@@ -102,6 +102,31 @@ export interface FiscalBatchResponse {
   };
 }
 
+export interface AgentSafeFiscalSummary {
+  decision_id: string;
+  decision_kind: 'rtc_calculation';
+  effective_at: string;
+  status: 'resolved' | 'requires_input' | 'unsupported';
+  regime: 'regular' | 'simples';
+  environment: 'test' | 'production';
+  use: 'authoritative_calculation_only' | 'reference_only' | 'review_required';
+  authoritative: boolean;
+  reference_only: boolean;
+  next_action: string;
+  message: { locale: 'pt-BR'; text: string };
+  policy: {
+    ai_authoritative: false;
+    financial_action_allowed: false;
+    issuance_binding_allowed: false;
+    raw_fiscal_payload_exposed: false;
+    raw_document_content_exposed: false;
+    taxpayer_pii_exposed: false;
+  };
+  assessment?: unknown;
+  freshness?: unknown;
+  engine?: unknown;
+}
+
 export interface FiscalDecisionSafety {
   use: FiscalDecisionUse;
   financial_action_allowed: false;
@@ -220,6 +245,34 @@ export class TaxAgentFiscalClient {
 
   async batchSimples(execution: FiscalBatchExecution, rows: CanonicalSimplesInput[]): Promise<FiscalBatchResponse> {
     return this.requestBatch('/v1/rtc/simulator/simples/batch', { execution, rows }, 'simples', execution);
+  }
+
+  async agentSummary(decisionId: string): Promise<AgentSafeFiscalSummary> {
+    const id = String(decisionId ?? '').trim();
+    if (!id || id.includes('/') || id.includes('?') || id.includes('#')) throw new TaxAgentFiscalClientError('invalid_config');
+    const value = await this.request('GET', `/v1/tax/decisions/${encodeURIComponent(id)}/agent-summary`);
+    if (
+      value.decision_kind !== 'rtc_calculation'
+      || typeof value.decision_id !== 'string'
+      || !['resolved', 'requires_input', 'unsupported'].includes(String(value.status))
+      || !['regular', 'simples'].includes(String(value.regime))
+      || !['authoritative_calculation_only', 'reference_only', 'review_required'].includes(String(value.use))
+      || typeof value.authoritative !== 'boolean'
+      || typeof value.reference_only !== 'boolean'
+      || !isObject(value.message)
+      || value.message.locale !== 'pt-BR'
+      || typeof value.message.text !== 'string'
+      || !isObject(value.policy)
+      || value.policy.ai_authoritative !== false
+      || value.policy.financial_action_allowed !== false
+      || value.policy.issuance_binding_allowed !== false
+      || value.policy.raw_fiscal_payload_exposed !== false
+      || value.policy.raw_document_content_exposed !== false
+      || value.policy.taxpayer_pii_exposed !== false
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_response');
+    }
+    return value as unknown as AgentSafeFiscalSummary;
   }
 
   async calculateRegular(input: CanonicalRegularInput): Promise<CanonicalFiscalDecision> {
