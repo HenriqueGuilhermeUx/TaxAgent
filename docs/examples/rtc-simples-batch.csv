@@ -1,0 +1,2 @@
+operation_id,effective_date,document_kind,crt,activity_code,tax_classification,tax_base,selective_tax_amount,item_number,ibs_cbs_regime_type,government_entity_type,ibs_effective_rate,cbs_effective_rate
+example-simples,2027-03-15,nfe,1,01,000001,950.00,50.00,1,,,1.25,2.75
