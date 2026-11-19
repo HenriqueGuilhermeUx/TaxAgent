@@ -77,6 +77,31 @@ export interface CanonicalFiscalDecision {
   };
 }
 
+export type FiscalBatchExecution = 'validate' | 'calculate';
+
+export interface FiscalBatchRowResult {
+  operation_id: string;
+  status: 'valid' | 'calculated' | 'requires_input' | 'unsupported' | 'engine_unavailable' | 'failed';
+  decision_id?: string;
+  authoritative?: boolean;
+  reference_only: boolean;
+  error_code?: string;
+}
+
+export interface FiscalBatchResponse {
+  regime: 'regular' | 'simples';
+  execution: FiscalBatchExecution;
+  rows: FiscalBatchRowResult[];
+  counts: Record<string, number>;
+  total: number;
+  policy: {
+    partial_results?: boolean;
+    zero_tax_on_error?: boolean;
+    financial_action_allowed?: boolean;
+    issuance_binding_allowed?: boolean;
+  };
+}
+
 export interface FiscalDecisionSafety {
   use: FiscalDecisionUse;
   financial_action_allowed: false;
@@ -177,12 +202,64 @@ export class TaxAgentFiscalClient {
     return this.request('GET', '/v1/rtc/official/freshness');
   }
 
+  async simulatorReadiness(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/v1/rtc/simulator/readiness');
+  }
+
+  async validateRegular(input: CanonicalRegularInput): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/rtc/simulator/regular/validate', input);
+  }
+
+  async validateSimples(input: CanonicalSimplesInput): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/rtc/simulator/simples/validate', input);
+  }
+
+  async batchRegular(execution: FiscalBatchExecution, rows: CanonicalRegularInput[]): Promise<FiscalBatchResponse> {
+    return this.requestBatch('/v1/rtc/simulator/regular/batch', { execution, rows }, 'regular', execution);
+  }
+
+  async batchSimples(execution: FiscalBatchExecution, rows: CanonicalSimplesInput[]): Promise<FiscalBatchResponse> {
+    return this.requestBatch('/v1/rtc/simulator/simples/batch', { execution, rows }, 'simples', execution);
+  }
+
   async calculateRegular(input: CanonicalRegularInput): Promise<CanonicalFiscalDecision> {
     return this.requestDecision('/v1/rtc/canonical/regular/calculate', input);
   }
 
   async calculateSimples(input: CanonicalSimplesInput): Promise<CanonicalFiscalDecision> {
     return this.requestDecision('/v1/rtc/canonical/simples/calculate', input);
+  }
+
+  private async requestBatch(
+    path: string,
+    body: unknown,
+    regime: 'regular' | 'simples',
+    execution: FiscalBatchExecution,
+  ): Promise<FiscalBatchResponse> {
+    const value = await this.request('POST', path, body);
+    if (
+      value.regime !== regime
+      || value.execution !== execution
+      || !Array.isArray(value.rows)
+      || typeof value.counts !== 'object'
+      || typeof value.total !== 'number'
+      || !isObject(value.policy)
+      || value.policy.financial_action_allowed !== false
+      || value.policy.issuance_binding_allowed !== false
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_response');
+    }
+    for (const row of value.rows) {
+      if (
+        !isObject(row)
+        || typeof row.operation_id !== 'string'
+        || !['valid', 'calculated', 'requires_input', 'unsupported', 'engine_unavailable', 'failed'].includes(String(row.status))
+        || typeof row.reference_only !== 'boolean'
+      ) {
+        throw new TaxAgentFiscalClientError('invalid_response');
+      }
+    }
+    return value as unknown as FiscalBatchResponse;
   }
 
   private async requestDecision(path: string, body: unknown): Promise<CanonicalFiscalDecision> {
