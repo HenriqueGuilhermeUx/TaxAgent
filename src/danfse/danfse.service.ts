@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { FiscalDocumentsService } from '../documents/fiscal-documents.service';
 import { FiscalEngineError } from '../fiscal-core/fiscal-engine.error';
@@ -20,16 +21,23 @@ export class DanfseService {
     const source = await this.documents.latestContent(invoiceId, 'nfse-authorized-xml');
     if (!source) throw new NotFoundException('Authorized NFS-e XML not found for invoice');
     const model = this.parser.parse(source.content.toString('utf8'));
-    // Shadow comparison is non-authoritative: keep the existing stored PDF.
+    // Shadow evidence is non-authoritative: never persist the upstream PDF or its raw error.
+    const shadowEvidence: { mode: 'shadow'; status: 'success' | 'failure'; official_pdf_sha256?: string; official_pdf_bytes?: number } | undefined =
+      invoice.environment === 'test' && officialRtcMode() === 'shadow' && this.officialRtc.danfseConfigured()
+        ? { mode: 'shadow', status: 'failure' }
+        : undefined;
     // Never send production taxpayer XML to an optional shadow sidecar.
-    if (invoice.environment === 'test' && officialRtcMode() === 'shadow' && this.officialRtc.danfseConfigured()) {
+    if (shadowEvidence) {
       try {
-        await this.officialRtc.renderDanfse(source.content.toString('utf8'));
+        const officialPdf = await this.officialRtc.renderDanfse(source.content.toString('utf8'));
+        shadowEvidence.status = 'success';
+        shadowEvidence.official_pdf_sha256 = createHash('sha256').update(officialPdf).digest('hex');
+        shadowEvidence.official_pdf_bytes = officialPdf.length;
       } catch {
         // Optional shadow failure must not interrupt the existing renderer.
       }
     }
     const pdf = await this.renderer.render(model, invoice.status);
-    return this.documents.save({ invoiceId, kind: 'danfse-pdf', content: pdf, contentType: 'application/pdf', metadata: { specification: model.specVersion, compliance_mode: process.env.TAXAGENT_DANFSE_RENDERER_MODE ?? 'draft', source_sha256: source.sha256 } });
+    return this.documents.save({ invoiceId, kind: 'danfse-pdf', content: pdf, contentType: 'application/pdf', metadata: { specification: model.specVersion, compliance_mode: process.env.TAXAGENT_DANFSE_RENDERER_MODE ?? 'draft', source_sha256: source.sha256, ...(shadowEvidence ? { official_shadow: { ...shadowEvidence, local_pdf_sha256: createHash('sha256').update(pdf).digest('hex'), local_pdf_bytes: pdf.length } } : {}) } });
   }
 }
