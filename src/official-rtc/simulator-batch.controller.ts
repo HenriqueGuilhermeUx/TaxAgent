@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Get, Post, Query, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { TaxAgentAuthContext } from '../auth/auth.types';
@@ -15,6 +15,12 @@ import { RtcBatchUploadedFile } from './rtc-batch-file.parser';
 @ApiBearerAuth()
 @UseGuards(ApiKeyGuard)
 @Controller('rtc/simulator')
+function fileExecution(raw: string | undefined): 'validate' | 'calculate' {
+  const value = String(raw ?? 'validate').trim().toLowerCase();
+  if (value !== 'validate' && value !== 'calculate') throw new BadRequestException('execution must be validate or calculate');
+  return value;
+}
+
 export class SimulatorBatchController {
   constructor(private readonly simulator: SimulatorBatchService, private readonly files: RtcBatchService) {}
 
@@ -52,10 +58,15 @@ export class SimulatorBatchController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024, files: 1 } }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'CSV or XLSX. Max 2 MiB / 100 data rows. Formulas, macros and external embedded content are refused.' } } } })
-  @ApiOperation({ summary: 'Calculate up to 100 regular NFS-e rows imported from a bounded CSV/XLSX file' })
-  regularBatchFile(@UploadedFile() file: RtcBatchUploadedFile | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+  @ApiQuery({ name: 'execution', required: false, enum: ['validate', 'calculate'], description: 'Defaults to validate. calculate requires an available RTC engine.' })
+  @ApiOperation({ summary: 'Validate or calculate up to 100 regular NFS-e rows imported from a bounded CSV/XLSX file' })
+  regularBatchFile(
+    @UploadedFile() file: RtcBatchUploadedFile | undefined,
+    @Query('execution') execution?: string,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
     if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
-    return this.files.regular(auth.companyId, auth.environment, file);
+    return this.files.regular(auth.companyId, auth.environment, file, fileExecution(execution));
   }
 
   @Post('simples/batch-file')
@@ -63,10 +74,15 @@ export class SimulatorBatchController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024, files: 1 } }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'CSV or XLSX. Max 2 MiB / 100 data rows. Formulas, macros and external embedded content are refused.' } } } })
-  @ApiOperation({ summary: 'Calculate up to 100 Simples NF-e/NFC-e rows imported from a bounded CSV/XLSX file' })
-  simplesBatchFile(@UploadedFile() file: RtcBatchUploadedFile | undefined, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
+  @ApiQuery({ name: 'execution', required: false, enum: ['validate', 'calculate'], description: 'Defaults to validate. calculate requires an available RTC engine.' })
+  @ApiOperation({ summary: 'Validate or calculate up to 100 Simples NF-e/NFC-e rows imported from a bounded CSV/XLSX file' })
+  simplesBatchFile(
+    @UploadedFile() file: RtcBatchUploadedFile | undefined,
+    @Query('execution') execution?: string,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
     if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
-    return this.files.simples(auth.companyId, auth.environment, file);
+    return this.files.simples(auth.companyId, auth.environment, file, fileExecution(execution));
   }
 
   @Post('simples/batch')
