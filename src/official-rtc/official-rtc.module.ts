@@ -6,11 +6,13 @@ import { OfficialRtcController } from './official-rtc.controller';
 import { CanonicalRtcController } from './canonical-rtc.controller';
 import { CanonicalRtcService } from './canonical-rtc.service';
 import { OfficialRtcService } from './official-rtc.service';
+import { SimulatorBatchController } from './simulator-batch.controller';
+import { SimulatorBatchService } from './simulator-batch.service';
 
 @Module({
   imports: [AuthModule, TaxEngineModule],
-  controllers: [OfficialRtcController, CanonicalRtcController],
-  providers: [OfficialRtcClient, OfficialRtcService, CanonicalRtcService],
+  controllers: [OfficialRtcController, CanonicalRtcController, SimulatorBatchController],
+  providers: [OfficialRtcClient, OfficialRtcService, CanonicalRtcService, SimulatorBatchService],
   exports: [OfficialRtcClient, OfficialRtcService],
 })
 export class OfficialRtcModule {}
