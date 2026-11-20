@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BadRequestException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException } from '@nestjs/common';
 import { mapCanonicalRegular, mapCanonicalSimples } from '../src/official-rtc/canonical-rtc.mapper';
+import { normalizeCanonicalSimplesActivityCompatibility } from '../src/official-rtc/canonical-rtc.service';
 
 test('maps canonical 2026 regular NFS-e to the pinned Receita contract without nominal rates', () => {
   const mapped = mapCanonicalRegular({
@@ -188,4 +189,65 @@ test('maps canonical Simples NFS-e to official tpDoc 91 using the pinned 0.0.6 g
     pIBSSN: '1.25',
     pCBSSN: '2.75',
   });
+});
+
+
+test('normalizes official Simples activity compatibility without inferring fiscal facts', () => {
+  const result = normalizeCanonicalSimplesActivityCompatibility(
+    'test',
+    '07',
+    { effective_date: '2027-03-15', document_kind: 'nfse', tax_classification: '000001' },
+    {
+      engine: {
+        id: 'simples',
+        upstreamRepository: 'https://github.com/ReceitaFederal/calculadora-rtc-simples-nacional',
+        upstreamCommit: 'c5b0f01c8351c3f0d0795cc617b29d233e9f98df',
+        upstreamRelease: '0.0.6',
+        license: 'MIT',
+      },
+      mode: 'shadow',
+      checked_at: '2026-11-19T22:30:00-03:00',
+      result: {
+        codigo: '07',
+        disponivel: true,
+        admissivelNoDocumento: true,
+        compativelComClassTrib: true,
+        sujeitaFatorR: false,
+        anexoSemFatorR: 'III',
+        anexoComFatorR: null,
+        tpDocsAdmissiveis: ['91'],
+      },
+    },
+  );
+
+  assert.equal(result.compatible, true);
+  assert.equal(result.official.admissible_on_document, true);
+  assert.equal(result.official.compatible_with_tax_classification, true);
+  assert.equal(result.policy.rates_inferred, false);
+  assert.equal(result.policy.calculation_executed, false);
+  assert.equal(result.policy.financial_action_allowed, false);
+  assert.equal(result.policy.issuance_binding_allowed, false);
+});
+
+test('official Simples activity compatibility fails closed on malformed upstream envelope', () => {
+  assert.throws(
+    () => normalizeCanonicalSimplesActivityCompatibility(
+      'test',
+      '07',
+      { effective_date: '2027-03-15', document_kind: 'nfse', tax_classification: '000001' },
+      {
+        engine: {
+          id: 'simples',
+          upstreamRepository: 'repo',
+          upstreamCommit: 'commit',
+          upstreamRelease: '0.0.6',
+          license: 'MIT',
+        },
+        mode: 'shadow',
+        checked_at: '2026-11-19T22:30:00-03:00',
+        result: { codigo: '07', disponivel: true },
+      },
+    ),
+    BadGatewayException,
+  );
 });
