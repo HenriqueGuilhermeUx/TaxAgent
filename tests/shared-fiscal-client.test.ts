@@ -298,3 +298,96 @@ test('shared client rejects agent summaries that claim execution authority', asy
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared client accepts only bounded read-only fiscal readiness proofs', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async (input: URL | RequestInfo) => {
+      assert.equal(String(input), 'https://taxagent.example/v1/portal/companies/comp_1/fiscal/proof');
+      return response({
+        proof_version: 'pilot-readiness-v1',
+        company: { id: 'comp_1' },
+        environment: 'test',
+        effective_at: '2026-11-19',
+        fiscal_status: 'ACTION_REQUIRED',
+        onboarding_status: 'BLOCKED',
+        route: { resolved_route: 'national-direct' },
+        readiness: {
+          homologation_ready: false,
+          unresolved_requirements: ['active_a1'],
+          stages: [{ id: 'a1_certificate', status: 'ACTION_REQUIRED' }],
+        },
+        evidence_presence: { onboarding: true, preflight: false },
+        next_action: { action: 'Upload A1 securely' },
+        authorization_boundary: {
+          read_only: true,
+          portal_can_issue_invoice: false,
+          portal_can_transmit_fiscal_document: false,
+          portal_can_enable_live_runtime: false,
+          portal_can_grant_transmission_permit: false,
+          customer_api_key_can_bypass_one_shot_permit: false,
+          one_shot_test_transmission_permit_required_for_first_real_attempt: true,
+        },
+        checked_at: '2026-11-19T21:15:00-03:00',
+      });
+    }) as typeof fetch,
+  });
+
+  const proof = await client.fiscalReadinessProof('comp_1');
+  assert.equal(proof.readiness.homologation_ready, false);
+  assert.deepEqual(proof.readiness.unresolved_requirements, ['active_a1']);
+  assert.equal(proof.authorization_boundary.portal_can_transmit_fiscal_document, false);
+});
+
+test('shared client rejects readiness proofs that claim execution authority', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => response({
+      proof_version: 'pilot-readiness-v1',
+      company: { id: 'comp_1' },
+      environment: 'test',
+      effective_at: '2026-11-19',
+      fiscal_status: 'HOMOLOGATION_READY',
+      onboarding_status: 'READY_FOR_HOMOLOGATION',
+      route: { resolved_route: 'national-direct' },
+      readiness: {
+        homologation_ready: true,
+        unresolved_requirements: [],
+        stages: [],
+      },
+      evidence_presence: { onboarding: true, preflight: true },
+      next_action: null,
+      authorization_boundary: {
+        read_only: false,
+        portal_can_issue_invoice: true,
+        portal_can_transmit_fiscal_document: true,
+        portal_can_enable_live_runtime: true,
+        portal_can_grant_transmission_permit: true,
+        customer_api_key_can_bypass_one_shot_permit: true,
+        one_shot_test_transmission_permit_required_for_first_real_attempt: false,
+      },
+      checked_at: '2026-11-19T21:15:00-03:00',
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.fiscalReadinessProof('comp_1'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
+
+test('shared client rejects unsafe readiness proof identifiers before making a request', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => { throw new Error('must not call network'); }) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.fiscalReadinessProof('../other-company'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_config',
+  );
+});
