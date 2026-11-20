@@ -532,6 +532,12 @@ export class TaxAgentFiscalClient {
         )
         || !isObject(item.source)
         || item.source.authority !== 'receita-federal-open-source-engine'
+        || typeof item.source.engine_id !== 'string'
+        || typeof item.source.repository !== 'string'
+        || typeof item.source.release !== 'string'
+        || typeof item.source.commit !== 'string'
+        || typeof item.source.mode !== 'string'
+        || typeof item.source.checked_at !== 'string'
       ) {
         throw new TaxAgentFiscalClientError('invalid_response');
       }
