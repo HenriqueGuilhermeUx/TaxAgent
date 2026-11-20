@@ -3,6 +3,7 @@ export type FiscalDecisionUse = 'authoritative' | 'reference_only' | 'review_req
 export interface TaxAgentFiscalClientConfig {
   baseUrl: string;
   apiKey: string;
+  expectedEnvironment?: 'test' | 'production';
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
@@ -237,6 +238,7 @@ export function assessFiscalDecisionSafety(decision: CanonicalFiscalDecision): F
 export class TaxAgentFiscalClient {
   private readonly baseUrl: URL;
   private readonly apiKey: string;
+  private readonly expectedEnvironment?: 'test' | 'production';
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
@@ -244,6 +246,10 @@ export class TaxAgentFiscalClient {
     this.baseUrl = normalizeBaseUrl(config.baseUrl);
     this.apiKey = String(config.apiKey ?? '').trim();
     if (!this.apiKey) throw new TaxAgentFiscalClientError('invalid_config');
+    if (config.expectedEnvironment !== undefined && !['test', 'production'].includes(config.expectedEnvironment)) {
+      throw new TaxAgentFiscalClientError('invalid_config');
+    }
+    this.expectedEnvironment = config.expectedEnvironment;
     this.timeoutMs = config.timeoutMs ?? 15_000;
     if (!Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0 || this.timeoutMs > 60_000) {
       throw new TaxAgentFiscalClientError('invalid_config');
@@ -292,7 +298,7 @@ export class TaxAgentFiscalClient {
       value.proof_version !== 'pilot-readiness-v1'
       || !isObject(company)
       || company.id !== id
-      || !['test', 'production'].includes(String(value.environment))
+      || !this.environmentAccepted(value.environment)
       || typeof value.fiscal_status !== 'string'
       || !isObject(readiness)
       || typeof readiness.homologation_ready !== 'boolean'
@@ -327,6 +333,7 @@ export class TaxAgentFiscalClient {
       || typeof value.decision_id !== 'string'
       || !['resolved', 'requires_input', 'unsupported'].includes(String(value.status))
       || !['regular', 'simples'].includes(String(value.regime))
+      || !this.environmentAccepted(value.environment)
       || !['authoritative_calculation_only', 'reference_only', 'review_required'].includes(String(value.use))
       || !['collect_or_correct_fiscal_inputs', 'route_to_manual_fiscal_review', 'explain_calculation_only_no_execution', 'explain_reference_only_no_execution'].includes(String(value.next_action))
       || typeof value.authoritative !== 'boolean'
@@ -394,12 +401,18 @@ export class TaxAgentFiscalClient {
       || value.decision_kind !== 'rtc_calculation'
       || !['resolved', 'requires_input', 'unsupported'].includes(String(value.status))
       || !['regular', 'simples'].includes(String(value.regime))
+      || !this.environmentAccepted(value.environment)
       || typeof value.authoritative !== 'boolean'
       || typeof value.reference_only !== 'boolean'
     ) {
       throw new TaxAgentFiscalClientError('invalid_response');
     }
     return value as unknown as CanonicalFiscalDecision;
+  }
+
+  private environmentAccepted(value: unknown): boolean {
+    if (!['test', 'production'].includes(String(value))) return false;
+    return this.expectedEnvironment === undefined || value === this.expectedEnvironment;
   }
 
   private async request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Record<string, unknown>> {
