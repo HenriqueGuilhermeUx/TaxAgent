@@ -96,7 +96,6 @@ export class SimulatorBatchService {
       reference_only: true,
       policy: {
         fiscal_fields_not_inferred: true,
-        official_activity_compatibility_checked: false,
         financial_action_allowed: false,
         issuance_binding_allowed: false,
       },
@@ -110,10 +109,12 @@ export class SimulatorBatchService {
       status: 'valid' as const,
       regime: 'simples' as const,
       document_kind: dto.document_kind,
+      validation_level: 'structural_only' as const,
       calculation_performed: false,
       reference_only: true,
       policy: {
         fiscal_fields_not_inferred: true,
+        official_activity_compatibility_checked: false,
         financial_action_allowed: false,
         issuance_binding_allowed: false,
       },
