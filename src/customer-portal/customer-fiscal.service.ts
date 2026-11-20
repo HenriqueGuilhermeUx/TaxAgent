@@ -15,6 +15,43 @@ export class CustomerFiscalService {
     return this.present(await this.pilot.status(companyId, environment, this.effectiveDate(effectiveAt)));
   }
 
+  async proof(companyId: string, environment: FiscalEnvironment, effectiveAt?: string) {
+    const presented = this.present(await this.pilot.status(companyId, environment, this.effectiveDate(effectiveAt)));
+    const evidence = presented.evidence as Record<string, unknown> | null;
+    return {
+      proof_version: 'pilot-readiness-v1',
+      company: presented.company,
+      environment: presented.environment,
+      effective_at: presented.effective_at,
+      fiscal_status: presented.fiscal_status,
+      onboarding_status: presented.onboarding_status,
+      route: presented.route,
+      readiness: {
+        homologation_ready: presented.ready_for_authorized_homologation_test,
+        unresolved_requirements: presented.blockers,
+        stages: presented.stages.map((stage: Record<string, unknown>) => ({
+          id: stage.id ?? null,
+          status: stage.status ?? null,
+        })),
+      },
+      evidence_presence: {
+        onboarding: Boolean(evidence?.latest_onboarding),
+        preflight: Boolean(evidence?.latest_preflight),
+      },
+      next_action: presented.next_action,
+      authorization_boundary: {
+        read_only: true,
+        portal_can_issue_invoice: false,
+        portal_can_transmit_fiscal_document: false,
+        portal_can_enable_live_runtime: false,
+        portal_can_grant_transmission_permit: false,
+        customer_api_key_can_bypass_one_shot_permit: false,
+        one_shot_test_transmission_permit_required_for_first_real_attempt: true,
+      },
+      checked_at: presented.checked_at,
+    };
+  }
+
   async updateProfile(companyId: string, environment: FiscalEnvironment, dto: UpdateCustomerFiscalProfileDto, effectiveAt?: string) {
     const patch: Record<string, string> = {};
     if (dto.city_code !== undefined) patch.city_code = dto.city_code.trim();
