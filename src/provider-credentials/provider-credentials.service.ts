@@ -55,15 +55,15 @@ export class ProviderCredentialsService {
     return publicMetadata(rows[0]);
   }
 
-  async list(companyId: string) {
+  async list(companyId: string, environment?: FiscalEnvironment) {
     await this.assertCompany(companyId);
     const { rows } = await this.db.query<CredentialRow>(
       `SELECT id, company_id, provider, environment, credential_keys, status,
               verification_metadata, verified_at, created_at, updated_at
        FROM fiscal_provider_credentials
-       WHERE company_id=$1
+       WHERE company_id=$1${environment ? ' AND environment=$2' : ''}
        ORDER BY provider, environment`,
-      [companyId],
+      environment ? [companyId, environment] : [companyId],
     );
     return rows.map(publicMetadata);
   }
