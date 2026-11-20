@@ -184,3 +184,26 @@ test('file batch calculate mode still delegates only canonical validated rows', 
   assert.equal(result.rows[0].reference_only, true);
   assert.equal(result.policy.each_success_persists_rtc_tax_decision, true);
 });
+
+
+test('file batch Simples row accepts canonical NFS-e and preserves official activity facts', () => {
+  const dto = simplesDtoFromBatchRow({
+    row_number: 2,
+    values: {
+      operation_id: 'op-simples-nfse',
+      effective_date: '2027-03-15',
+      document_kind: 'nfse',
+      crt: '1',
+      activity_code: '07',
+      tax_classification: '000001',
+      tax_base: '1000.00',
+      selective_tax_amount: '0.00',
+      ibs_effective_rate: '1.25',
+      cbs_effective_rate: '2.75',
+    },
+  });
+  assert.equal(dto.document_kind, 'nfse');
+  assert.equal(dto.items[0].activity_code, '07');
+  assert.equal(dto.items[0].ibs_effective_rate, 1.25);
+  assert.equal(dto.items[0].cbs_effective_rate, 2.75);
+});
