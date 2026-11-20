@@ -127,6 +127,38 @@ export interface AgentSafeFiscalSummary {
   engine?: unknown;
 }
 
+
+
+export interface FiscalReadinessProof {
+  proof_version: 'pilot-readiness-v1';
+  company: unknown;
+  environment: 'test' | 'production';
+  effective_at: string | null;
+  fiscal_status: string;
+  onboarding_status: string | null;
+  route: unknown;
+  readiness: {
+    homologation_ready: boolean;
+    unresolved_requirements: string[];
+    stages: Array<{ id: string | null; status: string | null }>;
+  };
+  evidence_presence: {
+    onboarding: boolean;
+    preflight: boolean;
+  };
+  next_action: unknown;
+  authorization_boundary: {
+    read_only: true;
+    portal_can_issue_invoice: false;
+    portal_can_transmit_fiscal_document: false;
+    portal_can_enable_live_runtime: false;
+    portal_can_grant_transmission_permit: false;
+    customer_api_key_can_bypass_one_shot_permit: false;
+    one_shot_test_transmission_permit_required_for_first_real_attempt: true;
+  };
+  checked_at: string;
+}
+
 export interface FiscalDecisionSafety {
   use: FiscalDecisionUse;
   financial_action_allowed: false;
@@ -245,6 +277,42 @@ export class TaxAgentFiscalClient {
 
   async batchSimples(execution: FiscalBatchExecution, rows: CanonicalSimplesInput[]): Promise<FiscalBatchResponse> {
     return this.requestBatch('/v1/rtc/simulator/simples/batch', { execution, rows }, 'simples', execution);
+  }
+
+
+  async fiscalReadinessProof(companyId: string): Promise<FiscalReadinessProof> {
+    const id = String(companyId ?? '').trim();
+    if (!id || id.includes('/') || id.includes('?') || id.includes('#')) throw new TaxAgentFiscalClientError('invalid_config');
+    const value = await this.request('GET', `/v1/portal/companies/${encodeURIComponent(id)}/fiscal/proof`);
+    const readiness = value.readiness;
+    const evidencePresence = value.evidence_presence;
+    const boundary = value.authorization_boundary;
+    if (
+      value.proof_version !== 'pilot-readiness-v1'
+      || !['test', 'production'].includes(String(value.environment))
+      || typeof value.fiscal_status !== 'string'
+      || !isObject(readiness)
+      || typeof readiness.homologation_ready !== 'boolean'
+      || !Array.isArray(readiness.unresolved_requirements)
+      || !readiness.unresolved_requirements.every((item) => typeof item === 'string')
+      || !Array.isArray(readiness.stages)
+      || !readiness.stages.every((stage) => isObject(stage) && (stage.id === null || typeof stage.id === 'string') && (stage.status === null || typeof stage.status === 'string'))
+      || !isObject(evidencePresence)
+      || typeof evidencePresence.onboarding !== 'boolean'
+      || typeof evidencePresence.preflight !== 'boolean'
+      || !isObject(boundary)
+      || boundary.read_only !== true
+      || boundary.portal_can_issue_invoice !== false
+      || boundary.portal_can_transmit_fiscal_document !== false
+      || boundary.portal_can_enable_live_runtime !== false
+      || boundary.portal_can_grant_transmission_permit !== false
+      || boundary.customer_api_key_can_bypass_one_shot_permit !== false
+      || boundary.one_shot_test_transmission_permit_required_for_first_real_attempt !== true
+      || typeof value.checked_at !== 'string'
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_response');
+    }
+    return value as unknown as FiscalReadinessProof;
   }
 
   async agentSummary(decisionId: string): Promise<AgentSafeFiscalSummary> {
