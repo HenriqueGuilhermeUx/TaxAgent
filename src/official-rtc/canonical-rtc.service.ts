@@ -53,7 +53,8 @@ export class CanonicalRtcService {
   async calculateSimples(companyId: string, environment: 'test' | 'production', dto: CanonicalSimplesCalculationDto) {
     const mapped = mapCanonicalSimples(dto);
     const calculation = await this.rtc.calculate('simples', mapped) as OfficialRtcCalculationResult;
-    return this.persist(companyId, environment, dto.effective_date.slice(0, 10), 'simples', dto, mapped, calculation);
+    const freshness = await this.rtc.freshness();
+    return this.persist(companyId, environment, dto.effective_date.slice(0, 10), 'simples', dto, mapped, calculation, freshness);
   }
 
   private async persist(
@@ -82,7 +83,7 @@ export class CanonicalRtcService {
     };
     const freshnessEligible = regime === 'regular'
       ? (freshness as any)?.regular?.authoritative_eligible === true
-      : false;
+      : (freshness as any)?.simples?.authoritative_eligible === true;
     const authoritative = calculation.assessment?.authoritative_eligible === true && freshnessEligible;
     const output = {
       status,
@@ -100,7 +101,10 @@ export class CanonicalRtcService {
         http_success_is_fiscal_success: false,
         issuance_binding_allowed: false,
         authoritative_requires_freshness: true,
-        simples_freshness_implemented: false,
+        simples_freshness_implemented: true,
+        simples_application_reference_verified: regime === 'simples'
+          ? (freshness as any)?.simples?.application_reference_verified === true
+          : undefined,
       },
     };
 
