@@ -23,6 +23,7 @@ import {
 const tax = new TaxAgentFiscalClient({
   baseUrl: process.env.TAXAGENT_URL!,
   apiKey: process.env.TAXAGENT_API_KEY!,
+  expectedEnvironment: 'test', // set explicitly per deployment; use 'production' only in reviewed production integration
   timeoutMs: 15000,
 });
 

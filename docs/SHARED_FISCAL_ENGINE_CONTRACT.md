@@ -137,6 +137,7 @@ The client:
 - calls TaxAgent company readiness proof, RTC status/freshness/simulator readiness, canonical calculation/batch and agent-summary endpoints;
 - rejects insecure remote HTTP and URLs containing credentials;
 - uses a dedicated server-to-server bearer key;
+- can bind the consumer to `expectedEnvironment='test'|'production'` and rejects readiness proofs, canonical decisions or agent summaries from the opposite environment;
 - applies bounded timeout/network/HTTP errors without exposing response bodies;
 - validates the minimum canonical decision envelope and the company readiness proof no-execution boundary;
 - returns a safety classification of `authoritative`, `reference_only` or `review_required`;
