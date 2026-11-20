@@ -25,3 +25,10 @@ The response is intentionally bounded. It exposes:
 - an explicit authorization boundary proving that this surface cannot issue, transmit, enable live runtime, grant a transmission permit or bypass the one-shot TEST permit.
 
 It never returns company profile fields such as name, city code or tax regime; raw onboarding/preflight evidence; certificate material; provider credentials; fiscal payloads; or any capability that authorizes external effects.
+
+
+## Authentication boundary
+
+Company-scoped fiscal portal, onboarding, A1 certificate and provider-credential routes require an authenticated TaxAgent API-key context in addition to their scope checks. Missing auth context fails closed before any company data, certificate vault or provider credential service is touched.
+
+Provider credential operations are also environment-bound: a `test` API key cannot create, disable or list `production` provider credential metadata, and vice versa. Environment-scoped listing is enforced in the service query rather than by filtering a mixed result after retrieval.
