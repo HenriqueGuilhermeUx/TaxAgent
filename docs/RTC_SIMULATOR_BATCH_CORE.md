@@ -77,4 +77,4 @@ Required: `operation_id`, `effective_date`, `document_kind`, `crt`, `activity_co
 
 Optional: `item_number`, `ibs_cbs_regime_type`, `government_entity_type`, `ibs_effective_rate`, `cbs_effective_rate`.
 
-The current pinned Simples engine still supports NF-e/NFC-e through this canonical boundary; the importer does not invent NFS-e support.
+The pinned Simples 0.0.6 engine supports NF-e (`nfe`/55), NFC-e (`nfce`/65) and NFS-e (`nfse`/91). NFS-e activity/document compatibility remains an official fiscal fact; the importer does not infer `cAtivSN` or effective rates.

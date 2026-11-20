@@ -54,7 +54,7 @@ export function mapCanonicalRegular(dto: CanonicalRegularCalculationDto): Record
 }
 
 export function mapCanonicalSimples(dto: CanonicalSimplesCalculationDto): Record<string, unknown> {
-  const tpDoc = dto.document_kind === 'nfe' ? '55' : '65';
+  const tpDoc = dto.document_kind === 'nfe' ? '55' : dto.document_kind === 'nfce' ? '65' : '91';
   return {
     id: dto.operation_id,
     versao: SIMPLES_ENDPOINT_VERSION,

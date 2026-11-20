@@ -159,3 +159,27 @@ test('Simples batch stays reference-only even for calculated rows', async () => 
   assert.equal(result.rows[0].authoritative, false);
   assert.equal(result.policy.financial_action_allowed, false);
 });
+
+
+test('Simples validate-only accepts pinned official NFS-e document kind without calling sidecar', () => {
+  const service = new SimulatorBatchService({} as any, {} as any);
+  const result = service.validateSimples({
+    operation_id: 'simples-nfse',
+    effective_date: '2027-03-15',
+    document_kind: 'nfse',
+    crt: '1',
+    items: [{
+      number: 1,
+      activity_code: '07',
+      tax_classification: '000001',
+      tax_base: 1000,
+      selective_tax_amount: 0,
+      ibs_effective_rate: 1.25,
+      cbs_effective_rate: 2.75,
+    }],
+  });
+  assert.equal(result.status, 'valid');
+  assert.equal(result.document_kind, 'nfse');
+  assert.equal(result.reference_only, true);
+  assert.equal(result.policy.issuance_binding_allowed, false);
+});

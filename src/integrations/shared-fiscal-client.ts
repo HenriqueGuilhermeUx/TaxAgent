@@ -45,7 +45,7 @@ export interface CanonicalSimplesItemInput {
 export interface CanonicalSimplesInput {
   operation_id: string;
   effective_date: string;
-  document_kind: 'nfe' | 'nfce';
+  document_kind: 'nfe' | 'nfce' | 'nfse';
   crt: '1' | '2' | '3' | '4';
   ibs_cbs_regime_type?: '1' | '2';
   government_entity_type?: '1' | '2' | '3' | '4';

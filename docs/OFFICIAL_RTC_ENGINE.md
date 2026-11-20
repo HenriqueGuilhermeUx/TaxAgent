@@ -47,4 +47,4 @@ Official engine service URLs are configuration-only and never supplied by end us
 
 ## Golden conformance sources
 
-The regular smoke case is copied from the official Receita Federal `docs/exemplos.md` for the pinned regular release. The Simples smoke case is copied from the pinned upstream `SimplesNacionalControllerTest.deveCalcularCaminhoFelizCrt1ComImpostoSeletivoForaDaReceitaBruta` integration test. These fixtures are kept as upstream-derived conformance evidence; TaxAgent does not invent nominal rates or expected tax outcomes.
+The regular smoke case is copied from the official Receita Federal `docs/exemplos.md` for the pinned regular release. Simples conformance includes the pinned upstream NF-e case `SimplesNacionalControllerTest.deveCalcularCaminhoFelizCrt1ComImpostoSeletivoForaDaReceitaBruta` and the NFS-e case `atividadeVinculadaCalculaNoDocumentoCertoENaoCalculaNoErrado` (`tpDoc=91`, `cAtivSN=07`). These fixtures are kept as upstream-derived conformance evidence; TaxAgent does not invent document support, activities, rates or expected tax outcomes.
