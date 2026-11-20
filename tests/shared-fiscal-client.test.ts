@@ -647,3 +647,54 @@ test('shared client rejects activity compatibility envelopes that claim executio
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared client rejects incoherent Simples activity compatibility flags', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async () => response({
+      activity_code: '07',
+      effective_date: '2027-03-15',
+      document_kind: 'nfse',
+      tax_classification: '000001',
+      environment: 'test',
+      compatible: true,
+      official: {
+        available: false,
+        admissible_on_document: false,
+        compatible_with_tax_classification: true,
+        factor_r_subject: false,
+        annex_without_factor_r: 'III',
+        annex_with_factor_r: null,
+        admissible_documents: ['91'],
+      },
+      source: {
+        authority: 'receita-federal-open-source-engine',
+        engine_id: 'simples',
+        repository: 'repo',
+        release: '0.0.6',
+        commit: 'commit',
+        mode: 'shadow',
+        checked_at: '2026-11-19T22:30:00-03:00',
+      },
+      policy: {
+        rates_inferred: false,
+        calculation_executed: false,
+        financial_action_allowed: false,
+        issuance_binding_allowed: false,
+      },
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.simplesActivityCompatibility({
+      activity_code: '07',
+      effective_date: '2027-03-15',
+      document_kind: 'nfse',
+      tax_classification: '000001',
+    }),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
