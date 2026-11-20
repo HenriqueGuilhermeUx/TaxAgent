@@ -69,10 +69,10 @@ export type OfficialRtcSimplesDatasetStatus = 'match' | 'mismatch' | 'unknown';
 
 export interface OfficialRtcSimplesFreshnessAssessment {
   status: OfficialRtcSimplesDatasetStatus;
-  authoritative_eligible: false;
+  authoritative_eligible: boolean;
   pinned_release: string;
   local_release_matches_pin: boolean;
-  application_reference_verified: false;
+  application_reference_verified: boolean;
   dataset_current: boolean;
   local: OfficialRtcVersionSnapshot;
   reference: OfficialRtcVersionSnapshot;
