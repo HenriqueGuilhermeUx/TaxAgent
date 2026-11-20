@@ -42,6 +42,46 @@ export interface CanonicalSimplesItemInput {
   cbs_effective_rate?: number;
 }
 
+export interface CanonicalSimplesActivityLookupInput {
+  activity_code: string;
+  effective_date: string;
+  document_kind: 'nfe' | 'nfce' | 'nfse';
+  tax_classification: string;
+}
+
+export interface CanonicalSimplesActivityCompatibility {
+  activity_code: string;
+  effective_date: string;
+  document_kind: 'nfe' | 'nfce' | 'nfse';
+  tax_classification: string;
+  environment: 'test' | 'production';
+  compatible: boolean;
+  official: {
+    available: boolean;
+    admissible_on_document: boolean;
+    compatible_with_tax_classification: boolean;
+    factor_r_subject: boolean;
+    annex_without_factor_r: string | null;
+    annex_with_factor_r: string | null;
+    admissible_documents: string[];
+  };
+  source: {
+    authority: 'receita-federal-open-source-engine';
+    engine_id: string;
+    repository: string;
+    release: string;
+    commit: string;
+    mode: string;
+    checked_at: string;
+  };
+  policy: {
+    rates_inferred: false;
+    calculation_executed: false;
+    financial_action_allowed: false;
+    issuance_binding_allowed: false;
+  };
+}
+
 export interface CanonicalSimplesInput {
   operation_id: string;
   effective_date: string;
@@ -190,10 +230,11 @@ function normalizeBaseUrl(raw: string): URL {
   return url;
 }
 
-function endpoint(base: URL, path: string): URL {
+function endpoint(base: URL, path: string, query?: Record<string, string>): URL {
   const url = new URL(base.toString());
   url.pathname = `${url.pathname.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
   url.search = '';
+  if (query) for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
   url.hash = '';
   return url;
 }
@@ -354,6 +395,72 @@ export class TaxAgentFiscalClient {
     return value as unknown as AgentSafeFiscalSummary;
   }
 
+  async simplesActivityCompatibility(input: CanonicalSimplesActivityLookupInput): Promise<CanonicalSimplesActivityCompatibility> {
+    const activityCode = String(input.activity_code ?? '').trim();
+    const effectiveDate = String(input.effective_date ?? '').trim();
+    const documentKind = input.document_kind;
+    const taxClassification = String(input.tax_classification ?? '').trim();
+    if (
+      !/^\d{2}$/.test(activityCode)
+      || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)
+      || !['nfe', 'nfce', 'nfse'].includes(String(documentKind))
+      || !/^\d{6}$/.test(taxClassification)
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_config');
+    }
+    const value = await this.request(
+      'GET',
+      `/v1/rtc/canonical/simples/activities/${encodeURIComponent(activityCode)}`,
+      undefined,
+      {
+        effective_date: effectiveDate,
+        document_kind: documentKind,
+        tax_classification: taxClassification,
+      },
+    );
+    const official = value.official;
+    const source = value.source;
+    const policy = value.policy;
+    const compatibleFromOfficial = isObject(official)
+      && official.available === true
+      && official.admissible_on_document === true
+      && official.compatible_with_tax_classification === true;
+    if (
+      value.activity_code !== activityCode
+      || value.effective_date !== effectiveDate
+      || value.document_kind !== documentKind
+      || value.tax_classification !== taxClassification
+      || !this.environmentAccepted(value.environment)
+      || typeof value.compatible !== 'boolean'
+      || value.compatible !== compatibleFromOfficial
+      || !isObject(official)
+      || typeof official.available !== 'boolean'
+      || typeof official.admissible_on_document !== 'boolean'
+      || typeof official.compatible_with_tax_classification !== 'boolean'
+      || typeof official.factor_r_subject !== 'boolean'
+      || !(official.annex_without_factor_r === null || typeof official.annex_without_factor_r === 'string')
+      || !(official.annex_with_factor_r === null || typeof official.annex_with_factor_r === 'string')
+      || !Array.isArray(official.admissible_documents)
+      || !official.admissible_documents.every((item) => typeof item === 'string')
+      || !isObject(source)
+      || source.authority !== 'receita-federal-open-source-engine'
+      || typeof source.engine_id !== 'string'
+      || typeof source.repository !== 'string'
+      || typeof source.release !== 'string'
+      || typeof source.commit !== 'string'
+      || typeof source.mode !== 'string'
+      || typeof source.checked_at !== 'string'
+      || !isObject(policy)
+      || policy.rates_inferred !== false
+      || policy.calculation_executed !== false
+      || policy.financial_action_allowed !== false
+      || policy.issuance_binding_allowed !== false
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_response');
+    }
+    return value as unknown as CanonicalSimplesActivityCompatibility;
+  }
+
   async calculateRegular(input: CanonicalRegularInput): Promise<CanonicalFiscalDecision> {
     return this.requestDecision('/v1/rtc/canonical/regular/calculate', input);
   }
@@ -415,14 +522,14 @@ export class TaxAgentFiscalClient {
     return this.expectedEnvironment === undefined || value === this.expectedEnvironment;
   }
 
-  private async request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Record<string, unknown>> {
+  private async request(method: 'GET' | 'POST', path: string, body?: unknown, query?: Record<string, string>): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const handle = setTimeout(() => controller.abort(), this.timeoutMs);
     handle.unref?.();
     try {
       let response: Response;
       try {
-        response = await this.fetchImpl(endpoint(this.baseUrl, path), {
+        response = await this.fetchImpl(endpoint(this.baseUrl, path, query), {
           method,
           headers: {
             accept: 'application/json',

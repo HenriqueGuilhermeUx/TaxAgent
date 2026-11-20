@@ -109,6 +109,16 @@ jobs:
           jq -e '.versaoDb == "V0059"' /tmp/rtc-simples-version.json
           jq -e '.dataVersaoDb == "2026-09-30"' /tmp/rtc-simples-version.json
 
+          # Official activity compatibility catalog: NFS-e activity 07 + cClassTrib 000001.
+          curl -fsS "http://127.0.0.1:18082/api/calculadora/simples-nacional/atividades/07?data=2027-03-15&tpDoc=91&cClassTrib=000001" \
+            >/tmp/rtc-simples-activity.json
+          jq . /tmp/rtc-simples-activity.json
+          jq -e '.codigo == "07"' /tmp/rtc-simples-activity.json
+          jq -e '.disponivel == true' /tmp/rtc-simples-activity.json
+          jq -e '.admissivelNoDocumento == true' /tmp/rtc-simples-activity.json
+          jq -e '.compativelComClassTrib == true' /tmp/rtc-simples-activity.json
+          jq -e '.tpDocsAdmissiveis | index("91") != null' /tmp/rtc-simples-activity.json
+
           cat >/tmp/rtc-simples-operation.json <<'JSON'
           {
             "id": "507f1f77bcf86cd799439011",

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { RtcOpenDataClient } from '../tax-engine/rtc-open-data.client';
 import { OfficialRtcClient, officialRtcMode } from './official-rtc.client';
@@ -79,6 +79,23 @@ export class OfficialRtcService {
         regular: regularSource,
         simples: simplesSource,
       },
+    };
+  }
+
+  async simplesActivity(activityCode: string, effectiveDate: string, tpDoc: string, taxClassification: string) {
+    this.assertCallable('simples');
+    const lookup = await this.client.simplesActivity(activityCode, effectiveDate, tpDoc, taxClassification);
+    if (lookup.status === 'not_found') {
+      throw new NotFoundException('Official Simples activity was not found for the supplied effective date');
+    }
+    if (lookup.status === 'invalid_reference') {
+      throw new BadRequestException('Official Simples activity lookup rejected the supplied document or tax classification');
+    }
+    return {
+      engine: OFFICIAL_RTC_MANIFEST.simples,
+      mode: officialRtcMode(),
+      checked_at: new Date().toISOString(),
+      result: lookup.payload,
     };
   }
 

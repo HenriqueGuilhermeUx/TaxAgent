@@ -50,6 +50,37 @@ export class OfficialRtcClient {
     return this.getJson(base, '/api/versao/status');
   }
 
+  async simplesActivity(
+    activityCode: string,
+    effectiveDate: string,
+    tpDoc: string,
+    taxClassification: string,
+  ): Promise<{ status: 'ok'; payload: unknown } | { status: 'not_found' } | { status: 'invalid_reference' }> {
+    const base = this.required(process.env.TAXAGENT_RTC_SIMPLES_URL, 'simples');
+    const url = join(base, `/api/calculadora/simples-nacional/atividades/${activityCode}`);
+    url.searchParams.set('data', effectiveDate);
+    url.searchParams.set('tpDoc', tpDoc);
+    url.searchParams.set('cClassTrib', taxClassification);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/json', 'user-agent': 'TaxAgent-OfficialRTC/1.0' },
+        redirect: 'error',
+        signal: AbortSignal.timeout(Number(process.env.TAXAGENT_RTC_REQUEST_TIMEOUT_MS ?? 20_000)),
+      });
+    } catch (error) {
+      throw new BadGatewayException(`Official RTC engine network failure: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+    if (response.status === 404) return { status: 'not_found' };
+    if (response.status === 400) return { status: 'invalid_reference' };
+    if (!response.ok) throw new BadGatewayException(`Official RTC engine HTTP ${response.status}`);
+    let parsed: unknown;
+    try { parsed = await response.json(); }
+    catch { throw new BadGatewayException('Official RTC Simples activity lookup returned invalid JSON'); }
+    return { status: 'ok', payload: parsed };
+  }
+
   async renderDanfse(xml: string, state = '0', canhoto = true): Promise<Buffer> {
     const base = this.required(process.env.TAXAGENT_RTC_DANFSE_URL, 'danfse');
     const url = join(base, '/api/danfse');
