@@ -8,7 +8,7 @@ Infraestrutura fiscal API-first para o novo sistema tributário brasileiro.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HenriqueGuilhermeUx/TaxAgent/tree/main)
 
-O botão acima usa o `render.yaml` da branch `main` para preparar um ambiente de **Produção Restrita**, com Web Service Docker + PostgreSQL e os gates live desligados por padrão.
+O botão acima usa o `render.yaml` da branch `main` para preparar um ambiente de **Produção Restrita**, com Web Service Docker e conexão a PostgreSQL externo via `DATABASE_URL` (não cria banco no Render), mantendo os gates live desligados por padrão.
 
 Depois do deploy:
 
