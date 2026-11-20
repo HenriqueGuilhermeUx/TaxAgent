@@ -6,7 +6,7 @@
 
 - Keep `TAXAGENT_URL` (HTTPS) and `TAXAGENT_API_KEY` exclusively in a server secret manager; use a separate scoped key per product/environment. Never bundle them into browser, PWA, Android, iOS, chat messages or WhatsApp webhooks.
 - Read-only status/freshness and agent summary require `tax:read`; calculations require the independently granted `tax:resolve`. Do not grant invoice/transmission or payment scopes.
-- Before enabling a calculation workflow, inspect `status()`, `freshness()` and `simulatorReadiness()` **on the server**. Their response shapes are not an authorization token: require an explicit locally reviewed allowlist of environment/mode/regime before calculating. A successful HTTP response or a green health check never proves fiscal eligibility.
+- Before enabling a calculation workflow, inspect the company-scoped `fiscalReadinessProof(companyId)` plus `status()`, `freshness()` and `simulatorReadiness()` **on the server**. The readiness proof is deliberately read-only and must preserve every no-execution boundary flag. None of these responses is an authorization token: require an explicit locally reviewed allowlist of environment/mode/regime before calculating. A successful HTTP response or a green health check never proves fiscal eligibility.
 - `TAXAGENT_RTC_ENGINE_MODE=off` is the safe default. When the official engine is unavailable, stop or offer validation-only. Never silently substitute zero tax or a guessed rate.
 - Store the returned `decision_id` and an internal operation correlation id; do not log input fiscal payloads, raw engine results, XML/PDF, taxpayer identifiers or summary text.
 
@@ -28,11 +28,13 @@ const tax = new TaxAgentFiscalClient({
 
 // An application-specific, reviewed policy gate. Do NOT replace with a check
 // for HTTP 200, a nonempty object, or the presence of "authoritative".
-async function requireReviewedReadiness(regime: 'regular' | 'simples') {
-  const [status, freshness, readiness] = await Promise.all([
+async function requireReviewedReadiness(companyId: string, regime: 'regular' | 'simples') {
+  const [companyProof, status, freshness, readiness] = await Promise.all([
+    tax.fiscalReadinessProof(companyId),
     tax.status(), tax.freshness(), tax.simulatorReadiness(),
   ]);
-  const approved = await consumerPolicyReview({ regime, status, freshness, readiness });
+  if (!companyProof.readiness.homologation_ready) throw new Error('company_fiscal_not_ready');
+  const approved = await consumerPolicyReview({ companyProof, regime, status, freshness, readiness });
   if (!approved) throw new Error('fiscal_engine_not_ready');
 }
 
@@ -40,6 +42,7 @@ async function requireReviewedReadiness(regime: 'regular' | 'simples') {
 // allowlisted TEST environment, explicit mode, engine readiness and
 // freshness evidence. It must reject unknown/missing states.
 declare function consumerPolicyReview(input: {
+  companyProof: Awaited<ReturnType<TaxAgentFiscalClient['fiscalReadinessProof']>>;
   regime: 'regular' | 'simples';
   status: Record<string, unknown>;
   freshness: Record<string, unknown>;
@@ -50,8 +53,8 @@ export async function validateRegularDraft(input: CanonicalRegularInput) {
   return tax.validateRegular(input); // validation only; never an issuance approval
 }
 
-export async function calculateRegularForReview(input: CanonicalRegularInput) {
-  await requireReviewedReadiness('regular');
+export async function calculateRegularForReview(companyId: string, input: CanonicalRegularInput) {
+  await requireReviewedReadiness(companyId, 'regular');
   const decision = await tax.calculateRegular(input);
   const safety = assessFiscalDecisionSafety(decision);
   // Persist only decision_id and internal correlation in the consumer.
@@ -64,9 +67,9 @@ export async function calculateRegularForReview(input: CanonicalRegularInput) {
   };
 }
 
-export async function calculateSimplesBatchForReview(rows: CanonicalSimplesInput[]) {
+export async function calculateSimplesBatchForReview(companyId: string, rows: CanonicalSimplesInput[]) {
   if (rows.length < 1 || rows.length > 100) throw new Error('invalid_batch_size');
-  await requireReviewedReadiness('simples');
+  await requireReviewedReadiness(companyId, 'simples');
   const result = await tax.batchSimples('calculate', rows);
   // Inspect EACH row: failed/unsupported/engine_unavailable are not zero-tax.
   return result.rows.map(row => ({
@@ -108,11 +111,12 @@ A provider adapter should accept **only an existing decision id** plus the authe
 
 ## Acceptance checklist
 
-1. Missing/invalid API key, timeout, non-HTTPS remote URL, unknown readiness or unavailable engine → fail closed.
+1. Missing/invalid API key, timeout, non-HTTPS remote URL, malformed/unsafe company readiness proof, unknown RTC readiness or unavailable engine → fail closed.
 2. A 200 response with invalid assessment/decision, reference-only, simulated or unresolved status → never definitive; never execute payment/issuance.
 3. Batch with one invalid row → that row remains an explicit failure, not a zero-tax success.
 4. Agent summary with unsafe policy flags or unrecognized next action → client rejects.
 5. No raw payloads/PII in logs, analytics, provider messages or browser bundles; no secret in client source.
-6. Official regular freshness mismatch and Simples without explicit freshness remain reference-only; DANFSe semantic/visual evidence never auto-promotes a renderer.
+6. The readiness proof may report `homologation_ready=true`, but it still cannot issue/transmit, enable live runtime, grant/bypass a transmission permit or authorize payment.
+7. Official regular freshness mismatch and Simples without explicit freshness remain reference-only; DANFSe semantic/visual evidence never auto-promotes a renderer.
 
 Related: `docs/SHARED_FISCAL_ENGINE_CONTRACT.md`, `docs/AGENT_SAFE_FISCAL_SUMMARY.md`.
