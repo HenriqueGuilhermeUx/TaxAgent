@@ -16,7 +16,7 @@ Authenticated company-scoped consumers may call:
 `GET /v1/portal/companies/:companyId/fiscal/proof`
 
 The response is intentionally bounded. It exposes:
-- company/environment and current fiscal/onboarding status;
+- company identifier only (`company.id`), environment and current fiscal/onboarding status;
 - route summary;
 - stage IDs/status only;
 - unresolved requirement codes;
@@ -24,4 +24,4 @@ The response is intentionally bounded. It exposes:
 - the next safe action;
 - an explicit authorization boundary proving that this surface cannot issue, transmit, enable live runtime, grant a transmission permit or bypass the one-shot TEST permit.
 
-It never returns raw onboarding/preflight evidence, certificate material, provider credentials, fiscal payloads or any capability that authorizes external effects.
+It never returns company profile fields such as name, city code or tax regime; raw onboarding/preflight evidence; certificate material; provider credentials; fiscal payloads; or any capability that authorizes external effects.

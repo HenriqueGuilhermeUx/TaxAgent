@@ -20,7 +20,7 @@ export class CustomerFiscalService {
     const evidence = presented.evidence as Record<string, unknown> | null;
     return {
       proof_version: 'pilot-readiness-v1',
-      company: presented.company,
+      company: { id: String((presented.company as Record<string, unknown> | null)?.id ?? companyId) },
       environment: presented.environment,
       effective_at: presented.effective_at,
       fiscal_status: presented.fiscal_status,
