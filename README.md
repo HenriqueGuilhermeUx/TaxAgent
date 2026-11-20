@@ -6,9 +6,9 @@ Infraestrutura fiscal API-first para o novo sistema tributário brasileiro.
 
 ## Homologação 100% pelo navegador
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HenriqueGuilhermeUx/TaxAgent/tree/agent/engine-v0.1)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HenriqueGuilhermeUx/TaxAgent/tree/main)
 
-O botão acima usa o `render.yaml` da branch `agent/engine-v0.1` para preparar um ambiente de **Produção Restrita**, com Web Service Docker + PostgreSQL e os gates live desligados por padrão.
+O botão acima usa o `render.yaml` da branch `main` para preparar um ambiente de **Produção Restrita**, com Web Service Docker + PostgreSQL e os gates live desligados por padrão.
 
 Depois do deploy:
 
@@ -29,7 +29,7 @@ A Console permite, sem PowerShell ou terminal:
 
 ## Estado atual
 
-A branch `agent/engine-v0.1` contém o primeiro motor executável. O modo `mock` é seguro para desenvolvimento/homologação inicial. Transmissão real fica bloqueada até que schemas, empresa, certificado, decisão fiscal, dry-run e readiness estejam validados.
+A branch `main` contém o motor consolidado, incluindo os contratos RTC e preflight Simples incorporados até a PR #61. O modo `mock` é seguro para desenvolvimento/homologação inicial. Transmissão real fica bloqueada até que schemas, empresa, certificado, decisão fiscal, dry-run e readiness estejam validados.
 
 ### Implementado
 
