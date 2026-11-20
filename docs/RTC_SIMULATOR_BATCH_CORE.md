@@ -10,7 +10,7 @@ The response also carries the regular freshness state and makes these policy con
 
 - financial actions are never authorized by simulator output;
 - invoice issuance is never authorized by simulator output;
-- Simples is reference-only until an explicit freshness mechanism exists;
+- Simples carries explicit freshness evidence for local pin integrity and the shared tax dataset, but remains reference-only until a trusted remote Simples application-version reference exists;
 - regular authoritative availability requires RTC official mode, configured engine and freshness match.
 
 ## Validation-only
