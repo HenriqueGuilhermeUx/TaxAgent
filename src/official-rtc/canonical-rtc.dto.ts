@@ -53,8 +53,8 @@ export class CanonicalSimplesItemDto {
 export class CanonicalSimplesCalculationDto {
   @ApiProperty({ example: 'sale-456' }) @IsString() @IsNotEmpty() @MaxLength(128) operation_id!: string;
   @ApiProperty({ example: '2027-03-15' }) @IsDateString() effective_date!: string;
-  @ApiProperty({ enum: ['nfe', 'nfce'], example: 'nfe', description: 'The pinned Simples 0.0.6 engine currently supports NF-e/NFC-e document types; NFS-e is not claimed here.' })
-  @IsIn(['nfe', 'nfce']) document_kind!: 'nfe' | 'nfce';
+  @ApiProperty({ enum: ['nfe', 'nfce', 'nfse'], example: 'nfse', description: 'Document type supported by the pinned Simples 0.0.6 engine: NF-e (55), NFC-e (65) or NFS-e (91).' })
+  @IsIn(['nfe', 'nfce', 'nfse']) document_kind!: 'nfe' | 'nfce' | 'nfse';
   @ApiProperty({ enum: ['1', '2', '3', '4'], example: '1' }) @IsIn(['1', '2', '3', '4']) crt!: '1' | '2' | '3' | '4';
   @ApiPropertyOptional({ enum: ['1', '2'] }) @IsOptional() @IsIn(['1', '2']) ibs_cbs_regime_type?: '1' | '2';
   @ApiPropertyOptional({ enum: ['1', '2', '3', '4'], description: 'Government buyer entity type, when the operation is a government purchase.' })
