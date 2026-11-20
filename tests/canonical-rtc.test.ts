@@ -158,3 +158,34 @@ test('maps canonical Simples NFC-e to tpDoc 65 and preserves optional regime/gov
   assert.equal(mapped.itens[0].pIBSSN, undefined);
   assert.equal(mapped.itens[0].pCBSSN, undefined);
 });
+
+
+test('maps canonical Simples NFS-e to official tpDoc 91 using the pinned 0.0.6 golden activity', () => {
+  const mapped = mapCanonicalSimples({
+    operation_id: 'simples-nfse-91',
+    effective_date: '2027-03-15',
+    document_kind: 'nfse',
+    crt: '1',
+    items: [{
+      number: 1,
+      activity_code: '07',
+      tax_classification: '000001',
+      tax_base: 1000,
+      selective_tax_amount: 0,
+      ibs_effective_rate: 1.25,
+      cbs_effective_rate: 2.75,
+    }],
+  }) as any;
+
+  assert.equal(mapped.tpDoc, '91');
+  assert.equal(mapped.CRT, '1');
+  assert.deepEqual(mapped.itens[0], {
+    numero: 1,
+    cAtivSN: '07',
+    cClassTrib: '000001',
+    baseCalculo: '1000.00',
+    valorImpostoSeletivo: '0.00',
+    pIBSSN: '1.25',
+    pCBSSN: '2.75',
+  });
+});
