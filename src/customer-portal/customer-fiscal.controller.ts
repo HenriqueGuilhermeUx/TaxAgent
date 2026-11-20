@@ -31,6 +31,22 @@ export class CustomerFiscalController {
     return this.fiscal.status(companyId, environment, effectiveAt);
   }
 
+  @Get('proof')
+  @RequireScope('operations:read')
+  @ApiOperation({ summary: 'Get a bounded read-only readiness proof bundle for products and operators; never authorizes fiscal effects' })
+  @ApiQuery({ name: 'environment', required: false, enum: ['test', 'production'] })
+  @ApiQuery({ name: 'effective_at', required: false, example: '2026-09-25' })
+  proof(
+    @Param('companyId') companyId: string,
+    @Query('environment') rawEnvironment?: string,
+    @Query('effective_at') effectiveAt?: string,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    const environment = this.environment(rawEnvironment ?? auth?.environment ?? 'test');
+    this.assertAccess(companyId, environment, auth);
+    return this.fiscal.proof(companyId, environment, effectiveAt);
+  }
+
   @Post('profile')
   @RequireScope('operations:write')
   @ApiOperation({ summary: 'Update only non-secret fiscal profile fields and safely reassess the company' })
