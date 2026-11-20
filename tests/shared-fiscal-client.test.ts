@@ -698,3 +698,133 @@ test('shared client rejects incoherent Simples activity compatibility flags', as
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared client validates bounded Simples official preflight response', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async (input: URL | RequestInfo) => {
+      assert.equal(String(input), 'https://taxagent.example/v1/rtc/simulator/simples/validate-official');
+      return response({
+        operation_id: 'preflight-1',
+        status: 'valid',
+        regime: 'simples',
+        environment: 'test',
+        document_kind: 'nfse',
+        validation_level: 'official_activity_compatibility',
+        calculation_performed: false,
+        reference_only: true,
+        items: [{
+          number: 1,
+          activity_code: '07',
+          tax_classification: '000001',
+          compatible: true,
+          official: {
+            available: true,
+            admissible_on_document: true,
+            compatible_with_tax_classification: true,
+            factor_r_subject: false,
+            annex_without_factor_r: 'III',
+            annex_with_factor_r: null,
+            admissible_documents: ['91'],
+          },
+          source: {
+            authority: 'receita-federal-open-source-engine',
+            engine_id: 'simples',
+            repository: 'repo',
+            release: '0.0.6',
+            commit: 'commit',
+            mode: 'shadow',
+            checked_at: '2026-11-19T22:30:00-03:00',
+          },
+        }],
+        policy: {
+          structural_validation: true,
+          official_activity_compatibility_checked: true,
+          fiscal_fields_not_inferred: true,
+          rates_inferred: false,
+          financial_action_allowed: false,
+          issuance_binding_allowed: false,
+        },
+      });
+    }) as typeof fetch,
+  });
+
+  const result = await client.validateSimplesOfficial({
+    operation_id: 'preflight-1',
+    effective_date: '2027-03-15',
+    document_kind: 'nfse',
+    crt: '1',
+    items: [{
+      number: 1,
+      activity_code: '07',
+      tax_classification: '000001',
+      tax_base: 100,
+      selective_tax_amount: 0,
+    }],
+  });
+  assert.equal(result.status, 'valid');
+  assert.equal(result.items[0].compatible, true);
+  assert.equal(result.policy.financial_action_allowed, false);
+});
+
+test('shared client rejects Simples official preflight that contradicts item compatibility', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async () => response({
+      operation_id: 'preflight-1',
+      status: 'valid',
+      regime: 'simples',
+      environment: 'test',
+      document_kind: 'nfse',
+      validation_level: 'official_activity_compatibility',
+      calculation_performed: false,
+      reference_only: true,
+      items: [{
+        number: 1,
+        activity_code: '07',
+        tax_classification: '000001',
+        compatible: true,
+        official: {
+          available: false,
+          admissible_on_document: false,
+          compatible_with_tax_classification: true,
+          factor_r_subject: false,
+          annex_without_factor_r: 'III',
+          annex_with_factor_r: null,
+          admissible_documents: ['91'],
+        },
+        source: { authority: 'receita-federal-open-source-engine' },
+      }],
+      policy: {
+        structural_validation: true,
+        official_activity_compatibility_checked: true,
+        fiscal_fields_not_inferred: true,
+        rates_inferred: false,
+        financial_action_allowed: false,
+        issuance_binding_allowed: false,
+      },
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.validateSimplesOfficial({
+      operation_id: 'preflight-1',
+      effective_date: '2027-03-15',
+      document_kind: 'nfse',
+      crt: '1',
+      items: [{
+        number: 1,
+        activity_code: '07',
+        tax_classification: '000001',
+        tax_base: 100,
+        selective_tax_amount: 0,
+      }],
+    }),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
