@@ -421,6 +421,10 @@ export class TaxAgentFiscalClient {
     const official = value.official;
     const source = value.source;
     const policy = value.policy;
+    const compatibleFromOfficial = isObject(official)
+      && official.available === true
+      && official.admissible_on_document === true
+      && official.compatible_with_tax_classification === true;
     if (
       value.activity_code !== activityCode
       || value.effective_date !== effectiveDate
@@ -428,6 +432,7 @@ export class TaxAgentFiscalClient {
       || value.tax_classification !== taxClassification
       || !this.environmentAccepted(value.environment)
       || typeof value.compatible !== 'boolean'
+      || value.compatible !== compatibleFromOfficial
       || !isObject(official)
       || typeof official.available !== 'boolean'
       || typeof official.admissible_on_document !== 'boolean'
