@@ -48,3 +48,15 @@ Official engine service URLs are configuration-only and never supplied by end us
 ## Golden conformance sources
 
 The regular smoke case is copied from the official Receita Federal `docs/exemplos.md` for the pinned regular release. Simples conformance includes the pinned upstream NF-e case `SimplesNacionalControllerTest.deveCalcularCaminhoFelizCrt1ComImpostoSeletivoForaDaReceitaBruta` and the NFS-e case `atividadeVinculadaCalculaNoDocumentoCertoENaoCalculaNoErrado` (`tpDoc=91`, `cAtivSN=07`). These fixtures are kept as upstream-derived conformance evidence; TaxAgent does not invent document support, activities, rates or expected tax outcomes.
+
+
+## Simples freshness evidence
+
+The pinned Simples sidecar exposes the upstream offline `GET /api/versao/status` comparator. TaxAgent consumes that endpoint only as bounded freshness evidence.
+
+The comparison is intentionally split:
+- the local Simples application version must match the pinned release;
+- the shared RTC/Flyway tax dataset reports whether its database version/date matches the online reference;
+- the upstream remote application version is **not** treated as a verified Simples application-version source, because the offline comparator may point at the shared RTC online service.
+
+Therefore Simples remains `authoritative_eligible=false` even if the shared dataset matches, until a trusted remote Simples application-version source is explicitly established. A dataset mismatch or unavailable status also remains fail-closed.
