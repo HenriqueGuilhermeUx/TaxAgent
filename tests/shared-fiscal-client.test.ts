@@ -391,3 +391,42 @@ test('shared client rejects unsafe readiness proof identifiers before making a r
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_config',
   );
 });
+
+
+test('shared client rejects readiness proof for a different company', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    fetchImpl: (async () => response({
+      proof_version: 'pilot-readiness-v1',
+      company: { id: 'comp_other' },
+      environment: 'test',
+      effective_at: '2026-11-19',
+      fiscal_status: 'ACTION_REQUIRED',
+      onboarding_status: 'BLOCKED',
+      route: { resolved_route: 'national-direct' },
+      readiness: {
+        homologation_ready: false,
+        unresolved_requirements: ['active_a1'],
+        stages: [{ id: 'a1_certificate', status: 'ACTION_REQUIRED' }],
+      },
+      evidence_presence: { onboarding: true, preflight: false },
+      next_action: null,
+      authorization_boundary: {
+        read_only: true,
+        portal_can_issue_invoice: false,
+        portal_can_transmit_fiscal_document: false,
+        portal_can_enable_live_runtime: false,
+        portal_can_grant_transmission_permit: false,
+        customer_api_key_can_bypass_one_shot_permit: false,
+        one_shot_test_transmission_permit_required_for_first_real_attempt: true,
+      },
+      checked_at: '2026-11-19T21:30:00-03:00',
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.fiscalReadinessProof('comp_1'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
