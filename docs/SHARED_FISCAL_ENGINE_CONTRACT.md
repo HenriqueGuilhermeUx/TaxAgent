@@ -102,8 +102,8 @@ Consumers should prefer the stable TaxAgent canonical endpoints instead of the r
   - For facts before 2027, nominal rates are forbidden by the pinned engine.
   - From 2027 onward, nominal CBS/IBS state/IBS municipal rates are required by the pinned engine and must be supplied explicitly from a verified source.
 - `POST /v1/rtc/canonical/simples/calculate`
-  - V1 supports `document_kind=nfe|nfce`, matching the current pinned Simples engine document support (55/65).
-  - It does **not** claim NFS-e support for Simples until the official engine contract supports it.
+  - V1 supports `document_kind=nfe|nfce|nfse`, mapped to official `tpDoc=55|65|91`.
+  - NFS-e support is grounded in the pinned Simples 0.0.6 upstream integration tests, including the official `cAtivSN=07` NFS-e golden case.
   - `cAtivSN`, `cClassTrib`, base, selective-tax amount and effective Simples rates (when applicable) are facts supplied by the consumer; TaxAgent does not guess them.
 
 The raw endpoints under `/v1/rtc/official/*` remain useful for internal conformance/debugging, but new product integrations should target the canonical boundary.
