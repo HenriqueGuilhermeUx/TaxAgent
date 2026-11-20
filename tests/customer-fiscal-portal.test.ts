@@ -34,6 +34,28 @@ test('customer fiscal surface replaces bootstrap actions with company-scoped saf
   assert.equal((result.stages[1]?.action as any)?.handled_by, 'certificate-vault');
 });
 
+test('customer readiness proof is bounded, read-only and cannot authorize transmission', async () => {
+  const service = new CustomerFiscalService(
+    { updateCompany: async () => { throw new Error('not expected'); } } as any,
+    { status: async () => ({ ...blockedJourney(), evidence: { latest_onboarding: { id: 'onb_1', secret: 'must-not-leak' }, latest_preflight: null } }) } as any,
+  );
+  const result = await service.proof('comp_1', 'test', '2026-09-25');
+  assert.equal(result.proof_version, 'pilot-readiness-v1');
+  assert.deepEqual(result.readiness.unresolved_requirements, ['municipal_registration', 'active_a1']);
+  assert.deepEqual(result.readiness.stages, [
+    { id: 'municipal_registration', status: 'ACTION_REQUIRED' },
+    { id: 'a1_certificate', status: 'ACTION_REQUIRED' },
+  ]);
+  assert.deepEqual(result.evidence_presence, { onboarding: true, preflight: false });
+  assert.equal(result.authorization_boundary.read_only, true);
+  assert.equal(result.authorization_boundary.portal_can_issue_invoice, false);
+  assert.equal(result.authorization_boundary.portal_can_transmit_fiscal_document, false);
+  assert.equal(result.authorization_boundary.portal_can_enable_live_runtime, false);
+  assert.equal(result.authorization_boundary.portal_can_grant_transmission_permit, false);
+  assert.equal(result.authorization_boundary.customer_api_key_can_bypass_one_shot_permit, false);
+  assert.doesNotMatch(JSON.stringify(result), /must-not-leak/);
+});
+
 test('customer profile update persists only non-secret fiscal fields and safely advances', async () => {
   let patch: Record<string, unknown> | null = null;
   let runs = 0;
