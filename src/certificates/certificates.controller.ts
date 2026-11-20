@@ -74,6 +74,7 @@ export class CertificatesController {
   }
 
   private assertCompany(companyId: string, auth?: TaxAgentAuthContext) {
-    if (auth && auth.companyId !== companyId) throw new ForbiddenException('API key cannot operate another company');
+    if (!auth) throw new ForbiddenException('API key authentication is required');
+    if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot operate another company');
   }
 }
