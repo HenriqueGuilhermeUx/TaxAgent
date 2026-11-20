@@ -92,6 +92,33 @@ export interface CanonicalSimplesInput {
   items: CanonicalSimplesItemInput[];
 }
 
+export interface SimplesOfficialPreflightResponse {
+  operation_id: string;
+  status: 'valid' | 'requires_input';
+  regime: 'simples';
+  environment: 'test' | 'production';
+  document_kind: 'nfe' | 'nfce' | 'nfse';
+  validation_level: 'official_activity_compatibility';
+  calculation_performed: false;
+  reference_only: true;
+  items: Array<{
+    number: number;
+    activity_code: string;
+    tax_classification: string;
+    compatible: boolean;
+    official: CanonicalSimplesActivityCompatibility['official'];
+    source: CanonicalSimplesActivityCompatibility['source'];
+  }>;
+  policy: {
+    structural_validation: true;
+    official_activity_compatibility_checked: true;
+    fiscal_fields_not_inferred: true;
+    rates_inferred: false;
+    financial_action_allowed: false;
+    issuance_binding_allowed: false;
+  };
+}
+
 export interface CanonicalFiscalDecision {
   decision_id: string;
   decision_kind: 'rtc_calculation';
@@ -459,6 +486,65 @@ export class TaxAgentFiscalClient {
       throw new TaxAgentFiscalClientError('invalid_response');
     }
     return value as unknown as CanonicalSimplesActivityCompatibility;
+  }
+
+  async validateSimplesOfficial(input: CanonicalSimplesInput): Promise<SimplesOfficialPreflightResponse> {
+    const value = await this.request('POST', '/v1/rtc/simulator/simples/validate-official', input);
+    const policy = value.policy;
+    if (
+      value.operation_id !== input.operation_id
+      || value.regime !== 'simples'
+      || !['valid', 'requires_input'].includes(String(value.status))
+      || !this.environmentAccepted(value.environment)
+      || value.document_kind !== input.document_kind
+      || value.validation_level !== 'official_activity_compatibility'
+      || value.calculation_performed !== false
+      || value.reference_only !== true
+      || !Array.isArray(value.items)
+      || value.items.length !== input.items.length
+      || !isObject(policy)
+      || policy.structural_validation !== true
+      || policy.official_activity_compatibility_checked !== true
+      || policy.fiscal_fields_not_inferred !== true
+      || policy.rates_inferred !== false
+      || policy.financial_action_allowed !== false
+      || policy.issuance_binding_allowed !== false
+    ) {
+      throw new TaxAgentFiscalClientError('invalid_response');
+    }
+    for (let index = 0; index < value.items.length; index += 1) {
+      const item = value.items[index];
+      const expected = input.items[index];
+      if (
+        !isObject(item)
+        || item.number !== expected.number
+        || item.activity_code !== expected.activity_code
+        || item.tax_classification !== expected.tax_classification
+        || typeof item.compatible !== 'boolean'
+        || !isObject(item.official)
+        || typeof item.official.available !== 'boolean'
+        || typeof item.official.admissible_on_document !== 'boolean'
+        || typeof item.official.compatible_with_tax_classification !== 'boolean'
+        || item.compatible !== (
+          item.official.available === true
+          && item.official.admissible_on_document === true
+          && item.official.compatible_with_tax_classification === true
+        )
+        || !isObject(item.source)
+        || item.source.authority !== 'receita-federal-open-source-engine'
+        || typeof item.source.engine_id !== 'string'
+        || typeof item.source.repository !== 'string'
+        || typeof item.source.release !== 'string'
+        || typeof item.source.commit !== 'string'
+        || typeof item.source.mode !== 'string'
+        || typeof item.source.checked_at !== 'string'
+      ) {
+        throw new TaxAgentFiscalClientError('invalid_response');
+      }
+    }
+    const allCompatible = value.items.every((item) => isObject(item) && item.compatible === true);
+    if ((value.status === 'valid') !== allCompatible) throw new TaxAgentFiscalClientError('invalid_response');
+    return value as unknown as SimplesOfficialPreflightResponse;
   }
 
   async calculateRegular(input: CanonicalRegularInput): Promise<CanonicalFiscalDecision> {

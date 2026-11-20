@@ -18,9 +18,17 @@ The response also carries the regular freshness state and makes these policy con
 - `POST /v1/rtc/simulator/regular/validate`
 - `POST /v1/rtc/simulator/simples/validate`
 
-These endpoints validate the stable canonical contract without calling an RTC sidecar and without persisting a TaxDecision.
+These endpoints validate the stable canonical contract without calling an RTC sidecar and without persisting a TaxDecision. Their response is explicitly structural-only; it does not claim that a Simples activity is compatible with the selected document/classification.
 
 For the regular engine they enforce the pinned year contract: nominal rates are forbidden before 2027 and required from 2027 onward.
+
+## Official Simples preflight
+
+`POST /v1/rtc/simulator/simples/validate-official`
+
+This authenticated preflight first runs canonical structural validation and then checks each unique `cAtivSN × cClassTrib` pair against the pinned official Simples activity catalog for the supplied date and document. Duplicate pairs are looked up once per request.
+
+It does **not** calculate tax, infer rates, persist a TaxDecision, issue/transmit a document, or authorize a financial action. A fully compatible request returns `status=valid`; any official incompatibility returns `status=requires_input`. Engine/network unavailability remains an explicit failure rather than silently degrading to structural validity.
 
 ## Batch JSON
 

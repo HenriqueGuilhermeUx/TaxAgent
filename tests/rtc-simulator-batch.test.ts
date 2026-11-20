@@ -180,6 +180,130 @@ test('Simples validate-only accepts pinned official NFS-e document kind without 
   });
   assert.equal(result.status, 'valid');
   assert.equal(result.document_kind, 'nfse');
+  assert.equal(result.validation_level, 'structural_only');
+  assert.equal(result.policy.official_activity_compatibility_checked, false);
   assert.equal(result.reference_only, true);
   assert.equal(result.policy.issuance_binding_allowed, false);
+});
+
+
+test('Simples official preflight checks unique activity/classification pairs without calculating tax', async () => {
+  let calls = 0;
+  const service = new SimulatorBatchService(
+    {} as any,
+    {
+      simplesActivityCompatibility: async (
+        environment: string,
+        activityCode: string,
+        query: any,
+      ) => {
+        calls += 1;
+        return {
+          activity_code: activityCode,
+          effective_date: query.effective_date,
+          document_kind: query.document_kind,
+          tax_classification: query.tax_classification,
+          environment,
+          compatible: true,
+          official: {
+            available: true,
+            admissible_on_document: true,
+            compatible_with_tax_classification: true,
+            factor_r_subject: false,
+            annex_without_factor_r: 'III',
+            annex_with_factor_r: null,
+            admissible_documents: ['91'],
+          },
+          source: {
+            authority: 'receita-federal-open-source-engine',
+            engine_id: 'simples',
+            repository: 'repo',
+            release: '0.0.6',
+            commit: 'commit',
+            mode: 'shadow',
+            checked_at: '2026-11-19T22:30:00-03:00',
+          },
+        };
+      },
+    } as any,
+  );
+
+  const dto = {
+    operation_id: 'preflight-1',
+    effective_date: '2027-03-15',
+    document_kind: 'nfse' as const,
+    crt: '1' as const,
+    items: [
+      {
+        number: 1,
+        activity_code: '07',
+        tax_classification: '000001',
+        tax_base: 100,
+        selective_tax_amount: 0,
+      },
+      {
+        number: 2,
+        activity_code: '07',
+        tax_classification: '000001',
+        tax_base: 200,
+        selective_tax_amount: 0,
+      },
+    ],
+  };
+
+  const result = await service.validateSimplesOfficial('test', dto);
+  assert.equal(calls, 1);
+  assert.equal(result.status, 'valid');
+  assert.equal(result.validation_level, 'official_activity_compatibility');
+  assert.equal(result.calculation_performed, false);
+  assert.equal(result.items.length, 2);
+  assert.equal(result.policy.official_activity_compatibility_checked, true);
+  assert.equal(result.policy.financial_action_allowed, false);
+});
+
+test('Simples official preflight returns requires_input when official compatibility is false', async () => {
+  const service = new SimulatorBatchService(
+    {} as any,
+    {
+      simplesActivityCompatibility: async () => ({
+        compatible: false,
+        official: {
+          available: false,
+          admissible_on_document: false,
+          compatible_with_tax_classification: true,
+          factor_r_subject: false,
+          annex_without_factor_r: 'I',
+          annex_with_factor_r: null,
+          admissible_documents: ['55', '65'],
+        },
+        source: {
+          authority: 'receita-federal-open-source-engine',
+          engine_id: 'simples',
+          repository: 'repo',
+          release: '0.0.6',
+          commit: 'commit',
+          mode: 'shadow',
+          checked_at: '2026-11-19T22:30:00-03:00',
+        },
+      }),
+    } as any,
+  );
+
+  const result = await service.validateSimplesOfficial('test', {
+    operation_id: 'preflight-bad',
+    effective_date: '2027-03-15',
+    document_kind: 'nfse',
+    crt: '1',
+    items: [{
+      number: 1,
+      activity_code: '01',
+      tax_classification: '000001',
+      tax_base: 100,
+      selective_tax_amount: 0,
+    }],
+  });
+
+  assert.equal(result.status, 'requires_input');
+  assert.equal(result.items[0].compatible, false);
+  assert.equal(result.calculation_performed, false);
 });

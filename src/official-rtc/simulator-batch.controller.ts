@@ -45,6 +45,17 @@ export class SimulatorBatchController {
     return this.simulator.validateSimples(dto);
   }
 
+  @Post('simples/validate-official')
+  @RequireScope('tax:resolve')
+  @ApiOperation({ summary: 'Validate Simples activity/document/classification compatibility against the pinned official catalog without calculating tax' })
+  validateSimplesOfficial(
+    @Body() dto: CanonicalSimplesCalculationDto,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
+    return this.simulator.validateSimplesOfficial(auth.environment, dto);
+  }
+
   @Post('regular/batch')
   @RequireScope('tax:resolve')
   @ApiOperation({ summary: 'Validate or calculate up to 100 regular NFS-e rows with per-row fail-closed outcomes' })
@@ -75,7 +86,7 @@ export class SimulatorBatchController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'CSV or XLSX. Max 2 MiB / 100 data rows. Formulas, macros and external embedded content are refused.' } } } })
   @ApiQuery({ name: 'execution', required: false, enum: ['validate', 'calculate'], description: 'Defaults to validate. calculate requires an available RTC engine.' })
-  @ApiOperation({ summary: 'Validate or calculate up to 100 Simples NF-e/NFC-e rows imported from a bounded CSV/XLSX file' })
+  @ApiOperation({ summary: 'Validate or calculate up to 100 Simples NF-e/NFC-e/NFS-e rows imported from a bounded CSV/XLSX file' })
   simplesBatchFile(
     @UploadedFile() file: RtcBatchUploadedFile | undefined,
     @Query('execution') execution?: string,
@@ -87,7 +98,7 @@ export class SimulatorBatchController {
 
   @Post('simples/batch')
   @RequireScope('tax:resolve')
-  @ApiOperation({ summary: 'Validate or calculate up to 100 Simples NF-e/NFC-e rows with per-row fail-closed outcomes' })
+  @ApiOperation({ summary: 'Validate or calculate up to 100 Simples NF-e/NFC-e/NFS-e rows with per-row fail-closed outcomes' })
   simplesBatch(@Body() dto: SimplesSimulatorBatchDto, @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext) {
     if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
     return this.simulator.simplesBatch(auth.companyId, auth.environment, dto);

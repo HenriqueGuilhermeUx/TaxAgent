@@ -75,6 +75,7 @@ export class SimulatorBatchService {
       freshness,
       policy: {
         validate_only_available: true,
+        official_simples_activity_validation_available: mode !== 'off' && simplesConfigured,
         batch_max_rows: 100,
         financial_action_allowed: false,
         issuance_binding_allowed: false,
@@ -90,6 +91,7 @@ export class SimulatorBatchService {
       status: 'valid' as const,
       regime: 'regular' as const,
       document_kind: dto.document_kind,
+      validation_level: 'structural_only' as const,
       calculation_performed: false,
       reference_only: true,
       policy: {
@@ -107,10 +109,65 @@ export class SimulatorBatchService {
       status: 'valid' as const,
       regime: 'simples' as const,
       document_kind: dto.document_kind,
+      validation_level: 'structural_only' as const,
       calculation_performed: false,
       reference_only: true,
       policy: {
         fiscal_fields_not_inferred: true,
+        official_activity_compatibility_checked: false,
+        financial_action_allowed: false,
+        issuance_binding_allowed: false,
+      },
+    };
+  }
+
+  async validateSimplesOfficial(environment: 'test' | 'production', dto: CanonicalSimplesCalculationDto) {
+    this.validateSimples(dto);
+    const lookups = new Map<string, Promise<any>>();
+    const items = [];
+
+    for (const item of dto.items) {
+      const key = `${item.activity_code}:${item.tax_classification}`;
+      let pending = lookups.get(key);
+      if (!pending) {
+        pending = this.canonical.simplesActivityCompatibility(
+          environment,
+          item.activity_code,
+          {
+            effective_date: dto.effective_date,
+            document_kind: dto.document_kind,
+            tax_classification: item.tax_classification,
+          },
+        );
+        lookups.set(key, pending);
+      }
+      const compatibility = await pending;
+      items.push({
+        number: item.number,
+        activity_code: item.activity_code,
+        tax_classification: item.tax_classification,
+        compatible: compatibility.compatible === true,
+        official: compatibility.official,
+        source: compatibility.source,
+      });
+    }
+
+    const compatible = items.every((item) => item.compatible === true);
+    return {
+      operation_id: dto.operation_id,
+      status: compatible ? 'valid' as const : 'requires_input' as const,
+      regime: 'simples' as const,
+      environment,
+      document_kind: dto.document_kind,
+      validation_level: 'official_activity_compatibility' as const,
+      calculation_performed: false as const,
+      reference_only: true as const,
+      items,
+      policy: {
+        structural_validation: true,
+        official_activity_compatibility_checked: true,
+        fiscal_fields_not_inferred: true,
+        rates_inferred: false,
         financial_action_allowed: false,
         issuance_binding_allowed: false,
       },
