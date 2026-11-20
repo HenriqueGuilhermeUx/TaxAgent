@@ -61,3 +61,15 @@ export class CanonicalSimplesCalculationDto {
   @IsOptional() @IsIn(['1', '2', '3', '4']) government_entity_type?: '1' | '2' | '3' | '4';
   @ApiProperty({ type: [CanonicalSimplesItemDto] }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => CanonicalSimplesItemDto) items!: CanonicalSimplesItemDto[];
 }
+
+
+export class CanonicalSimplesActivityQueryDto {
+  @ApiProperty({ example: '2027-03-15', description: 'Civil date used by the official Simples activity catalog.' })
+  @IsDateString() effective_date!: string;
+
+  @ApiProperty({ enum: ['nfe', 'nfce', 'nfse'], example: 'nfse' })
+  @IsIn(['nfe', 'nfce', 'nfse']) document_kind!: 'nfe' | 'nfce' | 'nfse';
+
+  @ApiProperty({ example: '000001', description: 'Verified cClassTrib to check against the official Simples activity catalog.' })
+  @IsString() @Matches(/^\d{6}$/) tax_classification!: string;
+}
