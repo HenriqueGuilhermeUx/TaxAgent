@@ -430,3 +430,113 @@ test('shared client rejects readiness proof for a different company', async () =
     (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
   );
 });
+
+
+test('shared fiscal client rejects invalid expected environment configuration', () => {
+  assert.throws(
+    () => new TaxAgentFiscalClient({
+      baseUrl: 'https://taxagent.example',
+      apiKey: 'server-key',
+      expectedEnvironment: 'staging' as any,
+    }),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_config',
+  );
+});
+
+test('shared fiscal client rejects canonical decisions from a different environment', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async () => response({
+      decision_id: 'taxdec_env',
+      decision_kind: 'rtc_calculation',
+      status: 'resolved',
+      regime: 'regular',
+      environment: 'production',
+      authoritative: false,
+      reference_only: true,
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.calculateRegular({
+      operation_id: 'order-env',
+      effective_at: '2026-11-19T22:00:00-03:00',
+      municipality_code: '3548500',
+      uf: 'SP',
+      document_kind: 'nfse',
+      items: [{ number: 1, nbs: '115012000', cst: '200', tax_classification: '200043', tax_base: 100 }],
+    }),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
+
+test('shared fiscal client rejects readiness proof from a different environment', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async () => response({
+      proof_version: 'pilot-readiness-v1',
+      company: { id: 'comp_1' },
+      environment: 'production',
+      effective_at: '2026-11-19',
+      fiscal_status: 'ACTION_REQUIRED',
+      onboarding_status: 'BLOCKED',
+      route: { resolved_route: 'national-direct' },
+      readiness: { homologation_ready: false, unresolved_requirements: ['active_a1'], stages: [] },
+      evidence_presence: { onboarding: true, preflight: false },
+      next_action: null,
+      authorization_boundary: {
+        read_only: true,
+        portal_can_issue_invoice: false,
+        portal_can_transmit_fiscal_document: false,
+        portal_can_enable_live_runtime: false,
+        portal_can_grant_transmission_permit: false,
+        customer_api_key_can_bypass_one_shot_permit: false,
+        one_shot_test_transmission_permit_required_for_first_real_attempt: true,
+      },
+      checked_at: '2026-11-19T22:00:00-03:00',
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.fiscalReadinessProof('comp_1'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
+
+test('shared fiscal client rejects agent summary from a different environment', async () => {
+  const client = new TaxAgentFiscalClient({
+    baseUrl: 'https://taxagent.example',
+    apiKey: 'server-key',
+    expectedEnvironment: 'test',
+    fetchImpl: (async () => response({
+      decision_id: 'taxdec_1',
+      decision_kind: 'rtc_calculation',
+      effective_at: '2026-11-19',
+      status: 'resolved',
+      regime: 'regular',
+      environment: 'production',
+      use: 'reference_only',
+      authoritative: false,
+      reference_only: true,
+      next_action: 'explain_reference_only_no_execution',
+      message: { locale: 'pt-BR', text: 'Resultado apenas de referência.' },
+      policy: {
+        ai_authoritative: false,
+        financial_action_allowed: false,
+        issuance_binding_allowed: false,
+        raw_fiscal_payload_exposed: false,
+        raw_document_content_exposed: false,
+        taxpayer_pii_exposed: false,
+      },
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.agentSummary('taxdec_1'),
+    (error: unknown) => error instanceof TaxAgentFiscalClientError && error.code === 'invalid_response',
+  );
+});
