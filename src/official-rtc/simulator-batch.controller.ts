@@ -45,6 +45,17 @@ export class SimulatorBatchController {
     return this.simulator.validateSimples(dto);
   }
 
+  @Post('simples/validate-official')
+  @RequireScope('tax:resolve')
+  @ApiOperation({ summary: 'Validate Simples activity/document/classification compatibility against the pinned official catalog without calculating tax' })
+  validateSimplesOfficial(
+    @Body() dto: CanonicalSimplesCalculationDto,
+    @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
+  ) {
+    if (!auth?.companyId) throw new UnauthorizedException('Authenticated company context required');
+    return this.simulator.validateSimplesOfficial(auth.environment, dto);
+  }
+
   @Post('regular/batch')
   @RequireScope('tax:resolve')
   @ApiOperation({ summary: 'Validate or calculate up to 100 regular NFS-e rows with per-row fail-closed outcomes' })
