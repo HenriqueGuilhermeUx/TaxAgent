@@ -136,6 +136,37 @@ jobs:
           jq -e '.objetos[0].tribCalc.vCBSSN == "26.12"' /tmp/rtc-simples-result.json
           jq -e '.total.totalTributos == "88.00"' /tmp/rtc-simples-result.json
 
+          # Golden NFS-e case from pinned upstream 0.0.6
+          # SimplesNacionalControllerTest.atividadeVinculadaCalculaNoDocumentoCertoENaoCalculaNoErrado
+          cat >/tmp/rtc-simples-nfse-operation.json <<'JSON'
+          {
+            "id": "taxagent-official-simples-nfse-ci",
+            "versao": "2.0.0",
+            "data": "2027-03-15",
+            "tpDoc": "91",
+            "CRT": "1",
+            "itens": [
+              {
+                "numero": 1,
+                "cAtivSN": "07",
+                "cClassTrib": "000001",
+                "baseCalculo": "1000.00",
+                "valorImpostoSeletivo": "0.00",
+                "pIBSSN": "1.25",
+                "pCBSSN": "2.75"
+              }
+            ]
+          }
+          JSON
+
+          curl -fsS -X POST             http://127.0.0.1:18082/api/calculadora/observabilidade/simples-nacional             -H 'Content-Type: application/json'             --data-binary @/tmp/rtc-simples-nfse-operation.json             >/tmp/rtc-simples-nfse-result.json
+          jq . /tmp/rtc-simples-nfse-result.json
+          jq -e '.objetos | length == 1' /tmp/rtc-simples-nfse-result.json
+          jq -e '.objetos[0].estadoItem == "CALCULADO"' /tmp/rtc-simples-nfse-result.json
+          jq -e '.objetos[0].tribCalc.vIBSSN == "12.50"' /tmp/rtc-simples-nfse-result.json
+          jq -e '.objetos[0].tribCalc.vCBSSN == "27.50"' /tmp/rtc-simples-nfse-result.json
+          jq -e '.total.totalTributos == "40.00"' /tmp/rtc-simples-nfse-result.json
+
   danfse:
     name: DANFSe 1.0.0
     runs-on: ubuntu-latest
