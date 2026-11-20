@@ -4,7 +4,7 @@ import { RtcOpenDataClient } from '../tax-engine/rtc-open-data.client';
 import { OfficialRtcClient, officialRtcMode } from './official-rtc.client';
 import { OFFICIAL_RTC_MANIFEST, OfficialRtcEngineId } from './official-rtc.manifest';
 import { assessOfficialRtcObservability } from './official-rtc-observability';
-import { assessOfficialRtcFreshness } from './official-rtc-freshness';
+import { assessOfficialRtcFreshness, assessOfficialRtcSimplesFreshness } from './official-rtc-freshness';
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -43,18 +43,43 @@ export class OfficialRtcService {
   }
 
   async freshness() {
+    let regular = assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, null);
+    let regularSource: Record<string, unknown>;
     try {
       const reference = await this.reference.getVersion();
-      return {
-        regular: assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, reference.payload),
-        source: { url: reference.url, fetched_at: reference.fetchedAt },
-      };
+      regular = assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, reference.payload);
+      regularSource = { url: reference.url, fetched_at: reference.fetchedAt };
     } catch (error) {
-      return {
-        regular: assessOfficialRtcFreshness(OFFICIAL_RTC_MANIFEST.regular.upstreamRelease, null),
-        source: { error: error instanceof Error ? error.message : 'Official RTC reference version lookup failed' },
-      };
+      regularSource = { error: error instanceof Error ? error.message : 'Official RTC reference version lookup failed' };
     }
+
+    let simples = assessOfficialRtcSimplesFreshness(OFFICIAL_RTC_MANIFEST.simples.upstreamRelease, null);
+    let simplesSource: Record<string, unknown> = {
+      configured: this.client.simplesConfigured(),
+      endpoint: '/api/versao/status',
+    };
+    if (this.client.simplesConfigured()) {
+      try {
+        const status = await this.client.simplesVersionStatus();
+        simples = assessOfficialRtcSimplesFreshness(OFFICIAL_RTC_MANIFEST.simples.upstreamRelease, status);
+        simplesSource = { ...simplesSource, fetched_at: new Date().toISOString() };
+      } catch (error) {
+        simplesSource = {
+          ...simplesSource,
+          error: error instanceof Error ? error.message : 'Official RTC Simples version status lookup failed',
+        };
+      }
+    }
+
+    return {
+      regular,
+      simples,
+      source: {
+        ...regularSource,
+        regular: regularSource,
+        simples: simplesSource,
+      },
+    };
   }
 
   async calculate(engine: 'regular' | 'simples', payload: Record<string, unknown>) {

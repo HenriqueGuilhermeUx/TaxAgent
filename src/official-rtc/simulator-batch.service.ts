@@ -68,8 +68,8 @@ export class SimulatorBatchService {
         simples: {
           configured: simplesConfigured,
           calculation_available: mode !== 'off' && simplesConfigured,
-          authoritative_available: false,
-          reference_only: true,
+          authoritative_available: mode === 'official' && simplesConfigured && freshness.simples.authoritative_eligible === true,
+          reference_only: !(mode === 'official' && simplesConfigured && freshness.simples.authoritative_eligible === true),
         },
       },
       freshness,

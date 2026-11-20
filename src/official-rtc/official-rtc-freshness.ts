@@ -63,3 +63,67 @@ export function assessOfficialRtcFreshness(pinnedRelease: string, payload: unkno
   }
   return { status: 'pinned_ahead', authoritative_eligible: false, pinned_release: pinnedRelease, reference };
 }
+
+
+export type OfficialRtcSimplesDatasetStatus = 'match' | 'mismatch' | 'unknown';
+
+export interface OfficialRtcSimplesFreshnessAssessment {
+  status: OfficialRtcSimplesDatasetStatus;
+  authoritative_eligible: boolean;
+  pinned_release: string;
+  local_release_matches_pin: boolean;
+  application_reference_verified: boolean;
+  dataset_current: boolean;
+  local: OfficialRtcVersionSnapshot;
+  reference: OfficialRtcVersionSnapshot;
+  blockers: string[];
+}
+
+export function assessOfficialRtcSimplesFreshness(
+  pinnedRelease: string,
+  payload: unknown,
+): OfficialRtcSimplesFreshnessAssessment {
+  const root = asRecord(payload);
+  const local: OfficialRtcVersionSnapshot = root ? {
+    app: typeof root.versaoAplicacaoLocal === 'string' ? root.versaoAplicacaoLocal : undefined,
+    database: typeof root.versaoDbLocal === 'string' ? root.versaoDbLocal : undefined,
+    databaseDate: typeof root.dataDbLocal === 'string' ? root.dataDbLocal : undefined,
+    environment: 'offline',
+  } : {};
+  const reference: OfficialRtcVersionSnapshot = root ? {
+    // The upstream offline comparator may point at the shared RTC online service.
+    // Do not treat versaoAplicacaoRemota as a verified Simples application version.
+    database: typeof root.versaoDbRemota === 'string' ? root.versaoDbRemota : undefined,
+    databaseDate: typeof root.dataDbRemota === 'string' ? root.dataDbRemota : undefined,
+    environment: 'online-reference',
+  } : {};
+
+  const pinned = semverCore(pinnedRelease);
+  const localApp = semverCore(local.app);
+  const localReleaseMatchesPin = !!pinned && !!localApp && compareTuple(localApp, pinned) === 0;
+  const dbCurrent = root?.dbAtualizada === true;
+  const dbDateCurrent = root?.dataDbAtualizada === true;
+  const hasDatasetEvidence = !!local.database && !!reference.database && !!local.databaseDate && !!reference.databaseDate;
+  const status: OfficialRtcSimplesDatasetStatus = !hasDatasetEvidence
+    ? 'unknown'
+    : dbCurrent && dbDateCurrent
+      ? 'match'
+      : 'mismatch';
+
+  const blockers: string[] = [];
+  if (!localReleaseMatchesPin) blockers.push('pinned_release_integrity_unverified');
+  if (status !== 'match') blockers.push(status === 'unknown' ? 'shared_tax_dataset_freshness_unknown' : 'shared_tax_dataset_mismatch');
+  blockers.push('simples_application_reference_unverified');
+
+  return {
+    status,
+    authoritative_eligible: false,
+    pinned_release: pinnedRelease,
+    local_release_matches_pin: localReleaseMatchesPin,
+    application_reference_verified: false,
+    dataset_current: status === 'match',
+    local,
+    reference,
+    blockers,
+  };
+}

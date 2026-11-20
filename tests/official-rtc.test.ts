@@ -4,7 +4,7 @@ import { officialRtcMode, resolveOfficialRtcBaseUrl } from '../src/official-rtc/
 import { OFFICIAL_RTC_MANIFEST } from '../src/official-rtc/official-rtc.manifest';
 import { officialRtcInputSha256 } from '../src/official-rtc/official-rtc.service';
 import { assessOfficialRtcObservability } from '../src/official-rtc/official-rtc-observability';
-import { assessOfficialRtcFreshness } from '../src/official-rtc/official-rtc-freshness';
+import { assessOfficialRtcFreshness, assessOfficialRtcSimplesFreshness } from '../src/official-rtc/official-rtc-freshness';
 
 test('pins the three Receita Federal MIT engines to exact release tag commits', () => {
   assert.deepEqual(
@@ -136,4 +136,51 @@ test('official freshness allows authoritative eligibility only on matching core 
   const unknown = assessOfficialRtcFreshness('1.6.1', { versaoApp: 'development' });
   assert.equal(unknown.status, 'unknown');
   assert.equal(unknown.authoritative_eligible, false);
+});
+
+
+test('Simples freshness records local pin integrity and shared dataset mismatch without claiming authority', () => {
+  const assessment = assessOfficialRtcSimplesFreshness('0.0.6', {
+    aplicacaoAtualizada: false,
+    dbAtualizada: false,
+    dataDbAtualizada: false,
+    versaoAplicacaoLocal: '0.0.6',
+    versaoAplicacaoRemota: '1.7.1-2beedf45',
+    versaoDbLocal: 'V0059',
+    versaoDbRemota: 'V0073',
+    dataDbLocal: '2026-09-30',
+    dataDbRemota: '2026-11-09',
+  });
+
+  assert.equal(assessment.local_release_matches_pin, true);
+  assert.equal(assessment.status, 'mismatch');
+  assert.equal(assessment.dataset_current, false);
+  assert.equal(assessment.application_reference_verified, false);
+  assert.equal(assessment.authoritative_eligible, false);
+  assert.equal(assessment.local.database, 'V0059');
+  assert.equal(assessment.reference.database, 'V0073');
+  assert.deepEqual(assessment.blockers, [
+    'shared_tax_dataset_mismatch',
+    'simples_application_reference_unverified',
+  ]);
+});
+
+test('Simples freshness remains non-authoritative even when the shared dataset matches', () => {
+  const assessment = assessOfficialRtcSimplesFreshness('0.0.6', {
+    aplicacaoAtualizada: false,
+    dbAtualizada: true,
+    dataDbAtualizada: true,
+    versaoAplicacaoLocal: '0.0.6',
+    versaoAplicacaoRemota: '1.7.1',
+    versaoDbLocal: 'V0073',
+    versaoDbRemota: 'V0073',
+    dataDbLocal: '2026-11-09',
+    dataDbRemota: '2026-11-09',
+  });
+
+  assert.equal(assessment.status, 'match');
+  assert.equal(assessment.dataset_current, true);
+  assert.equal(assessment.local_release_matches_pin, true);
+  assert.equal(assessment.authoritative_eligible, false);
+  assert.deepEqual(assessment.blockers, ['simples_application_reference_unverified']);
 });

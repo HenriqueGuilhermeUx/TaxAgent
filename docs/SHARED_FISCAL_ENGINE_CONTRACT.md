@@ -126,7 +126,7 @@ The persisted record contains:
 
 Existing issuance decisions remain `decision_kind=issuance` by default. The invoice flow rejects `rtc_calculation` decisions even when their calculation status is `resolved`, preventing a simulator/batch result from being reused as an issuance decision.
 
-Until a freshness mechanism is implemented for the pinned Simples engine, persisted Simples calculations remain `reference_only=true`.
+Persisted Simples calculations include bounded freshness evidence from the pinned sidecar: local release integrity plus shared tax-dataset version/date comparison. They remain `reference_only=true` because the upstream offline comparator does not provide an unambiguous remote Simples application-version authority.
 
 
 ## TypeScript integration client
