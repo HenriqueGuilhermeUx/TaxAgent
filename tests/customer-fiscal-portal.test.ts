@@ -41,6 +41,7 @@ test('customer readiness proof is bounded, read-only and cannot authorize transm
   );
   const result = await service.proof('comp_1', 'test', '2026-09-25');
   assert.equal(result.proof_version, 'pilot-readiness-v1');
+  assert.deepEqual(result.company, { id: 'comp_1' });
   assert.deepEqual(result.readiness.unresolved_requirements, ['municipal_registration', 'active_a1']);
   assert.deepEqual(result.readiness.stages, [
     { id: 'municipal_registration', status: 'ACTION_REQUIRED' },
@@ -54,6 +55,7 @@ test('customer readiness proof is bounded, read-only and cannot authorize transm
   assert.equal(result.authorization_boundary.portal_can_grant_transmission_permit, false);
   assert.equal(result.authorization_boundary.customer_api_key_can_bypass_one_shot_permit, false);
   assert.doesNotMatch(JSON.stringify(result), /must-not-leak/);
+  assert.doesNotMatch(JSON.stringify(result), /Empresa|3548500|regular/);
 });
 
 test('customer profile update persists only non-secret fiscal fields and safely advances', async () => {
