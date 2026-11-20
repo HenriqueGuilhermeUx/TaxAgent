@@ -131,7 +131,7 @@ export interface AgentSafeFiscalSummary {
 
 export interface FiscalReadinessProof {
   proof_version: 'pilot-readiness-v1';
-  company: unknown;
+  company: { id: string };
   environment: 'test' | 'production';
   effective_at: string | null;
   fiscal_status: string;
@@ -284,11 +284,14 @@ export class TaxAgentFiscalClient {
     const id = String(companyId ?? '').trim();
     if (!id || id.includes('/') || id.includes('?') || id.includes('#')) throw new TaxAgentFiscalClientError('invalid_config');
     const value = await this.request('GET', `/v1/portal/companies/${encodeURIComponent(id)}/fiscal/proof`);
+    const company = value.company;
     const readiness = value.readiness;
     const evidencePresence = value.evidence_presence;
     const boundary = value.authorization_boundary;
     if (
       value.proof_version !== 'pilot-readiness-v1'
+      || !isObject(company)
+      || company.id !== id
       || !['test', 'production'].includes(String(value.environment))
       || typeof value.fiscal_status !== 'string'
       || !isObject(readiness)
