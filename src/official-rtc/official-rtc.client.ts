@@ -45,6 +45,11 @@ export class OfficialRtcClient {
     return this.postJson(base, '/api/calculadora/observabilidade/simples-nacional', payload);
   }
 
+  async simplesVersionStatus(): Promise<unknown> {
+    const base = this.required(process.env.TAXAGENT_RTC_SIMPLES_URL, 'simples');
+    return this.getJson(base, '/api/versao/status');
+  }
+
   async renderDanfse(xml: string, state = '0', canhoto = true): Promise<Buffer> {
     const base = this.required(process.env.TAXAGENT_RTC_DANFSE_URL, 'danfse');
     const url = join(base, '/api/danfse');
@@ -81,6 +86,26 @@ export class OfficialRtcClient {
     const url = resolveOfficialRtcBaseUrl(raw);
     if (!url) throw new ServiceUnavailableException(`Official RTC ${engine} engine is not configured`);
     return url;
+  }
+
+  private async getJson(base: URL, path: string): Promise<unknown> {
+    const url = join(base, path);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/json', 'user-agent': 'TaxAgent-OfficialRTC/1.0' },
+        redirect: 'error',
+        signal: AbortSignal.timeout(Number(process.env.TAXAGENT_RTC_REQUEST_TIMEOUT_MS ?? 20_000)),
+      });
+    } catch (error) {
+      throw new BadGatewayException(`Official RTC engine network failure: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+    const raw = await response.text();
+    let parsed: unknown = raw;
+    try { parsed = raw ? JSON.parse(raw) : null; } catch {}
+    if (!response.ok) throw new BadGatewayException({ message: `Official RTC engine HTTP ${response.status}`, upstream: parsed });
+    return parsed;
   }
 
   private async postJson(base: URL, path: string, payload: Record<string, unknown>): Promise<unknown> {
