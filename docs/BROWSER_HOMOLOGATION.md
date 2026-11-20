@@ -81,7 +81,7 @@ No Render Dashboard:
 
 1. escolha **New > Blueprint**;
 2. conecte `HenriqueGuilhermeUx/TaxAgent`;
-3. selecione a branch `agent/engine-v0.1` enquanto o PR permanecer Draft;
+3. selecione a branch `main` (o Blueprint atual também aponta o Web Service para `main`);
 4. confirme o Blueprint `render.yaml`;
 5. quando o Render pedir `DATABASE_URL`, cole a connection string do Neon;
 6. confirme o deploy do Web Service `taxagent-homologation`;
