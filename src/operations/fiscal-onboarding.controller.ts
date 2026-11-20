@@ -128,7 +128,7 @@ export class FiscalOnboardingController {
   }
 
   private assertAccess(companyId: string, environment: FiscalEnvironment, auth?: TaxAgentAuthContext) {
-    if (!auth) return;
+    if (!auth) throw new ForbiddenException('API key authentication is required');
     if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot inspect another company');
     if (auth.environment !== environment) throw new ForbiddenException('API key environment does not match requested environment');
   }
