@@ -22,11 +22,15 @@ Do not reuse customer-facing tokens or bootstrap credentials.
 
 Before enabling a consumer calculation flow:
 
-1. `GET /v1/rtc/official/status`
-2. `GET /v1/rtc/official/freshness`
-3. require the intended engine to be configured;
-4. require TaxAgent mode to be `shadow` during integration;
-5. never infer authoritative status from HTTP 200.
+1. `GET /v1/portal/companies/:companyId/fiscal/proof` for the company-scoped, read-only readiness bundle;
+2. `GET /v1/rtc/official/status`;
+3. `GET /v1/rtc/official/freshness`;
+4. `GET /v1/rtc/simulator/readiness`;
+5. require the intended engine to be configured;
+6. require the reviewed integration mode/environment for the intended regime;
+7. never infer authoritative status from HTTP 200.
+
+The company readiness proof is a bounded status artifact, not an issuance credential. Consumers must reject a proof unless its authorization boundary remains strictly read-only: it cannot issue invoices, transmit fiscal documents, enable live runtime, grant a transmission permit or bypass the one-shot TEST permit.
 
 The regular engine is not authoritative when the current Receita reference version is ahead of the pinned open-source release.
 
@@ -130,12 +134,17 @@ Until a freshness mechanism is implemented for the pinned Simples engine, persis
 TaxAgent ships a framework-neutral TypeScript reference client in `src/integrations/shared-fiscal-client.ts`. It is intended to be copied/packaged through the product-specific integration process rather than by duplicating fiscal rules.
 
 The client:
-- calls only TaxAgent status/freshness/canonical endpoints;
+- calls TaxAgent company readiness proof, RTC status/freshness/simulator readiness, canonical calculation/batch and agent-summary endpoints;
 - rejects insecure remote HTTP and URLs containing credentials;
 - uses a dedicated server-to-server bearer key;
 - applies bounded timeout/network/HTTP errors without exposing response bodies;
-- validates the minimum canonical decision envelope;
+- validates the minimum canonical decision envelope and the company readiness proof no-execution boundary;
 - returns a safety classification of `authoritative`, `reference_only` or `review_required`;
 - always returns `financial_action_allowed=false` and `issuance_binding_allowed=false`.
 
 This means NexOffices can orchestrate fiscal UX while TaxAgent remains the tax authority, and Nexa PJ can show calculations beside financial workflows without a calculation silently authorizing a transfer, payment or tax remittance.
+
+
+## Company readiness proof
+
+Server-side consumers should call `fiscalReadinessProof(companyId)` before any company-scoped fiscal workflow. The shared client rejects malformed identifiers and fails closed if the returned proof weakens any no-execution boundary. The proof may be used to explain blockers and readiness in product UX, but it never grants invoice issuance, fiscal transmission, live-runtime activation, transmission permits, payment authority or financial movement.
