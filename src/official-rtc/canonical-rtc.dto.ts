@@ -65,7 +65,7 @@ export class CanonicalSimplesCalculationDto {
 
 export class CanonicalSimplesActivityQueryDto {
   @ApiProperty({ example: '2027-03-15', description: 'Civil date used by the official Simples activity catalog.' })
-  @IsDateString() effective_date!: string;
+  @IsDateString() @Matches(/^\d{4}-\d{2}-\d{2}$/) effective_date!: string;
 
   @ApiProperty({ enum: ['nfe', 'nfce', 'nfse'], example: 'nfse' })
   @IsIn(['nfe', 'nfce', 'nfse']) document_kind!: 'nfe' | 'nfce' | 'nfse';
