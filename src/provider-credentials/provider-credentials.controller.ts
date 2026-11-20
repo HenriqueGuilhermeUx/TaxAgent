@@ -22,7 +22,8 @@ export class ProviderCredentialsController {
     @Body() dto: UpsertProviderCredentialsDto,
     @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
   ) {
-    this.assertCompany(companyId, auth);
+    const context = this.assertCompany(companyId, auth);
+    if (context.environment !== dto.environment) throw new ForbiddenException('API key environment does not match requested environment');
     return this.credentials.store(companyId, dto.provider, dto.environment, dto.credentials, dto.note);
   }
 
@@ -32,8 +33,8 @@ export class ProviderCredentialsController {
     @Param('companyId') companyId: string,
     @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
   ) {
-    this.assertCompany(companyId, auth);
-    return this.credentials.list(companyId);
+    const context = this.assertCompany(companyId, auth);
+    return this.credentials.list(companyId, context.environment);
   }
 
   @Post(':provider/disable')
@@ -44,11 +45,14 @@ export class ProviderCredentialsController {
     @Query('environment') environment: FiscalEnvironment = 'test',
     @CurrentTaxAgentAuth() auth?: TaxAgentAuthContext,
   ) {
-    this.assertCompany(companyId, auth);
+    const context = this.assertCompany(companyId, auth);
+    if (context.environment !== environment) throw new ForbiddenException('API key environment does not match requested environment');
     return this.credentials.disable(companyId, provider, environment);
   }
 
-  private assertCompany(companyId: string, auth?: TaxAgentAuthContext) {
-    if (auth && auth.companyId !== companyId) throw new ForbiddenException('API key cannot operate another company');
+  private assertCompany(companyId: string, auth?: TaxAgentAuthContext): TaxAgentAuthContext {
+    if (!auth) throw new ForbiddenException('API key authentication is required');
+    if (auth.companyId !== companyId) throw new ForbiddenException('API key cannot operate another company');
+    return auth;
   }
 }
