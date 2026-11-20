@@ -101,6 +101,10 @@ Consumers should prefer the stable TaxAgent canonical endpoints instead of the r
   - TaxAgent owns the upstream ROC version field.
   - For facts before 2027, nominal rates are forbidden by the pinned engine.
   - From 2027 onward, nominal CBS/IBS state/IBS municipal rates are required by the pinned engine and must be supplied explicitly from a verified source.
+- `GET /v1/rtc/canonical/simples/activities/:activityCode`
+  - Validates `cAtivSN × effective_date × document_kind × cClassTrib` against the pinned official Simples activity catalog.
+  - Returns only bounded compatibility/factor-R/annex metadata and provenance; it does not infer rates, calculate tax, issue documents or authorize financial actions.
+  - Use this read-only lookup before calculation when the consumer needs to prevent invalid activity/document/classification combinations.
 - `POST /v1/rtc/canonical/simples/calculate`
   - V1 supports `document_kind=nfe|nfce|nfse`, mapped to official `tpDoc=55|65|91`.
   - NFS-e support is grounded in the pinned Simples 0.0.6 upstream integration tests, including the official `cAtivSN=07` NFS-e golden case.
@@ -134,7 +138,7 @@ Persisted Simples calculations include bounded freshness evidence from the pinne
 TaxAgent ships a framework-neutral TypeScript reference client in `src/integrations/shared-fiscal-client.ts`. It is intended to be copied/packaged through the product-specific integration process rather than by duplicating fiscal rules.
 
 The client:
-- calls TaxAgent company readiness proof, RTC status/freshness/simulator readiness, canonical calculation/batch and agent-summary endpoints;
+- calls TaxAgent company readiness proof, RTC status/freshness/simulator readiness, official Simples activity compatibility, canonical calculation/batch and agent-summary endpoints;
 - rejects insecure remote HTTP and URLs containing credentials;
 - uses a dedicated server-to-server bearer key;
 - can bind the consumer to `expectedEnvironment='test'|'production'` and rejects readiness proofs, canonical decisions or agent summaries from the opposite environment;
