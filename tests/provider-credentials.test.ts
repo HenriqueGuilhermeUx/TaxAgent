@@ -46,3 +46,22 @@ test('verified provider credentials are decrypted only through internal service 
   const service = new ProviderCredentialsService(db as any, crypto as any);
   assert.deepEqual(await service.getVerifiedCredentials('cmp_1', 'giss', 'test'), { login: 'verified-user' });
 });
+
+
+test('provider credential list can be restricted to one fiscal environment', async () => {
+  const queries: Array<{ sql: string; params?: unknown[] }> = [];
+  const db = {
+    query: async (sql: string, params?: unknown[]) => {
+      queries.push({ sql, params });
+      if (sql.startsWith('SELECT id FROM companies')) return { rowCount: 1, rows: [{ id: 'cmp_1' }] };
+      return { rowCount: 0, rows: [] };
+    },
+  };
+  const service = new ProviderCredentialsService(db as any, {} as any);
+  await service.list('cmp_1', 'test');
+
+  const listQuery = queries.find((item) => item.sql.includes('FROM fiscal_provider_credentials'));
+  assert.ok(listQuery);
+  assert.match(listQuery.sql, /company_id=\$1 AND environment=\$2/);
+  assert.deepEqual(listQuery.params, ['cmp_1', 'test']);
+});
