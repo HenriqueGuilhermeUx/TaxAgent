@@ -75,6 +75,7 @@ export class OfficialRtcService {
       regular,
       simples,
       source: {
+        ...regularSource,
         regular: regularSource,
         simples: simplesSource,
       },
