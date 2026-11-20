@@ -105,6 +105,9 @@ jobs:
 
           curl -fsS http://127.0.0.1:18082/api/versao >/tmp/rtc-simples-version.json
           jq . /tmp/rtc-simples-version.json
+          jq -e '.versaoApp == "0.0.6"' /tmp/rtc-simples-version.json
+          jq -e '.versaoDb == "V0059"' /tmp/rtc-simples-version.json
+          jq -e '.dataVersaoDb == "2026-09-30"' /tmp/rtc-simples-version.json
 
           cat >/tmp/rtc-simples-operation.json <<'JSON'
           {
