@@ -115,3 +115,41 @@ test('schema sync rejects HTTP 404 and oversized Content-Length without changing
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('schema sync rejects reserved manifest and file/directory collisions without promotion', { timeout: 30000 }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'taxagent-schema-sync-collisions-'));
+  let payload = Buffer.alloc(0);
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/zip', 'content-length': String(payload.length) });
+    res.end(payload);
+  });
+  try {
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const vendor = join(root, 'schemas/vendor', sourceId);
+    await mkdir(vendor, { recursive: true });
+    await writeFile(join(vendor, 'previous.xsd'), 'untouched');
+    await writeFile(join(root, 'schemas/registry.json'), JSON.stringify({ sources: { test: {
+      id: sourceId, status: 'active', officialUrl: `http://127.0.0.1:${address.port}/schemas.zip`,
+    } } }));
+    const cases: Array<{ entries: Array<[string, string]>; error: RegExp }> = [
+      { entries: [['manifest.json', '{}']], error: /Reserved archive path/ },
+      { entries: [['Parent', 'file'], ['parent/child.xsd', 'child']], error: /collision/ },
+      { entries: [['Parent/child.xsd', 'child'], ['parent', 'file']], error: /collision/ },
+    ];
+    for (const scenario of cases) {
+      const zip = new AdmZip();
+      for (const [name, value] of scenario.entries) zip.addFile(name, Buffer.from(value));
+      payload = zip.toBuffer();
+      const result = await run(root);
+      assert.notEqual(result.code, 0, result.output);
+      assert.match(result.output, scenario.error);
+      assert.equal(await readFile(join(vendor, 'previous.xsd'), 'utf8'), 'untouched');
+      assert.deepEqual(await readdir(vendor), ['previous.xsd']);
+    }
+  } finally {
+    await new Promise<void>((done) => server.close(() => done()));
+    await rm(root, { recursive: true, force: true });
+  }
+});
