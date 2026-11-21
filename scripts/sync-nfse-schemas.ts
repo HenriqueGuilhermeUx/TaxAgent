@@ -49,7 +49,7 @@ async function main() {
     // Extraction limits below apply to uncompressed entries separately.
     const maxArchiveBytes = 64 * 1024 * 1024;
     const declaredLength = response.headers.get('content-length');
-    if (declaredLength !== null && (!/^\\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
+    if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
       await response.body?.cancel();
       throw new Error(`Official schema archive download limit exceeded for ${key}`);
     }
