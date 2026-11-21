@@ -45,7 +45,33 @@ async function main() {
     const source = registry.sources[key];
     if (!source?.officialUrl) throw new Error(`No officialUrl configured for ${key}`);
     const response = await fetchOfficialSchema(source.officialUrl, key);
-    const zipBuffer = Buffer.from(await response.arrayBuffer());
+    // Bound the compressed download before allocating the complete ZIP in memory.
+    // Extraction limits below apply to uncompressed entries separately.
+    const maxArchiveBytes = 64 * 1024 * 1024;
+    const declaredLength = response.headers.get('content-length');
+    if (declaredLength !== null && (!/^\\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
+      await response.body?.cancel();
+      throw new Error(`Official schema archive download limit exceeded for ${key}`);
+    }
+    if (!response.body) throw new Error(`Empty official schema archive response for ${key}`);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let downloadedBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        downloadedBytes += value.byteLength;
+        if (downloadedBytes > maxArchiveBytes) {
+          await reader.cancel();
+          throw new Error(`Official schema archive download limit exceeded for ${key}`);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const zipBuffer = Buffer.concat(chunks, downloadedBytes);
     const zipSha256 = createHash('sha256').update(zipBuffer).digest('hex');
     if (source.expectedArchiveSha256 && source.expectedArchiveSha256 !== zipSha256) {
       throw new Error(`Official schema archive checksum changed for ${key}: expected ${source.expectedArchiveSha256}, received ${zipSha256}. Review upstream changes before promotion.`);
