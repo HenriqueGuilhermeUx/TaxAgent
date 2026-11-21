@@ -23,13 +23,17 @@ async function fetchOfficialSchema(url: string, environment: EnvironmentKey, att
     try {
       const response = await fetch(url, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
       if (response.ok) return response;
-      if (response.status < 500 || attempt === attempts) {
-        throw new Error(`Schema download failed for ${environment}: HTTP ${response.status}`);
+      // A 4xx response is not transient: do not retry or leave its body open.
+      if (response.status < 500) {
+        await response.body?.cancel();
+        throw Object.assign(new Error(`Schema download failed for ${environment}: HTTP ${response.status}`), { nonRetryable: true });
       }
+      await response.body?.cancel();
       lastError = new Error(`Schema download transient failure for ${environment}: HTTP ${response.status}`);
+      if (attempt === attempts) throw lastError;
     } catch (error) {
       lastError = error;
-      if (attempt === attempts) break;
+      if ((error as Error & { nonRetryable?: boolean }).nonRetryable || attempt === attempts) break;
     }
     const delayMs = 2_000 * attempt;
     console.warn(`Official schema download attempt ${attempt}/${attempts} failed for ${environment}; retrying in ${delayMs}ms.`);
