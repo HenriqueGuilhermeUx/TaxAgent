@@ -1,6 +1,6 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 interface Source { id: string; status: string; officialUrl?: string; expectedArchiveSha256?: string }
@@ -51,9 +51,11 @@ async function main() {
       throw new Error(`Official schema archive checksum changed for ${key}: expected ${source.expectedArchiveSha256}, received ${zipSha256}. Review upstream changes before promotion.`);
     }
     const target = join(process.cwd(), 'schemas', 'vendor', source.id);
-    await rm(target, { recursive: true, force: true });
-    await mkdir(target, { recursive: true });
-    const targetRoot = `${resolve(target)}${sep}`;
+    // Never mutate the installed schema set until the complete archive is validated.
+    await mkdir(dirname(target), { recursive: true });
+    const staged = await mkdtemp(`${target}.staging-`);
+    try {
+    const targetRoot = `${resolve(staged)}${sep}`;
 
     const zip = new AdmZip(zipBuffer);
     const xsdFiles: string[] = [];
@@ -64,7 +66,7 @@ async function main() {
     for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
       const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
-      const output = resolve(target, clean);
+      const output = resolve(staged, clean);
       if (!output.startsWith(targetRoot)) throw new Error(`Unsafe path in official schema archive: ${entry.entryName}`);
       await mkdir(dirname(output), { recursive: true });
       const data = entry.getData();
@@ -95,8 +97,26 @@ async function main() {
       registeredEventXsd,
       xsdFiles,
     };
-    await writeFile(join(target, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(join(staged, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    const backup = `${staged}.backup`;
+    let hadPrevious = false;
+    try {
+      await rename(target, backup);
+      hadPrevious = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await rename(staged, target);
+    } catch (error) {
+      if (hadPrevious) await rename(backup, target);
+      throw error;
+    }
+    if (hadPrevious) await rm(backup, { recursive: true, force: true });
     console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256}; dps=${dpsXsd}; event_request=${eventXsd}; event_registered=${registeredEventXsd})`);
+    } finally {
+      await rm(staged, { recursive: true, force: true });
+    }
   }
 }
 
