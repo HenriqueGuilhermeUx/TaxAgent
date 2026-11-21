@@ -60,6 +60,7 @@ async function main() {
     const zip = new AdmZip(zipBuffer);
     const xsdFiles: string[] = [];
     const seenPaths = new Set<string>();
+    const explicitDirectories = new Set<string>();
     const maxEntryBytes = 32 * 1024 * 1024;
     const maxTotalBytes = 256 * 1024 * 1024;
     const entries = zip.getEntries();
@@ -70,12 +71,18 @@ async function main() {
     let registeredEventXsd: string | undefined;
     let fallbackDpsXsd: string | undefined;
     for (const entry of entries) {
-      if (entry.isDirectory) continue;
       const normalized = entry.entryName.replace(/\\/g, '/');
       if (normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) throw new Error(`Absolute archive path: ${entry.entryName}`);
-      const clean = normalized;
+      const clean = entry.isDirectory && normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
       if (!clean || clean.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error(`Invalid archive path: ${entry.entryName}`);
       const canonical = clean.toLowerCase();
+      if (canonical === 'manifest.json') throw new Error('Reserved archive path: manifest.json');
+      if (entry.isDirectory) {
+        if (seenPaths.has(canonical)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+        explicitDirectories.add(canonical);
+        continue;
+      }
+      if (explicitDirectories.has(canonical)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
       if (seenPaths.has(canonical)) throw new Error(`Duplicate archive path: ${entry.entryName}`);
       // A ZIP file must never occupy a path used as a directory by another file.
       // Detect both orders (parent first or child first), case-insensitively.
@@ -86,7 +93,7 @@ async function main() {
         prefix = prefix ? `${prefix}/${part}` : part;
         if (seenPaths.has(prefix)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
       }
-      for (const previous of seenPaths) {
+      for (const previous of [...seenPaths, ...explicitDirectories]) {
         if (previous.startsWith(`${canonical}/`)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
       }
       seenPaths.add(canonical);
@@ -139,7 +146,13 @@ async function main() {
       if (hadPrevious) await rename(backup, target);
       throw error;
     }
-    if (hadPrevious) await rm(backup, { recursive: true, force: true });
+    if (hadPrevious) {
+      try {
+        await rm(backup, { recursive: true, force: true });
+      } catch (error) {
+        console.warn(`Schema promotion succeeded for ${key}, but backup cleanup failed: ${String(error)}`);
+      }
+    }
     console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256}; dps=${dpsXsd}; event_request=${eventXsd}; event_registered=${registeredEventXsd})`);
     } finally {
       await rm(staged, { recursive: true, force: true });
