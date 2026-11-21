@@ -59,17 +59,30 @@ async function main() {
 
     const zip = new AdmZip(zipBuffer);
     const xsdFiles: string[] = [];
+    const seenPaths = new Set<string>();
+    const maxEntryBytes = 32 * 1024 * 1024;
+    const maxTotalBytes = 256 * 1024 * 1024;
+    const entries = zip.getEntries();
+    if (entries.length > 4096) throw new Error(`Too many official schema archive entries for ${key}`);
+    let extractedBytes = 0;
     let dpsXsd: string | undefined;
     let eventXsd: string | undefined;
     let registeredEventXsd: string | undefined;
     let fallbackDpsXsd: string | undefined;
-    for (const entry of zip.getEntries()) {
+    for (const entry of entries) {
       if (entry.isDirectory) continue;
       const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
+      if (!clean || clean.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error(`Invalid archive path: ${entry.entryName}`);
+      const canonical = clean.toLowerCase();
+      if (seenPaths.has(canonical)) throw new Error(`Duplicate archive path: ${entry.entryName}`);
+      seenPaths.add(canonical);
+      if (entry.header.size > maxEntryBytes || extractedBytes + entry.header.size > maxTotalBytes) throw new Error(`Schema archive extraction limit exceeded for ${key}`);
       const output = resolve(staged, clean);
       if (!output.startsWith(targetRoot)) throw new Error(`Unsafe path in official schema archive: ${entry.entryName}`);
       await mkdir(dirname(output), { recursive: true });
       const data = entry.getData();
+      extractedBytes += data.length;
+      if (data.length > maxEntryBytes || extractedBytes > maxTotalBytes) throw new Error(`Schema archive extraction limit exceeded for ${key}`);
       await writeFile(output, data);
       if (!clean.toLowerCase().endsWith('.xsd')) continue;
       xsdFiles.push(clean);
