@@ -79,6 +79,13 @@ async function main() {
       if (canonical === 'manifest.json') throw new Error('Reserved archive path: manifest.json');
       if (entry.isDirectory) {
         if (seenPaths.has(canonical)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+        const segments = canonical.split('/');
+        segments.pop();
+        let ancestor = '';
+        for (const segment of segments) {
+          ancestor = ancestor ? `${ancestor}/${segment}` : segment;
+          if (seenPaths.has(ancestor)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+        }
         explicitDirectories.add(canonical);
         continue;
       }
