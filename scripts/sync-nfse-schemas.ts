@@ -71,7 +71,9 @@ async function main() {
     let fallbackDpsXsd: string | undefined;
     for (const entry of entries) {
       if (entry.isDirectory) continue;
-      const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
+      const normalized = entry.entryName.replace(/\\/g, '/');
+      if (normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) throw new Error(`Absolute archive path: ${entry.entryName}`);
+      const clean = normalized;
       if (!clean || clean.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error(`Invalid archive path: ${entry.entryName}`);
       const canonical = clean.toLowerCase();
       if (seenPaths.has(canonical)) throw new Error(`Duplicate archive path: ${entry.entryName}`);
