@@ -77,6 +77,18 @@ async function main() {
       if (!clean || clean.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error(`Invalid archive path: ${entry.entryName}`);
       const canonical = clean.toLowerCase();
       if (seenPaths.has(canonical)) throw new Error(`Duplicate archive path: ${entry.entryName}`);
+      // A ZIP file must never occupy a path used as a directory by another file.
+      // Detect both orders (parent first or child first), case-insensitively.
+      const ancestors = canonical.split('/');
+      ancestors.pop();
+      let prefix = '';
+      for (const part of ancestors) {
+        prefix = prefix ? `${prefix}/${part}` : part;
+        if (seenPaths.has(prefix)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+      }
+      for (const previous of seenPaths) {
+        if (previous.startsWith(`${canonical}/`)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+      }
       seenPaths.add(canonical);
       if (entry.header.size > maxEntryBytes || extractedBytes + entry.header.size > maxTotalBytes) throw new Error(`Schema archive extraction limit exceeded for ${key}`);
       const output = resolve(staged, clean);
