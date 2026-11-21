@@ -1,6 +1,6 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 interface Source { id: string; status: string; officialUrl?: string; expectedArchiveSha256?: string }
@@ -23,13 +23,17 @@ async function fetchOfficialSchema(url: string, environment: EnvironmentKey, att
     try {
       const response = await fetch(url, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
       if (response.ok) return response;
-      if (response.status < 500 || attempt === attempts) {
-        throw new Error(`Schema download failed for ${environment}: HTTP ${response.status}`);
+      // A 4xx response is not transient: do not retry or leave its body open.
+      if (response.status < 500) {
+        await response.body?.cancel();
+        throw Object.assign(new Error(`Schema download failed for ${environment}: HTTP ${response.status}`), { nonRetryable: true });
       }
+      await response.body?.cancel();
       lastError = new Error(`Schema download transient failure for ${environment}: HTTP ${response.status}`);
+      if (attempt === attempts) throw lastError;
     } catch (error) {
       lastError = error;
-      if (attempt === attempts) break;
+      if ((error as Error & { nonRetryable?: boolean }).nonRetryable || attempt === attempts) break;
     }
     const delayMs = 2_000 * attempt;
     console.warn(`Official schema download attempt ${attempt}/${attempts} failed for ${environment}; retrying in ${delayMs}ms.`);
@@ -45,29 +49,98 @@ async function main() {
     const source = registry.sources[key];
     if (!source?.officialUrl) throw new Error(`No officialUrl configured for ${key}`);
     const response = await fetchOfficialSchema(source.officialUrl, key);
-    const zipBuffer = Buffer.from(await response.arrayBuffer());
+    // Bound the compressed download before allocating the complete ZIP in memory.
+    // Extraction limits below apply to uncompressed entries separately.
+    const maxArchiveBytes = 64 * 1024 * 1024;
+    const declaredLength = response.headers.get('content-length');
+    if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
+      await response.body?.cancel();
+      throw new Error(`Official schema archive download limit exceeded for ${key}`);
+    }
+    if (!response.body) throw new Error(`Empty official schema archive response for ${key}`);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let downloadedBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        downloadedBytes += value.byteLength;
+        if (downloadedBytes > maxArchiveBytes) {
+          await reader.cancel();
+          throw new Error(`Official schema archive download limit exceeded for ${key}`);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const zipBuffer = Buffer.concat(chunks, downloadedBytes);
     const zipSha256 = createHash('sha256').update(zipBuffer).digest('hex');
     if (source.expectedArchiveSha256 && source.expectedArchiveSha256 !== zipSha256) {
       throw new Error(`Official schema archive checksum changed for ${key}: expected ${source.expectedArchiveSha256}, received ${zipSha256}. Review upstream changes before promotion.`);
     }
     const target = join(process.cwd(), 'schemas', 'vendor', source.id);
-    await rm(target, { recursive: true, force: true });
-    await mkdir(target, { recursive: true });
-    const targetRoot = `${resolve(target)}${sep}`;
+    // Never mutate the installed schema set until the complete archive is validated.
+    await mkdir(dirname(target), { recursive: true });
+    const staged = await mkdtemp(`${target}.staging-`);
+    try {
+    const targetRoot = `${resolve(staged)}${sep}`;
 
     const zip = new AdmZip(zipBuffer);
     const xsdFiles: string[] = [];
+    const seenPaths = new Set<string>();
+    const explicitDirectories = new Set<string>();
+    const maxEntryBytes = 32 * 1024 * 1024;
+    const maxTotalBytes = 256 * 1024 * 1024;
+    const entries = zip.getEntries();
+    if (entries.length > 4096) throw new Error(`Too many official schema archive entries for ${key}`);
+    let extractedBytes = 0;
     let dpsXsd: string | undefined;
     let eventXsd: string | undefined;
     let registeredEventXsd: string | undefined;
     let fallbackDpsXsd: string | undefined;
-    for (const entry of zip.getEntries()) {
-      if (entry.isDirectory) continue;
-      const clean = entry.entryName.replace(/\\/g, '/').replace(/^\/+/, '');
-      const output = resolve(target, clean);
+    for (const entry of entries) {
+      const normalized = entry.entryName.replace(/\\/g, '/');
+      if (normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) throw new Error(`Absolute archive path: ${entry.entryName}`);
+      const clean = entry.isDirectory && normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+      if (!clean || clean.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error(`Invalid archive path: ${entry.entryName}`);
+      const canonical = clean.toLowerCase();
+      if (canonical === 'manifest.json') throw new Error('Reserved archive path: manifest.json');
+      if (entry.isDirectory) {
+        if (seenPaths.has(canonical)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+        const segments = canonical.split('/');
+        segments.pop();
+        let ancestor = '';
+        for (const segment of segments) {
+          ancestor = ancestor ? `${ancestor}/${segment}` : segment;
+          if (seenPaths.has(ancestor)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+        }
+        explicitDirectories.add(canonical);
+        continue;
+      }
+      if (explicitDirectories.has(canonical)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+      if (seenPaths.has(canonical)) throw new Error(`Duplicate archive path: ${entry.entryName}`);
+      // A ZIP file must never occupy a path used as a directory by another file.
+      // Detect both orders (parent first or child first), case-insensitively.
+      const ancestors = canonical.split('/');
+      ancestors.pop();
+      let prefix = '';
+      for (const part of ancestors) {
+        prefix = prefix ? `${prefix}/${part}` : part;
+        if (seenPaths.has(prefix)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+      }
+      for (const previous of [...seenPaths, ...explicitDirectories]) {
+        if (previous.startsWith(`${canonical}/`)) throw new Error(`Archive file/directory collision: ${entry.entryName}`);
+      }
+      seenPaths.add(canonical);
+      if (entry.header.size > maxEntryBytes || extractedBytes + entry.header.size > maxTotalBytes) throw new Error(`Schema archive extraction limit exceeded for ${key}`);
+      const output = resolve(staged, clean);
       if (!output.startsWith(targetRoot)) throw new Error(`Unsafe path in official schema archive: ${entry.entryName}`);
       await mkdir(dirname(output), { recursive: true });
       const data = entry.getData();
+      extractedBytes += data.length;
+      if (data.length > maxEntryBytes || extractedBytes > maxTotalBytes) throw new Error(`Schema archive extraction limit exceeded for ${key}`);
       await writeFile(output, data);
       if (!clean.toLowerCase().endsWith('.xsd')) continue;
       xsdFiles.push(clean);
@@ -95,8 +168,32 @@ async function main() {
       registeredEventXsd,
       xsdFiles,
     };
-    await writeFile(join(target, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(join(staged, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    const backup = `${staged}.backup`;
+    let hadPrevious = false;
+    try {
+      await rename(target, backup);
+      hadPrevious = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await rename(staged, target);
+    } catch (error) {
+      if (hadPrevious) await rename(backup, target);
+      throw error;
+    }
+    if (hadPrevious) {
+      try {
+        await rm(backup, { recursive: true, force: true });
+      } catch (error) {
+        console.warn(`Schema promotion succeeded for ${key}, but backup cleanup failed: ${String(error)}`);
+      }
+    }
     console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256}; dps=${dpsXsd}; event_request=${eventXsd}; event_registered=${registeredEventXsd})`);
+    } finally {
+      await rm(staged, { recursive: true, force: true });
+    }
   }
 }
 
