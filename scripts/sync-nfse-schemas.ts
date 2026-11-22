@@ -1,6 +1,7 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { promoteValidatedSchemas } from './schema-promotion.js';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 interface Source { id: string; status: string; officialUrl?: string; expectedArchiveSha256?: string }
@@ -170,26 +171,7 @@ async function main() {
     };
     await writeFile(join(staged, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     const backup = `${staged}.backup`;
-    let hadPrevious = false;
-    try {
-      await rename(target, backup);
-      hadPrevious = true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-    try {
-      await rename(staged, target);
-    } catch (error) {
-      if (hadPrevious) await rename(backup, target);
-      throw error;
-    }
-    if (hadPrevious) {
-      try {
-        await rm(backup, { recursive: true, force: true });
-      } catch (error) {
-        console.warn(`Schema promotion succeeded for ${key}, but backup cleanup failed: ${String(error)}`);
-      }
-    }
+    await promoteValidatedSchemas(staged, target, backup);
     console.log(`${key}: ${source.id} -> ${relative(process.cwd(), target)} (${xsdFiles.length} XSDs; sha256=${zipSha256}; dps=${dpsXsd}; event_request=${eventXsd}; event_registered=${registeredEventXsd})`);
     } finally {
       await rm(staged, { recursive: true, force: true });
