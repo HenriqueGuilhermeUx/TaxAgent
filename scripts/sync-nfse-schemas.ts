@@ -17,12 +17,14 @@ function requestedEnvironments(): EnvironmentKey[] {
   return [value];
 }
 
-async function fetchOfficialSchema(url: string, environment: EnvironmentKey, attempts = 3): Promise<Response> {
+async function fetchOfficialSchema(url: string, environment: EnvironmentKey, attempts = 3): Promise<Buffer> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const response = await fetch(url, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
-      if (response.ok) return response;
+      // Consume the body inside the retry boundary: a successful HTTP status can still
+      // fail mid-stream (e.g. ECONNRESET during response.arrayBuffer()).
+      if (response.ok) return Buffer.from(await response.arrayBuffer());
       if (response.status < 500 || attempt === attempts) {
         throw new Error(`Schema download failed for ${environment}: HTTP ${response.status}`);
       }
@@ -44,8 +46,7 @@ async function main() {
   for (const key of requestedEnvironments()) {
     const source = registry.sources[key];
     if (!source?.officialUrl) throw new Error(`No officialUrl configured for ${key}`);
-    const response = await fetchOfficialSchema(source.officialUrl, key);
-    const zipBuffer = Buffer.from(await response.arrayBuffer());
+    const zipBuffer = await fetchOfficialSchema(source.officialUrl, key);
     const zipSha256 = createHash('sha256').update(zipBuffer).digest('hex');
     if (source.expectedArchiveSha256 && source.expectedArchiveSha256 !== zipSha256) {
       throw new Error(`Official schema archive checksum changed for ${key}: expected ${source.expectedArchiveSha256}, received ${zipSha256}. Review upstream changes before promotion.`);
