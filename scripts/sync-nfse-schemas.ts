@@ -18,20 +18,46 @@ function requestedEnvironments(): EnvironmentKey[] {
   return [value];
 }
 
-async function fetchOfficialSchema(url: string, environment: EnvironmentKey, attempts = 3): Promise<Response> {
+async function fetchOfficialSchema(url: string, environment: EnvironmentKey, attempts = 3): Promise<Buffer> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const response = await fetch(url, { headers: { 'user-agent': 'TaxAgent-SchemaSync/0.12' } });
-      if (response.ok) return response;
-      // A 4xx response is not transient: do not retry or leave its body open.
-      if (response.status < 500) {
+      if (!response.ok) {
         await response.body?.cancel();
-        throw Object.assign(new Error(`Schema download failed for ${environment}: HTTP ${response.status}`), { nonRetryable: true });
+        const error = Object.assign(new Error(`Schema download failed for ${environment}: HTTP ${response.status}`), {
+          nonRetryable: response.status < 500,
+        });
+        throw error;
       }
-      await response.body?.cancel();
-      lastError = new Error(`Schema download transient failure for ${environment}: HTTP ${response.status}`);
-      if (attempt === attempts) throw lastError;
+      // Bound the compressed download before allocating the complete ZIP in memory.
+      // Extraction limits below apply to uncompressed entries separately.
+      const maxArchiveBytes = 64 * 1024 * 1024;
+      const declaredLength = response.headers.get('content-length');
+      if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
+        await response.body?.cancel();
+        throw new Error(`Official schema archive download limit exceeded for ${key}`);
+      }
+      if (!response.body) throw new Error(`Empty official schema archive response for ${key}`);
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let downloadedBytes = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          downloadedBytes += value.byteLength;
+          if (downloadedBytes > maxArchiveBytes) {
+            await reader.cancel();
+            throw new Error(`Official schema archive download limit exceeded for ${key}`);
+          }
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      const zipBuffer = Buffer.concat(chunks, downloadedBytes);
+      return zipBuffer;
     } catch (error) {
       lastError = error;
       if ((error as Error & { nonRetryable?: boolean }).nonRetryable || attempt === attempts) break;
@@ -49,34 +75,7 @@ async function main() {
   for (const key of requestedEnvironments()) {
     const source = registry.sources[key];
     if (!source?.officialUrl) throw new Error(`No officialUrl configured for ${key}`);
-    const response = await fetchOfficialSchema(source.officialUrl, key);
-    // Bound the compressed download before allocating the complete ZIP in memory.
-    // Extraction limits below apply to uncompressed entries separately.
-    const maxArchiveBytes = 64 * 1024 * 1024;
-    const declaredLength = response.headers.get('content-length');
-    if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
-      await response.body?.cancel();
-      throw new Error(`Official schema archive download limit exceeded for ${key}`);
-    }
-    if (!response.body) throw new Error(`Empty official schema archive response for ${key}`);
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let downloadedBytes = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        downloadedBytes += value.byteLength;
-        if (downloadedBytes > maxArchiveBytes) {
-          await reader.cancel();
-          throw new Error(`Official schema archive download limit exceeded for ${key}`);
-        }
-        chunks.push(value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-    const zipBuffer = Buffer.concat(chunks, downloadedBytes);
+    const zipBuffer = await fetchOfficialSchema(source.officialUrl, key);
     const zipSha256 = createHash('sha256').update(zipBuffer).digest('hex');
     if (source.expectedArchiveSha256 && source.expectedArchiveSha256 !== zipSha256) {
       throw new Error(`Official schema archive checksum changed for ${key}: expected ${source.expectedArchiveSha256}, received ${zipSha256}. Review upstream changes before promotion.`);
