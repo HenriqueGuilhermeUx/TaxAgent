@@ -36,9 +36,9 @@ async function fetchOfficialSchema(url: string, environment: EnvironmentKey, att
       const declaredLength = response.headers.get('content-length');
       if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maxArchiveBytes)) {
         await response.body?.cancel();
-        throw new Error(`Official schema archive download limit exceeded for ${key}`);
+        throw Object.assign(new Error(`Official schema archive download limit exceeded for ${environment}`), { nonRetryable: true });
       }
-      if (!response.body) throw new Error(`Empty official schema archive response for ${key}`);
+      if (!response.body) throw new Error(`Empty official schema archive response for ${environment}`);
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let downloadedBytes = 0;
@@ -49,7 +49,7 @@ async function fetchOfficialSchema(url: string, environment: EnvironmentKey, att
           downloadedBytes += value.byteLength;
           if (downloadedBytes > maxArchiveBytes) {
             await reader.cancel();
-            throw new Error(`Official schema archive download limit exceeded for ${key}`);
+            throw Object.assign(new Error(`Official schema archive download limit exceeded for ${environment}`), { nonRetryable: true });
           }
           chunks.push(value);
         }
